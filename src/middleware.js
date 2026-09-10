@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const PUBLIC = ['/login', '/api/sync', '/api/setup', '/setup'];
+const PUBLIC = ['/login', '/api/sync', '/api/setup', '/api/status', '/setup'];
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
   if (PUBLIC.some(p => pathname.startsWith(p)) || pathname.startsWith('/_next') || pathname === '/favicon.ico') return NextResponse.next();
