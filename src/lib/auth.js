@@ -19,8 +19,11 @@ export async function verifyToken(token) { try { const { payload } = await jwtVe
 export async function getUser() {
   const c = cookies().get(COOKIE); if (!c) return null;
   const p = await verifyToken(c.value); if (!p) return null;
-  const u = await one('select u.id,u.email,u.name,u.role,u.manager_id,u.must_change_pw,m.name as manager_name from users u left join managers m on m.id=u.manager_id where u.id=$1', [p.uid]);
-  return u;
+  // Faellt die Datenbank aus, gilt der Besucher als abgemeldet: dann bleibt wenigstens
+  // /login bedienbar, statt dass jede Seite mit einer Fehlerseite antwortet.
+  try {
+    return await one('select u.id,u.email,u.name,u.role,u.manager_id,u.must_change_pw,m.name as manager_name from users u left join managers m on m.id=u.manager_id where u.id=$1', [p.uid]);
+  } catch { return null; }
 }
 export async function requireUser() { const u = await getUser(); if (!u) throw new Error('Nicht angemeldet'); return u; }
 export async function requireAdmin() { const u = await requireUser(); if (u.role !== 'admin') throw new Error('Nur Admin'); return u; }

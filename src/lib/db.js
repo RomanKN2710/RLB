@@ -32,6 +32,20 @@ export async function tx(fn) {
   } catch (e) { await client.query('rollback'); throw e; } finally { client.release(); }
 }
 
+/** Uebersetzt typische Datenbankfehler in einen Satz, der sagt, was zu tun ist. */
+export function dbHint(e) {
+  const c = e && e.code;
+  if (c === '42P01') return 'Die Datenbank ist noch leer: die Tabellen fehlen. Bitte einmal /api/setup?key=CRON_SECRET aufrufen.';
+  if (c === '28P01' || c === '28000') return 'Die Datenbank weist die Zugangsdaten ab – DATABASE_URL im Projekt pruefen.';
+  if (c === '3D000') return 'Die in DATABASE_URL angegebene Datenbank existiert nicht.';
+  if (['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'].includes(c)) return 'Keine Verbindung zur Datenbank – DATABASE_URL im Projekt pruefen.';
+  if (!dbUrl()) return 'Im Projekt ist keine DATABASE_URL gesetzt (Vercel: Storage > Neon verbinden, danach Redeploy).';
+  return 'Datenbankfehler: ' + (e && e.message ? e.message : String(e));
+}
+
+/** Steht das Schema schon? */
+export async function schemaReady() { try { await q('select 1 from users limit 1'); return true; } catch { return false; } }
+
 export async function getSetting(key, dflt = null) { const r = await one('select value from settings where key=$1', [key]); return r ? r.value : dflt; }
 export async function setSetting(key, value) { await q('insert into settings(key,value) values($1,$2) on conflict(key) do update set value=excluded.value', [key, JSON.stringify(value)]); }
 export async function audit(userId, action, detail) { try { await q('insert into audit(user_id,action,detail) values($1,$2,$3)', [userId || null, action, JSON.stringify(detail || {})]); } catch (e) { /* best effort */ } }

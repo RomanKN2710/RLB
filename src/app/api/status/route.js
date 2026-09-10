@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { q, one, getSetting } from '@/lib/db';
+import { q, one, getSetting, schemaReady, dbHint } from '@/lib/db';
 import { base, openRound, pendingRounds, lastFinalRound } from '@/lib/data';
 import { rlbLeavers } from '@/lib/squads';
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,8 @@ export async function GET(req) {
   const key = new URL(req.url).searchParams.get('key'); const auth = req.headers.get('authorization') || '';
   if (!process.env.CRON_SECRET || (key !== process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const out = { at: new Date().toISOString(), warnungen: [] };
+  if (!await schemaReady()) return NextResponse.json({ ...out, ok: false, schema: false, warnungen: ['Die Datenbank ist noch nicht eingerichtet – /api/setup?key=CRON_SECRET aufrufen'] });
+  out.schema = true;
   try {
     const [lastSync, lastCur, squads] = [await getSetting('last_sync'), await getSetting('last_sync_current'), await getSetting('squads_sync')];
     out.sync = {
@@ -49,5 +51,5 @@ export async function GET(req) {
     out.spielerpool = (await one('select count(*)::int as n from bl_players where in_squad')).n;
     out.ok = out.warnungen.length === 0;
     return NextResponse.json(out);
-  } catch (e) { return NextResponse.json({ ...out, ok: false, error: e.message }, { status: 500 }); }
+  } catch (e) { return NextResponse.json({ ...out, ok: false, error: dbHint(e) }, { status: 500 }); }
 }

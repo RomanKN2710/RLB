@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { q, one, tx, audit, setSetting, getSetting } from '@/lib/db';
+import { q, one, tx, audit, setSetting, getSetting, dbHint } from '@/lib/db';
 import { login, clearSession, requireUser, requireAdmin, hashPassword } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
@@ -15,7 +15,12 @@ const rev = () => ['/', '/aufstellung', '/markt', '/kader', '/abrechnung', '/adm
 
 /* ---------- Auth ---------- */
 export async function loginAction(prev, fd) {
-  const u = await login(String(fd.get('email') || ''), String(fd.get('password') || ''));
+  let u;
+  // Der Datenbankteil braucht einen eigenen try-Block: redirect() weiter unten wirft
+  // selbst eine Ausnahme, die nicht abgefangen werden darf.
+  try {
+    u = await login(String(fd.get('email') || ''), String(fd.get('password') || ''));
+  } catch (e) { return fail(dbHint(e)); }
   if (!u) return fail('E-Mail oder Passwort falsch');
   await audit(u.id, 'login', {});
   redirect(u.must_change_pw ? '/konto?first=1' : '/');

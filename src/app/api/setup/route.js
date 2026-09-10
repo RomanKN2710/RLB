@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs'; import path from 'node:path';
 import bcrypt from 'bcryptjs';
-import { q } from '@/lib/db';
+import { q, dbHint } from '@/lib/db';
 import { applySquads } from '@/lib/squads';
 import { applyStartelfSeed } from '@/lib/kicker';
 import { base } from '@/lib/data';
@@ -46,5 +46,5 @@ export async function GET(req) {
       }
     }
     return NextResponse.json({ ok: true, logs });
-  } catch (e) { return NextResponse.json({ ok: false, error: e.message, logs }, { status: 500 }); }
+  } catch (e) { return NextResponse.json({ ok: false, error: dbHint(e), detail: e.message, logs }, { status: 500 }); }
 }
