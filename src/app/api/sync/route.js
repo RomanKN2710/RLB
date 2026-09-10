@@ -3,6 +3,7 @@ import { syncTeams, syncSchedule } from '@/lib/oldb';
 import { syncSquads } from '@/lib/squads';
 import { base } from '@/lib/data';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // 18 kicker-Kaderseiten nacheinander brauchen mehr als die 10 s Vercel-Standard
 /** Täglicher Sync (Vercel Cron oder manuell): /api/sync?key=CRON_SECRET */
 export async function GET(req) {
   const key = new URL(req.url).searchParams.get('key'); const auth = req.headers.get('authorization') || '';

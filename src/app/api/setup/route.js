@@ -6,6 +6,7 @@ import { applyStartelfSeed } from '@/lib/kicker';
 import { base } from '@/lib/data';
 import { runSeed } from '../../../../db/seed/seed-core.mjs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Schema + Seed + 509 Spieler brauchen deutlich mehr als die 10 s Vercel-Standard
 /** Ersteinrichtung ohne lokales Node: /api/setup?key=CRON_SECRET legt das Schema an, importiert Runde 1 und den Admin (ADMIN_EMAIL/ADMIN_PASSWORD). Idempotent. */
 export async function GET(req) {
   const key = new URL(req.url).searchParams.get('key');

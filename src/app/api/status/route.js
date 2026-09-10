@@ -3,6 +3,7 @@ import { q, one, getSetting } from '@/lib/db';
 import { base, openRound, pendingRounds, lastFinalRound } from '@/lib/data';
 import { rlbLeavers } from '@/lib/squads';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Neon-Kaltstart einrechnen
 
 const age = at => at ? Math.round((Date.now() - new Date(at).getTime()) / 60000) : null;
 
