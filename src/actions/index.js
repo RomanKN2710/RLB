@@ -124,6 +124,44 @@ export const createUserAction = wrap(async (prev, fd) => {
   await q('insert into users(email,name,role,manager_id,password_hash,must_change_pw) values($1,$2,$3,$4,$5,true)', [email, name, role, mid, await hashPassword(pw)]);
   await audit(a.id, 'user_create', { email, role, mid }); rev(); return ok(`Konto ${email} angelegt`);
 });
+/** Mehrere Manager-Konten auf einmal: je Zeile "Name <Trenner> E-Mail". Das Team wird
+    ueber den Namen zugeordnet (umlautsicher, Vorname genuegt: "Rene Peter" trifft "René").
+    Nicht eindeutige Zeilen werden gemeldet, nie geraten - ein falsch zugeordnetes Team
+    hiesse, jemand verwaltet den Kader eines anderen. */
+export const bulkCreateUsersAction = wrap(async (prev, fd) => {
+  const a = await requireAdmin();
+  const pw = String(fd.get('password') || '');
+  // Kuerzer als im Einzelformular ist hier vertretbar: das Startpasswort gilt nur bis zur
+  // ersten Anmeldung, danach verlangt die App ohnehin mindestens 8 Zeichen.
+  if (pw.length < 6) return fail('Startpasswort: mindestens 6 Zeichen');
+  const norm = x => String(x || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const managers = await q('select id, name from managers where active order by sort, id');
+  const taken = new Set((await q('select manager_id from users where manager_id is not null')).map(r => r.manager_id));
+  const mails = new Set((await q('select lower(email) as e from users')).map(r => r.e));
+  const hash = await hashPassword(pw);
+  const angelegt = [], offen = [];
+  for (const raw of String(fd.get('text') || '').split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    const m = line.match(/([^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+)/);
+    if (!m) { offen.push(`${line.slice(0, 40)}: keine E-Mail erkannt`); continue; }
+    const email = m[1].toLowerCase();
+    const name = line.replace(m[1], '').replace(/[;,\t|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!name) { offen.push(`${email}: kein Name davor`); continue; }
+    if (mails.has(email)) { offen.push(`${name}: ${email} gibt es schon`); continue; }
+    const parts = norm(name).split(' ');
+    const hits = managers.filter(x => { const n = norm(x.name); return n === norm(name) || parts.includes(n); });
+    if (hits.length !== 1) { offen.push(`${name}: ${hits.length ? 'mehrdeutig (' + hits.map(h => h.name).join('/') + ')' : 'kein Team mit diesem Namen'}`); continue; }
+    if (taken.has(hits[0].id)) { offen.push(`${name}: Team ${hits[0].name} hat schon ein Konto`); continue; }
+    await q('insert into users(email,name,role,manager_id,password_hash,must_change_pw) values($1,$2,$3,$4,$5,true)', [email, name, 'manager', hits[0].id, hash]);
+    taken.add(hits[0].id); mails.add(email); angelegt.push(`${name} → ${hits[0].name}`);
+  }
+  await audit(a.id, 'user_bulk_create', { n: angelegt.length });
+  rev();
+  const msg = [angelegt.length ? `${angelegt.length} angelegt: ${angelegt.join(', ')}` : 'Nichts angelegt', offen.length ? `Offen: ${offen.join(' · ')}` : ''].filter(Boolean).join(' — ');
+  return angelegt.length ? ok(msg) : fail(msg);
+});
+
 export const resetPasswordAction = wrap(async (userId, pw) => { const a = await requireAdmin(); if (String(pw).length < 8) return fail('min. 8 Zeichen'); await q('update users set password_hash=$1, must_change_pw=true where id=$2', [await hashPassword(String(pw)), userId]); await audit(a.id, 'pw_reset', { userId }); return ok('Startpasswort gesetzt'); });
 export const deleteUserAction = wrap(async (userId) => { const a = await requireAdmin(); if (userId === a.id) return fail('Eigenes Konto nicht löschbar'); await q('delete from users where id=$1', [userId]); rev(); return ok('Konto gelöscht'); });
 

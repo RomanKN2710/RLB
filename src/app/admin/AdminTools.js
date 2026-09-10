@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
+import { syncAction, syncCurrentAction, splitNachtragAction, createUserAction, bulkCreateUsersAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -12,6 +12,12 @@ export function UserRow({ userId }) { const { msg, pending, run } = useRun(); co
   return <span className="row" style={{ gap: 4 }}><input type="text" placeholder="neues Startpasswort" value={pw} onChange={e => setPw(e.target.value)} style={{ width: 150 }} /><button className="sm sec" disabled={pending || pw.length < 8} onClick={() => run(() => resetPasswordAction(userId, pw))}>Setzen</button>{arm ? <button className="sm danger" onClick={() => run(() => deleteUserAction(userId))}>Löschen?</button> : <button className="sm sec" onClick={() => setArm(true)}>×</button>}{msg && <span className="mini">{msg.msg}</span>}</span>; }
 export function CreateUser({ managers }) { const [state, action] = useFormState(createUserAction, null);
   return <form action={action} className="stack" style={{ marginTop: 10 }}><div className="eyebrow">Konto anlegen</div><div className="row"><input name="name" placeholder="Name" required /><input name="email" type="email" placeholder="E-Mail" required /><select name="role" defaultValue="manager"><option value="manager">Manager</option><option value="admin">Admin</option></select><select name="manager_id" defaultValue=""><option value="">– Team –</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select><input name="password" placeholder="Startpasswort (min. 8)" required minLength={8} /><button className="sm">Anlegen</button></div><Msg state={state} /><p className="mini">Der Manager meldet sich mit E-Mail und Startpasswort an und setzt beim ersten Login ein eigenes Passwort.</p></form>; }
+export function BulkCreateUsers() { const [state, action] = useFormState(bulkCreateUsersAction, null);
+  return <form action={action} className="stack" style={{ marginTop: 10 }}><div className="eyebrow">Mehrere Konten auf einmal</div>
+    <textarea name="text" rows={5} placeholder={'Pädi\tpatrick.duss@gmx.ch\nRene Peter\trene.peter@ptrn.ch\n…'} style={{ width: '100%', fontFamily: 'monospace', fontSize: 12 }} />
+    <div className="row"><input name="password" placeholder="Startpasswort für alle" required minLength={6} /><button className="sm">Alle anlegen</button><Msg state={state} /></div>
+    <p className="mini">Je Zeile Name und E-Mail, getrennt durch Tabulator, Komma oder Semikolon – so, wie es aus einer Tabelle kopiert wird. Das Team wird über den Namen zugeordnet; Vorname genügt, Umlaute egal. Zeilen ohne eindeutiges Team werden gemeldet und nicht angelegt. Alle melden sich mit dem Startpasswort an und setzen danach ein eigenes.</p></form>; }
+
 export function Vorsaison({ list, managers }) { const { msg, pending, run } = useRun(); const [txt, setTxt] = useState(list.join(', '));
   return <div className="stack"><textarea rows={2} value={txt} onChange={e => setTxt(e.target.value)} placeholder={managers.join(', ')} /><div className="row"><button className="sm sec" disabled={pending} onClick={() => run(() => setVorsaisonAction(txt.split(',').map(s => s.trim()).filter(Boolean)))}>Speichern</button><span className="mini">Schlechtester zuerst, Komma-getrennt. Verfügbar: {managers.join(', ')}</span>{msg && <span className="mini">{msg.msg}</span>}</div></div>; }
 export function Manual({ managers, clubs }) { const [s1, a1] = useFormState(manualBuyAction, null); const [s2, a2] = useFormState(ledgerAction, null);

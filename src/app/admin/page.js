@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import { q, getSetting } from '@/lib/db';
 import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
-import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste } from './AdminTools';
+import { Sync, Split, UserRow, CreateUser, BulkCreateUsers, Vorsaison, Manual, PoolPaste } from './AdminTools';
 import { SquadSync, Leavers } from './SquadTools';
 import { rlbLeavers } from '@/lib/squads';
 import clubSlugs from '../../../db/seed/kicker-clubs.json';
@@ -36,7 +36,8 @@ export default async function Admin() {
     <div className="grid2">
       <div className="card"><div className="eyebrow">Benutzer</div><h2>Konten</h2>
         <div className="tbl"><table><thead><tr><th className="l">Name</th><th className="l">E-Mail</th><th className="l">Rolle</th><th className="l">Team</th><th className="l"></th></tr></thead><tbody>{users.map(x => <tr key={x.id}><td className="l">{x.name}</td><td className="l">{x.email}</td><td className="l">{x.role}{x.must_change_pw && <span className="badge v">Startpasswort</span>}</td><td className="l">{x.manager_name || '–'}</td><td className="l"><UserRow userId={x.id} /></td></tr>)}</tbody></table></div>
-        <CreateUser managers={b.managers.map(m => ({ id: m.id, name: m.name }))} /></div>
+        <CreateUser managers={b.managers.map(m => ({ id: m.id, name: m.name }))} />
+        <BulkCreateUsers /></div>
       <div className="card"><div className="eyebrow">Einstellungen</div><h2>Vorsaison-Reihenfolge</h2><p className="mini">Für Gleichstände bei Geboten vor der ersten gewerteten Runde (Ziff. 7.1: schlechtester Tabellenplatz der Vorsaison zuerst). Danach zählt die aktuelle Tabelle automatisch.</p>
         <Vorsaison list={vorsaison} managers={b.managers.map(m => m.name)} />
         <h3 style={{ marginTop: 14 }}>Manueller Kauf / Buchung</h3><Manual managers={b.managers.map(m => ({ id: m.id, name: m.name }))} clubs={b.clubs.map(c => c.id)} /></div>
