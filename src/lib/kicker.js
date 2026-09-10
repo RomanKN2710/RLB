@@ -9,7 +9,14 @@ const SEASON = () => process.env.KICKER_SEASON || '2026-27';
 
 export async function fetchHtml(url) {
   const r = await fetch(url, { headers: { 'user-agent': process.env.KICKER_UA || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36', accept: 'text/html,application/xhtml+xml', 'accept-language': 'de-CH,de;q=0.9' }, cache: 'no-store', redirect: 'follow' });
-  if (!r.ok) throw new Error(`kicker ${url}: HTTP ${r.status}`);
+  if (!r.ok) {
+    // 403/429 heisst bei kicker so gut wie immer: Abrufe aus Rechenzentren sind gesperrt.
+    // Der Kennsatz oben ist bereits der eines Browsers, daran liegt es also nicht.
+    const hint = [403, 429, 503].includes(r.status)
+      ? ' – kicker lässt Abrufe von Servern nicht zu. Die App läuft bei Vercel im Rechenzentrum, deshalb greift die Sperre. Nimm den Rückfall im Admin: Seite im eigenen Browser öffnen und die Daten von dort übernehmen.'
+      : '';
+    throw new Error(`kicker ${url}: HTTP ${r.status}${hint}`);
+  }
   return r.text();
 }
 

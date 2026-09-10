@@ -7,6 +7,24 @@ function useRun() { const [msg, setMsg] = useState(null); const [pending, start]
 function zurichToIso(local) { const g = new Date(local + ':00Z'); const shown = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(g).replace(' ', 'T'); const off = new Date(shown + ':00Z') - g; return new Date(g - off).toISOString(); }
 const M = ({ msg }) => msg ? <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span> : null;
 
+/* Eingefuegtes kicker-HTML im Browser ausduennen, bevor es zum Server geht. Der Parser
+   liest nur gerenderte Elemente (Aufstellungszeilen, Ticker, Spielerlinks); script-,
+   style- und svg-Bloecke machen bei kicker aber den groessten Teil der Seite aus. Ohne
+   das reisst die Nutzlast die Grenze der Server-Action, und der Abbruch ist im Browser
+   nur ein Verbindungsfehler ohne Meldung. */
+function slimHtml(html) {
+  if (!html || !html.trim()) return '';
+  try {
+    const d = new DOMParser().parseFromString(html, 'text/html');
+    d.querySelectorAll('script, style, noscript, svg, link, iframe, picture source, template').forEach(el => el.remove());
+    const walker = d.createTreeWalker(d, NodeFilter.SHOW_COMMENT);
+    const junk = []; while (walker.nextNode()) junk.push(walker.currentNode);
+    junk.forEach(n => n.remove());
+    const out = d.body ? d.body.innerHTML : '';
+    return out.length && out.length < html.length ? out : html;
+  } catch { return html; }
+}
+
 export function Header({ round, managers, corrections }) {
   const { msg, pending, run } = useRun();
   const [dl, setDl] = useState(round.deadlineLocal); const [tdr, setTdr] = useState(round.tdr.join(', ')); const [sdt, setSdt] = useState(round.sdt); const [label, setLabel] = useState(round.label);
@@ -54,5 +72,11 @@ export function Kicker({ roundId, lastLog }) { const { msg, pending, run } = use
       <textarea rows={3} placeholder="Aufstellung Spiel 1 (HTML)" value={h1} onChange={e => setH1(e.target.value)} style={{ width: '100%' }} />
       <textarea rows={3} placeholder="Aufstellung Spiel 2 (HTML)" value={h2} onChange={e => setH2(e.target.value)} style={{ width: '100%' }} />
       <textarea rows={3} placeholder="Elf des Tages (HTML)" value={h3} onChange={e => setH3(e.target.value)} style={{ width: '100%' }} />
-      <div className="row"><button className="sm komm" disabled={pending} onClick={() => run(async () => { const r = await importKickerHtmlAction(roundId, [h1, h2], h3); if (r.ok) { setH1(''); setH2(''); setH3(''); } return r; })}>Aus eingefügtem HTML importieren</button></div></details>
+      <div className="row"><button className="sm komm" disabled={pending} onClick={() => run(async () => {
+        const parts = [h1, h2].map(slimHtml), eleven = slimHtml(h3);
+        const bytes = [...parts, eleven].reduce((n, x) => n + x.length, 0);
+        if (!bytes) return { ok: false, msg: 'Nichts eingefügt' };
+        if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte nur ein Spiel pro Durchgang einfügen.` };
+        const r = await importKickerHtmlAction(roundId, parts, eleven); if (r.ok) { setH1(''); setH2(''); setH3(''); } return r;
+      })}>Aus eingefügtem HTML importieren</button><span className="mini">Skripte und Stile werden vor dem Senden entfernt.</span></div></details>
   </div>); }
