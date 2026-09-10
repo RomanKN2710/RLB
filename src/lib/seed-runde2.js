@@ -20,6 +20,9 @@ export async function applyRunde2(seed, log = () => {}) {
 
   // Vereinsergebnisse: nur für Spiele, die noch kein Resultat haben. Tore werden aus Punkten
   // und Zu-null rekonstruiert, weil nur diese beiden Grössen in die Wertung eingehen.
+  // Vereinsergebnisse aus dem Excel hinterlegen: solange der Spielplan nicht geladen ist,
+  // rechnet die Wertung damit (siehe roundData). Echte Spiele haben Vorrang.
+  await setSetting('club_results_' + number, seed.clubResults || {});
   const matches = await q('select m.*, c1.id as c1, c2.id as c2 from matches m left join clubs c1 on c1.oldb_team_id=m.team1 left join clubs c2 on c2.oldb_team_id=m.team2 where m.round_id=$1', [round.id]);
   for (const m of matches) { if (m.finished) continue; const a = seed.clubResults[m.c1], b = seed.clubResults[m.c2]; if (!a || !b) continue;
     const g1 = a.pts === 3 ? (b.cs ? 0 : 2) : a.pts === 1 ? (a.cs ? 0 : 1) : (b.cs ? 0 : 1), g2 = b.pts === 3 ? (a.cs ? 0 : 2) : b.pts === 1 ? (b.cs ? 0 : 1) : (a.cs ? 0 : 1);
@@ -51,23 +54,26 @@ export async function applyRunde2(seed, log = () => {}) {
       ent[p.id] = { pos: e.pos };
       if ((seed.freeIn || {})[m]?.some(n => norm(n) === norm(e.name))) free.push(p.id);
       if (e.pos !== p.base_pos && !(p.extra_pos || []).includes(e.pos)) await q('update players set extra_pos = array_append(extra_pos, $1) where id=$2 and not ($1 = any(extra_pos))', [e.pos, p.id]);
-      await q("insert into results(round_id,player_id,start,assist,tore,karten,tdr,source) values($1,$2,$3,$4,$5,$6,$7,'excel') on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, source='excel' where results.locked = false", [round.id, p.id, e.start, e.assist, e.tore, e.karten, e.tdr]); }
+      await q("insert into results(round_id,player_id,start,assist,tore,karten,tdr,source,locked) values($1,$2,$3,$4,$5,$6,$7,'excel',true) on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, source='excel', locked=true", [round.id, p.id, e.start, e.assist, e.tore, e.karten, e.tdr]); }
     await q('insert into lineups(round_id,manager_id,entries,free_in,updated_at) values($1,$2,$3,$4,now()) on conflict(round_id,manager_id) do update set entries=excluded.entries, free_in=excluded.free_in, updated_at=now()', [round.id, mid[m], JSON.stringify(ent), free]); }
 
   // Beim Wechsel auf Seed-Version 2 wird die Runde einmalig wieder geoeffnet: die
   // erste Fassung hatte sie sofort auf 'final' gesetzt, die Wertung gehoert aber Roman.
   // Nur beim Versionswechsel, damit ein spaeterer Setup-Aufruf einen von ihm gesetzten
   // Abschluss nicht wieder aufreisst.
-  let geoeffnet = false;
-  if (alteVersion < 2) { const r = await q("update rounds set status='open' where id=$1 and status<>'open' returning id", [round.id]); geoeffnet = r.length > 0; }
+  // Das Excel enthaelt die fertige Auswertung des 2. Spieltags, die Runde gilt also als
+  // gewertet. Nur beim Versionswechsel setzen, damit ein spaeter von Hand geaenderter
+  // Status nicht bei jedem Setup-Aufruf zurueckgedreht wird.
+  let statusGesetzt = false;
+  if (alteVersion < 4) { const r = await q("update rounds set status='final' where id=$1 and status<>'final' returning id", [round.id]); statusGesetzt = r.length > 0; }
 
   const mrows = await q('select count(*)::int as n from matches where round_id=$1', [round.id]);
   if (!mrows[0].n) {
     await q("update rounds set deadline=coalesce(deadline, now() - interval '1 day') where id=$1 and not deadline_manual", [round.id]);
-    log('Runde 2: keine Spiele in der Datenbank – Vereinspunkte und Zu-null fehlen noch. Im Admin den Spielplan laden (OpenLigaDB), danach stimmen sie. Deadline vorläufig gesetzt, damit die Runde in der Tabelle erscheint.');
+    log('Runde 2: noch keine Spiele in der Datenbank. Vereinspunkte und Zu-null kommen so lange aus den im Excel hinterlegten Vereinsergebnissen; sobald der Spielplan geladen ist, gelten die echten Spiele. Deadline vorläufig gesetzt, damit die Runde in der Tabelle erscheint.');
   }
-  const info = { at: new Date().toISOString(), version: 2, missing };
+  const info = { at: new Date().toISOString(), version: 4, missing };
   await setSetting('runde2_seed', info);
-  log(`Runde 2 ${erstmals ? 'importiert' : 'abgeglichen'}: ${Object.keys(seed.lineups || {}).length} Aufstellungen mit ${Object.values(seed.lineups || {}).reduce((n, x) => n + x.length, 0)} Einträgen${missing.length ? ' · nicht zugeordnet: ' + missing.join(', ') : ''}. Runde ${geoeffnet ? 'wieder geöffnet' : 'steht auf ' + (await one('select status from rounds where id=$1', [round.id])).status} – die Wertung schliesst du selbst ab.`);
+  log(`Runde 2 ${erstmals ? 'importiert' : 'abgeglichen'}: ${Object.keys(seed.lineups || {}).length} Aufstellungen mit ${Object.values(seed.lineups || {}).reduce((n, x) => n + x.length, 0)} Einträgen${missing.length ? ' · nicht zugeordnet: ' + missing.join(', ') : ''}. Runde ${statusGesetzt ? 'als gewertet markiert' : 'steht auf ' + (await one('select status from rounds where id=$1', [round.id])).status}; die Excel-Werte sind gegen Überschreiben gesperrt.`);
   return info;
 }

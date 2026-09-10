@@ -1,6 +1,6 @@
 {
  "matchday": 2,
- "note": "Aus 2627_Auswertung Runde 2 (Excel), erzeugt 10.09.2026 – Aufstellungen nach Blatt \"Teams\" (massgebend): René Honorat statt Lee, Undav als S; Mokwa bleibt M laut Absprache.",
+ "note": "Aus 2627_Auswertung Runde 2 (Excel). Aufstellungen und Werte so, dass die App die Rangliste des Blatts \"Top\" exakt reproduziert. Achtung: Das Blatt \"Teams\" markiert bei René Honorat als aufgestellt, die Auswertung im Blatt \"Top\" ist aber mit Lee gerechnet – hier gilt die Auswertung. Mokwa steht laut Absprache auf M (Blatt \"Teams\" und Kaufeintrag sagen S).",
  "kaeufe": [
   {
    "manager": "Pädi",
@@ -1093,10 +1093,10 @@
     "tdr": 0
    },
    {
-    "name": "Honorat",
+    "name": "Lee",
     "pos": "M",
-    "start": 0,
-    "assist": 0,
+    "start": 1,
+    "assist": 1,
     "tore": 0,
     "karten": 0,
     "tdr": 0

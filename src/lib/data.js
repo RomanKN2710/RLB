@@ -1,4 +1,4 @@
-import { q, one } from './db';
+import { q, one, getSetting } from './db';
 import * as R from './rules';
 
 /** Stammdaten: Manager, Vereine, Spieler. */
@@ -36,7 +36,12 @@ export async function ensureLineups(round, b) {
 export async function roundData(round, b) {
   await ensureLineups(round, b);
   const matches = await q('select * from matches where round_id=$1', [round.id]);
-  const clubRes = R.clubResults(matches, b.teamToClub);
+  // Vereinsergebnisse stammen normalerweise aus den Spielen der Runde. Solange der
+  // Spielplan noch nicht geladen ist, gibt es keine Spiele und damit weder Vereinspunkte
+  // noch Zu-null. Ein im Seed hinterlegter Stand dient dann als Rueckfall; echte Spiele
+  // ueberschreiben ihn, sobald sie da sind.
+  const seeded = await getSetting('club_results_' + round.number, null);
+  const clubRes = { ...(seeded || {}), ...R.clubResults(matches, b.teamToClub) };
   const lus = await q('select * from lineups where round_id=$1', [round.id]);
   const lineups = {}; lus.forEach(l => lineups[l.manager_id] = l);
   const rs = await q('select * from results where round_id=$1', [round.id]);

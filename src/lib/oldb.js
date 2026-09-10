@@ -134,6 +134,9 @@ export function nameMatches(oldbName, ourName) {
  */
 export async function importGoals(roundId, players, teamToClub) {
   const matches = await q('select * from matches where round_id=$1 and finished', [roundId]);
+  // Ohne beendete Spiele gibt es nichts zu uebernehmen. Frueher wurde in diesem Fall jedem
+  // aufgestellten Spieler tore=0 geschrieben und damit von Hand erfasste Werte geloescht.
+  if (!matches.length) return { assigned: [], unmatched: [], unknown: 0, skipped: 'keine beendeten Spiele' };
   const lus = await q('select * from lineups where round_id=$1', [roundId]);
   const lineupPids = new Set(); lus.forEach(l => Object.keys(l.entries || {}).forEach(pid => lineupPids.add(pid)));
   const candidates = Object.values(players).filter(p => lineupPids.has(p.id));
