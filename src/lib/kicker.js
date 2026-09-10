@@ -168,13 +168,22 @@ export async function importRound(round, b, fetcher = fetchHtml, opts = {}) {
 
 /** Spielerpool pflegen: jeder Spieler, der laut kicker im Spiel stand (Startelf oder eingewechselt), mit Verein und kicker-Position. */
 export async function upsertPool(stats, b, matchday) {
+  // Eine Sammelanweisung statt einer Abfrage pro Spieler. Innerhalb einer Anweisung
+  // darf ein slug nur einmal vorkommen, sonst bricht Postgres den ON-CONFLICT-Teil ab.
+  const seen = new Set(); const rows = [];
   for (const s of stats) {
-    if (!s.slug) continue;
+    if (!s.slug || seen.has(s.slug)) continue; seen.add(s.slug);
     const club = (b.clubs || []).map(c => c.id).find(id => clubMatches(s.team, id)) || null;
     const played = s.start === 1 && s.kpos ? [s.kpos] : [];
-    await q(`insert into bl_players(slug,name,club,pos,last_matchday,games,played_pos) values($1,$2,$3,$4,$5,1,$6)
-      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when bl_players.last_matchday is distinct from excluded.last_matchday then bl_players.games+1 else bl_players.games end, played_pos=(select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), updated_at=now()`,
-      [s.slug, s.name, club, s.kpos || null, matchday || null, played]);
+    rows.push([s.slug, s.name, club, s.kpos || null, matchday || null, played]);
+  }
+  const cols = ['slug', 'name', 'club', 'pos', 'last_matchday', 'played_pos'];
+  for (let i = 0; i < rows.length; i += 150) {
+    const part = rows.slice(i, i + 150); const params = [];
+    const vals = part.map((r, ri) => { for (const v of r) params.push(v); const b0 = ri * cols.length;
+      return `($${b0 + 1},$${b0 + 2},$${b0 + 3},$${b0 + 4},$${b0 + 5},1,$${b0 + 6})`; }).join(',');
+    await q(`insert into bl_players(slug,name,club,pos,last_matchday,games,played_pos) values ${vals}
+      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when bl_players.last_matchday is distinct from excluded.last_matchday then bl_players.games+1 else bl_players.games end, played_pos=(select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), updated_at=now()`, params);
   }
 }
 

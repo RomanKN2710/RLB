@@ -28,20 +28,27 @@ export async function applySquads(squads, b, source = 'kicker') {
   const clubOf = {}; for (const [id, slug] of Object.entries(clubSlugs)) clubOf[slug] = id;
   const before = await q('select slug, name, club, squad_pos, in_squad from bl_players');
   const prev = {}; before.forEach(p => prev[p.slug] = p);
-  const seen = new Set(); const log = []; const now = new Date();
+  const seen = new Set(); const log = []; const now = new Date(); const rows = [];
   for (const [cslug, list] of Object.entries(squads)) {
     const club = clubOf[cslug] || cslug;
     for (const row of list) {
       const [pos, last, first, slug] = Array.isArray(row) ? row : [row.pos, row.last, row.first, row.slug];
-      if (!slug) continue; seen.add(slug);
+      if (!slug || seen.has(slug)) continue; seen.add(slug);
       const name = last || first; const p = prev[slug];
-      await q(`insert into bl_players(slug,name,first_name,club,pos,squad_pos,in_squad,seen_at,left_at) values($1,$2,$3,$4,$5,$5,true,$6,null)
-        on conflict(slug) do update set name=excluded.name, first_name=excluded.first_name, club=excluded.club, squad_pos=excluded.squad_pos, pos=coalesce(bl_players.pos, excluded.pos), in_squad=true, seen_at=excluded.seen_at, left_at=null, updated_at=now()`,
-        [slug, name, first || null, club, pos, now]);
+      rows.push([slug, name, first || null, club, pos, pos, true, now, null]);
       if (!p || !p.in_squad) { if (before.length) log.push({ type: 'zugang', slug, name, club_to: club, pos_to: pos }); }
       else if (p.club !== club) log.push({ type: 'wechsel', slug, name, club_from: p.club, club_to: club, pos_to: pos });
       else if (p.squad_pos && p.squad_pos !== pos) log.push({ type: 'position', slug, name, club_to: club, pos_from: p.squad_pos, pos_to: pos });
     }
+  }
+  // Alle Kaderzeilen in wenigen Sammelanweisungen statt einer pro Spieler: ueber 500
+  // Einzelabfragen sprengen sonst die Zeitgrenze der Serverless-Funktion.
+  const cols = ['slug', 'name', 'first_name', 'club', 'pos', 'squad_pos', 'in_squad', 'seen_at', 'left_at'];
+  for (let i = 0; i < rows.length; i += 150) {
+    const part = rows.slice(i, i + 150); const params = [];
+    const vals = part.map((r, ri) => { for (const v of r) params.push(v); return '(' + cols.map((_, ci) => '$' + (ri * cols.length + ci + 1)).join(',') + ')'; }).join(',');
+    await q(`insert into bl_players(${cols.join(',')}) values ${vals}
+      on conflict(slug) do update set name=excluded.name, first_name=excluded.first_name, club=excluded.club, squad_pos=excluded.squad_pos, pos=coalesce(bl_players.pos, excluded.pos), in_squad=true, seen_at=excluded.seen_at, left_at=null, updated_at=now()`, params);
   }
   // Abgänge: vorher im Kader, jetzt in keinem
   if (Object.keys(squads).length >= 18) {
