@@ -17,9 +17,18 @@ export async function GET(req) {
     await q(fs.readFileSync(path.join(process.cwd(), 'db', 'schema.sql'), 'utf8'));
     const seedData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'runde1.json'), 'utf8'));
     await runSeed(q, process.env, seedData, m => logs.push(m));
-    // Spielerpool: kicker-Kader-Momentaufnahme aller 18 Vereine, falls noch leer
-    const n = await q('select count(*)::int as n from bl_players where in_squad');
-    if (n[0].n === 0) { const kader = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'kicker-kader.json'), 'utf8')); const r = await applySquads(kader.squads, null, 'seed ' + kader.date); logs.push(`Spielerpool: ${r.players} Spieler aus ${r.clubs} kicker-Kadern (Stand ${kader.date})`); }
+    // Spielerpool: kicker-Kader-Momentaufnahme aller 18 Vereine. Die Merkzeile wird erst
+    // nach dem vollstaendigen Import geschrieben, darum holt ein zweiter Aufruf einen
+    // abgebrochenen Lauf nach. Ein blosser Zeilenzaehler taugt dafuer nicht: nach einem
+    // Abbruch bei 200 von 509 Spielern waere der Pool fuer immer unvollstaendig geblieben,
+    // und nach einem spaeteren kicker-Abgleich wuerde er abgegangene Spieler zurueckholen.
+    const poolDone = await q("select 1 from settings where key='pool_seed'");
+    if (!poolDone.length) {
+      const kader = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'kicker-kader.json'), 'utf8'));
+      const r = await applySquads(kader.squads, null, 'seed ' + kader.date);
+      await q("insert into settings(key,value) values('pool_seed',$1) on conflict(key) do update set value=excluded.value", [JSON.stringify({ at: new Date().toISOString(), players: r.players, date: kader.date })]);
+      logs.push(`Spielerpool: ${r.players} Spieler aus ${r.clubs} kicker-Kadern (Stand ${kader.date})`);
+    } else { logs.push('Spielerpool war schon importiert'); }
     const done = await q("select 1 from settings where key='startelf_seed'");
     if (!done.length) { const se = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'kicker-startelf.json'), 'utf8')); const l = await applyStartelfSeed(se, await base()); await q("insert into settings(key,value) values('startelf_seed',$1) on conflict(key) do update set value=excluded.value", [JSON.stringify({ at: new Date().toISOString(), n: l.length })]); logs.push(`Startaufstellungen Spieltag 1–2 (kicker): ${l.length} Positionserwerbe: ${l.join('; ')}`); }
     // Admin-Konto: der Seed legt es nur an, solange die users-Tabelle leer ist. Darum hier
