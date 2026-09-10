@@ -1,0 +1,1321 @@
+{
+"matchday": 2,
+"note": "Aus 2627_Auswertung Runde 2 (Excel), erzeugt 10.09.2026",
+"kaeufe": [
+{
+"manager": "Pädi",
+"name": "Conté",
+"club": "Hoffenheim",
+"pos": "M",
+"price": 2
+},
+{
+"manager": "Pädi",
+"name": "Moore",
+"club": "Köln",
+"pos": "S",
+"price": 3
+},
+{
+"manager": "Pädi",
+"name": "Hwang",
+"club": "Schalke",
+"pos": "S",
+"price": 2
+},
+{
+"manager": "Arbi",
+"name": "Mokwa",
+"club": "Elversberg",
+"pos": "S",
+"price": 4
+},
+{
+"manager": "Arbi",
+"name": "Dallinga",
+"club": "Köln",
+"pos": "S",
+"price": 5
+},
+{
+"manager": "Arbi",
+"name": "Mensah",
+"club": "Köln",
+"pos": "V",
+"price": 3
+},
+{
+"manager": "Röfe",
+"name": "Johanesson",
+"club": "Köln",
+"pos": "M",
+"price": 3
+},
+{
+"manager": "Röfe",
+"name": "Regeer",
+"club": "Bremen",
+"pos": "M",
+"price": 3
+},
+{
+"manager": "Mark",
+"name": "Kühn",
+"club": "Gladbach",
+"pos": "M",
+"price": 4
+},
+{
+"manager": "Mark",
+"name": "Onyeka",
+"club": "Elversberg",
+"pos": "M",
+"price": 3
+},
+{
+"manager": "Mark",
+"name": "Nwaneri",
+"club": "Dortmund",
+"pos": "M",
+"price": 19
+},
+{
+"manager": "Mike",
+"name": "Doué",
+"club": "Leverkusen",
+"pos": "V",
+"price": 19
+},
+{
+"manager": "Dani",
+"name": "Vieira",
+"club": "Hamburg",
+"pos": "M",
+"price": 12
+},
+{
+"manager": "David",
+"name": "El Aynaoui",
+"club": "Leipzig",
+"pos": "M",
+"price": 11
+},
+{
+"manager": "David",
+"name": "Guiu",
+"club": "Leipzig",
+"pos": "S",
+"price": 8
+}
+],
+"entlassungen": [
+{
+"manager": "Pädi",
+"name": "Konstantelias",
+"price": 23
+},
+{
+"manager": "Pädi",
+"name": "Bahoya",
+"price": 2
+},
+{
+"manager": "Pädi",
+"name": "L. Vazquez",
+"price": 5
+},
+{
+"manager": "Arbi",
+"name": "Itten",
+"price": 2
+},
+{
+"manager": "Arbi",
+"name": "Lerma",
+"price": 5
+},
+{
+"manager": "Arbi",
+"name": "Harder",
+"price": 5
+},
+{
+"manager": "Röfe",
+"name": "Kaua Santos",
+"price": 3
+},
+{
+"manager": "Röfe",
+"name": "Mbangula",
+"price": 5
+},
+{
+"manager": "Mark",
+"name": "Tapé",
+"price": 5
+},
+{
+"manager": "Mark",
+"name": "Arthur",
+"price": 5
+},
+{
+"manager": "Mark",
+"name": "Woltemade",
+"price": 5
+},
+{
+"manager": "Mike",
+"name": "Hollerbach",
+"price": 5
+},
+{
+"manager": "Dani",
+"name": "Doan",
+"price": 8
+},
+{
+"manager": "David",
+"name": "Fort",
+"price": 5
+},
+{
+"manager": "David",
+"name": "Waldschmidt",
+"price": 5
+}
+],
+"vereinswechsel": [
+{
+"manager": "Pädi",
+"name": "Prömel",
+"club": "Stuttgart"
+}
+],
+"lineups": {
+"Pädi": [
+{
+"name": "Nkunku",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Prömel",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Moreira",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Undav",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ljubicic",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Zentner",
+"pos": "T",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Itakura",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Coufal",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Caci",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Mwene",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 1,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Querfeld",
+"pos": "V",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+],
+"Arbi": [
+{
+"name": "Nmecha",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Mokwa",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Kramaric",
+"pos": "M",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Gregoritsch",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Hlozek",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Kobel",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ryerson",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ulrich",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Scally",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Mensah",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Raum",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+],
+"Röfe": [
+{
+"name": "Petkov",
+"pos": "M",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Aleix Garcia",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Leweling",
+"pos": "M",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Amiri",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Kane",
+"pos": "S",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Burkardt",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Pejcinovic",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Dahmen",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Gadou",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Lienhart",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Hajdari",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+}
+],
+"Mark": [
+{
+"name": "Veermann",
+"pos": "M",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Grönbaek",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Burger",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Führich",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ebnoutalib",
+"pos": "S",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Schick",
+"pos": "S",
+"start": 1,
+"assist": 1,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Tietz",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 2,
+"karten": 0,
+"tdr": 1
+},
+{
+"name": "Backhaus",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Baku",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Miguel",
+"pos": "V",
+"start": 1,
+"assist": 2,
+"tore": 0,
+"karten": 0,
+"tdr": 1
+},
+{
+"name": "Quansah",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 1
+}
+],
+"Roman": [
+{
+"name": "Karl",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Karetsas",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Eggestein",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Beier",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Kleindienst",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Flekken",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Davies",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Svensson",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Anton",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Medina",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 1
+},
+{
+"name": "Chabot",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+],
+"Mike": [
+{
+"name": "Uzun",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Tillman",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Stiller",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Saibari",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Nusa",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Latte Lath",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Nicolas",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Matsima",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Kabak",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Esteve",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Mittelstaedt",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+}
+],
+"Dani": [
+{
+"name": "Beste",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Engelhardt",
+"pos": "M",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Vieira",
+"pos": "M",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Luis Diaz",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Guirassy",
+"pos": "S",
+"start": 1,
+"assist": 1,
+"tore": 1,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Matanovic",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Vandevoordt",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Brown",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Makengo",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Günter",
+"pos": "V",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Diks",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+}
+],
+"Lazar": [
+{
+"name": "Kimmich",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "J. Bellingham",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Maza",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 1,
+"karten": 0,
+"tdr": 1
+},
+{
+"name": "Khedira",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Olise",
+"pos": "S",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Baumann",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Kim",
+"pos": "V",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Koch",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Treu",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Orban",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Hendriks",
+"pos": "V",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+],
+"René": [
+{
+"name": "Suzuki",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Mohya",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Seiwald",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Lee",
+"pos": "M",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ache",
+"pos": "S",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Becker",
+"pos": "S",
+"start": 1,
+"assist": 2,
+"tore": 1,
+"karten": 1,
+"tdr": 1
+},
+{
+"name": "Heuer Fernandes",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Ginter",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Tapsoba",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Jeltsch",
+"pos": "V",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Juranovic",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+],
+"David": [
+{
+"name": "Pavlovic",
+"pos": "M",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Grifo",
+"pos": "M",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Gruda",
+"pos": "M",
+"start": 0,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Sano",
+"pos": "M",
+"start": 1,
+"assist": 1,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Gomis",
+"pos": "S",
+"start": 2,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Neuer",
+"pos": "T",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Tah",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Laimer",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Upamecano",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 1,
+"tdr": 0
+},
+{
+"name": "Baum",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+},
+{
+"name": "Rothe",
+"pos": "V",
+"start": 1,
+"assist": 0,
+"tore": 0,
+"karten": 0,
+"tdr": 0
+}
+]
+},
+"clubResults": {
+"Augsburg": {
+"pts": 3,
+"cs": false
+},
+"Köln": {
+"pts": 0,
+"cs": false
+},
+"Paderborn": {
+"pts": 0,
+"cs": false
+},
+"Freiburg": {
+"pts": 3,
+"cs": true
+},
+"Dortmund": {
+"pts": 3,
+"cs": false
+},
+"Frankfurt": {
+"pts": 0,
+"cs": false
+},
+"Union": {
+"pts": 0,
+"cs": false
+},
+"Leipzig": {
+"pts": 0,
+"cs": false
+},
+"Hoffenheim": {
+"pts": 0,
+"cs": false
+},
+"Schalke": {
+"pts": 1,
+"cs": true
+},
+"Stuttgart": {
+"pts": 3,
+"cs": false
+},
+"Leverkusen": {
+"pts": 3,
+"cs": true
+},
+"Mainz": {
+"pts": 3,
+"cs": true
+},
+"Gladbach": {
+"pts": 0,
+"cs": false
+},
+"Bayern": {
+"pts": 1,
+"cs": true
+},
+"Hamburg": {
+"pts": 0,
+"cs": false
+},
+"Bremen": {
+"pts": 3,
+"cs": false
+},
+"Elversberg": {
+"pts": 3,
+"cs": false
+}
+},
+"tdr": [
+"Medina",
+"Maza",
+"Tietz",
+"Miguel",
+"Quansah",
+"Becker"
+],
+"sdt": "",
+"gutschriften": [
+{
+"manager": "Dani",
+"amount": 5,
+"text": "Abgang Kolo Muani (Juventus), Ziff. 7.4 – aus Excel"
+},
+{
+"manager": "Arbi",
+"amount": 5,
+"text": "Gutschrift gemäss Excel (−5), Spieler nicht dokumentiert"
+},
+{
+"manager": "Pädi",
+"amount": 2,
+"text": "Gutschrift gemäss Excel (−2), Spieler nicht dokumentiert"
+},
+{
+"manager": "Röfe",
+"amount": 5,
+"text": "Gutschrift gemäss Excel (L = 6−5), Spieler nicht dokumentiert"
+}
+],
+"freeIn": {
+"Dani": [
+"Vieira"
+],
+"Arbi": [
+"Mensah",
+"Mokwa"
+]
+}
+}

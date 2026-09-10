@@ -162,8 +162,10 @@ export async function importRound(round, b, fetcher = fetchHtml, opts = {}) {
       if (elf && elf.elf.length) { const r = await one(`insert into results(round_id,player_id,tdr,source) values($1,$2,$3,'kicker') on conflict(round_id,player_id) do update set tdr=excluded.tdr where results.locked = false returning player_id`, [round.id, p.id, tdr]); if (r) written++; else skipped++; }
       continue; }
     const s = perPlayer[p.id] || { start: 0, assist: 0, tore: 0, karten: 0, kpos: null, notes: [] };
+    // Ohne Elf-des-Tages-Seite bleibt ein vorhandener TdR-Wert erhalten (Teil-Import/Wiederholung)
+    const hasElf = !!(elf && elf.elf.length);
     const r = await one(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,kpos,source) values($1,$2,$3,$4,$5,$6,$7,$8,'kicker')
-      on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, kpos=excluded.kpos, source='kicker' where results.locked = false returning player_id`, [round.id, p.id, s.start, s.assist, s.tore, s.karten, tdr, s.kpos]);
+      on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=case when $9 then excluded.tdr else results.tdr end, kpos=excluded.kpos, source='kicker' where results.locked = false returning player_id`, [round.id, p.id, s.start, s.assist, s.tore, s.karten, tdr, s.kpos, hasElf]);
     if (r) written++; else skipped++;
     if (s.notes.length) log.push(`${p.name}: ${s.notes.join('; ')}`);
   }
