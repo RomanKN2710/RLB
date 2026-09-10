@@ -1,0 +1,14 @@
+import { requireUser } from '@/lib/auth';
+export default async function Regeln() { await requireUser(); return (
+  <div className="grid2"><div className="card"><div className="eyebrow">So rechnet die App (Regelwerk V4 2022)</div><h2>Regeln</h2>
+    <ul className="small" style={{ paddingLeft: 18, display: 'grid', gap: 4 }}>
+      <li><b>Aufstellung (5.1)</b>: 11 Spieler, 1 T, 3–5 V, 3–6 M, 1–3 S. Offen ist nur die nächste Runde, bis 90 Minuten vor dem ersten Anpfiff (Spielplan OpenLigaDB). Ohne Änderung gilt die Aufstellung der Vorrunde. Grundaufstellung Runde 1 gratis, danach 50 % des Werts jedes neu aufgestellten Spielers.</li>
+      <li><b>Positionen (5.2)</b>: Grundposition laut kicker; erworbene Zusatzpositionen trägt der Admin ein.</li>
+      <li><b>Jugendspieler (4.3.4)</b>: Bank-Picks (J) verlieren den Status, sobald sie aufgestellt werden.</li>
+      <li><b>Gebote (7.1)</b>: verdeckt (nur Admin sieht sie), ganze Franken, min. 2, Entlassung Pflicht (Kader 22), optional Eventualauftrag (gratis eingewechselt). Höchstgebot gewinnt, Gleichstand an den schlechteren Tabellenplatz. Budget 50 (7.4), ab 20 Vertragspflicht. Neue Bundesligaspieler: 48-Stunden-Regel (7.2) prüft der Admin.</li>
+      <li><b>Entlassene (7.3)</b>: der entlassende Manager wartet eine Runde; Folgerunde Mindestgebot = alter Wert. Abgang aus der Bundesliga: Wert wird dem Kaufbudget gutgeschrieben (7.4).</li>
+      <li><b>Trades (6)</b>: Vorschlag, Annahme, sofort vollzogen, beide je 5; unbeteiligte Manager haben ein Veto, bei Mehrheit macht der Admin rückgängig. Getauschte Spieler fallen aus der offenen Aufstellung und müssen neu aufgestellt werden.</li>
+      <li><b>Wertung (8)</b>: Punkte 3/1/0 bei Einsatz (Startelf oder eingewechselt), Shutout für T/V bei Einsatz (Startelf oder eingewechselt) und zu null, Start nur Startelf, Karten Gelb 1 / Gelb-Rot 2 / Rot 3 / Rot mit Gelb 4, Team der Runde laut kicker. Positionen (5.2): Grundposition laut kicker-Kader; wer laut Spielbericht in der Startelf auf einer anderen Position stand, ist ab der Folgerunde auf beiden einsetzbar (automatisch aus kicker, im Kader als z. B. «V/M»). Rangpunkte pro Kategorie (Anzahl Manager für den Besten), Teilrangpunkte bei Gleichstand, Karten: weniger ist besser. Nachtragsspiele sind eigene Runden.</li>
+      <li><b>Pott (9)</b>: Draft-Auslagen, Käufe, Wechselkosten, Trades und Vertragsauflösungen; minus 20 pro Manager fürs BBQ; 40/25/15/10 % für Rang 1–4, je 5 % Torschützenkönig und Spieler des Jahres.</li>
+    </ul></div>
+    <div className="card"><div className="eyebrow">Ermessen</div><h2>Bleibt beim Admin</h2><p className="small">Trade-Missverhältnis (6), Positionslogik und Positionserwerb (5.2), 48-Stunden-Regel (7.2), Spielabbruch-Wertungen (10.2), Verträge zum Draft (4.3.3), Vorsaison-Reihenfolge für Gleichstände in Runde 1.</p></div></div>); }
