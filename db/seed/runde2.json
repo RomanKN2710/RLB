@@ -46,7 +46,7 @@
   },
   {
    "manager": "Röfe",
-   "name": "Johanesson",
+   "name": "Johannesson",
    "club": "Köln",
    "pos": "M",
    "price": 3
@@ -359,7 +359,7 @@
     "tdr": 0
    },
    {
-    "name": "Ulrich",
+    "name": "Ullrich",
     "pos": "V",
     "start": 1,
     "assist": 0,
@@ -498,7 +498,7 @@
   ],
   "Mark": [
    {
-    "name": "Veermann",
+    "name": "Veerman",
     "pos": "M",
     "start": 2,
     "assist": 0,
