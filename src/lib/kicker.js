@@ -179,6 +179,9 @@ export async function importRound(round, b, fetcher = fetchHtml, opts = {}) {
 export async function upsertPool(stats, b, matchday) {
   // Eine Sammelanweisung statt einer Abfrage pro Spieler. Innerhalb einer Anweisung
   // darf ein slug nur einmal vorkommen, sonst bricht Postgres den ON-CONFLICT-Teil ab.
+  // played_pos: array_agg ueber eine leere Menge liefert NULL, nicht '{}' - bei einem
+  // Einwechselspieler ohne Startelf-Position verletzte das den NOT-NULL-Zwang und liess
+  // den ganzen Import scheitern. Daher coalesce.
   const seen = new Set(); const rows = [];
   for (const s of stats) {
     if (!s.slug || seen.has(s.slug)) continue; seen.add(s.slug);
@@ -192,7 +195,7 @@ export async function upsertPool(stats, b, matchday) {
     const vals = part.map((r, ri) => { for (const v of r) params.push(v); const b0 = ri * cols.length;
       return `($${b0 + 1},$${b0 + 2},$${b0 + 3},$${b0 + 4},$${b0 + 5},1,$${b0 + 6})`; }).join(',');
     await q(`insert into bl_players(slug,name,club,pos,last_matchday,games,played_pos) values ${vals}
-      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when bl_players.last_matchday is distinct from excluded.last_matchday then bl_players.games+1 else bl_players.games end, played_pos=(select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), updated_at=now()`, params);
+      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when bl_players.last_matchday is distinct from excluded.last_matchday then bl_players.games+1 else bl_players.games end, played_pos=coalesce((select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), '{}'), updated_at=now()`, params);
   }
 }
 
