@@ -45,7 +45,6 @@ export const GEPRUEFT_OK = [];
 export const ABGAENGE = [
   { id: 'arbi-belocian', grund: 'Liga verlassen: zu Racing Santander (von Roman bestätigt).' },
   { id: 'dani-vogt', grund: 'Liga verlassen (von Roman bestätigt).' },
-  { id: 'dani-kolo-muani', gutschrift: false, grund: 'Zu Juventus abgegangen. Die Gutschrift steht bereits aus dem Excel-Import von Runde 2, hier wird nur der Status nachgezogen – sonst bliebe er als aktiver Spieler auf einem Kaderplatz stehen, ohne je punkten zu können.' },
 ];
 
 /** Abgänge buchen: Status, Gutschrift aufs Kaufbudget, Transferzeile. Mehrfach aufrufbar. */
@@ -71,3 +70,11 @@ export async function applyAbgaenge(q, log = () => {}) {
     log(`Abgang gebucht: ${p.name} (${p.club})${schon ? ' – ohne neue Gutschrift, sie war schon vorhanden' : ` – ${wert} dem Kaufbudget gutgeschrieben`}. ${a.grund}`);
   }
 }
+
+/* Kaderspieler, die absichtlich in keinem kicker-Kader stehen: im Ersatzdraft darf weltweit
+   geboten werden. Sie bleiben im Kader und entfalten einfach keine Wirkung, bis der Manager
+   sie für einen anderen Spieler entlässt. Aus dem Bericht in /api/status ausgenommen, damit
+   dort nur echte Fehler stehen. */
+export const AUSSERHALB_DER_LIGA = [
+  { id: 'dani-kolo-muani', grund: 'Gebot aus dem Ersatzdraft (weltweit erlaubt). Liegt ohne Wirkung im Kader, bis Dani ihn entlässt.' },
+];

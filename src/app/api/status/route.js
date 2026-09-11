@@ -4,7 +4,7 @@ import { base, openRound, pendingRounds, lastFinalRound } from '@/lib/data';
 import { rlbLeavers } from '@/lib/squads';
 import { playerMatches } from '@/lib/kicker';
 import { norm } from '@/lib/rules';
-import { GEPRUEFT_OK } from '@/lib/korrekturen';
+import { GEPRUEFT_OK, AUSSERHALB_DER_LIGA } from '@/lib/korrekturen';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Neon-Kaltstart einrechnen
 
@@ -54,7 +54,9 @@ export async function GET(req) {
     // obwohl er jemandem gehört.
     const bl = await q('select slug, name, club from bl_players where in_squad');
     const aktive = b.playersArr.filter(p => p.status === 'active');
+    const weltweit = new Set(AUSSERHALB_DER_LIGA.map(x => x.id));
     out.kader_ohne_kicker = aktive
+      .filter(p => !weltweit.has(p.id))
       .filter(p => !bl.some(x => playerMatches(x.slug, x.name, p.name) || norm(x.name) === norm(p.name)))
       .map(p => ({ spieler: p.name, verein: p.club, manager: b.managerName[p.manager_id] }));
     if (out.kader_ohne_kicker.length) out.warnungen.push(`${out.kader_ohne_kicker.length} Kaderspieler ohne kicker-Zuordnung (Schreibweise prüfen – sie erscheinen sonst als frei im Transfermarkt)`);
