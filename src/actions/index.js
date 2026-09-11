@@ -6,7 +6,8 @@ import { login, clearSession, requireUser, requireAdmin, hashPassword } from '@/
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } from '@/lib/oldb';
-import { importRound } from '@/lib/kicker';
+import { importRound, playerMatches } from '@/lib/kicker';
+import { parseLineupText } from '@/lib/aufstellungstext';
 
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
 const fail = msg => ({ ok: false, msg });
@@ -43,6 +44,10 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   const clean = {}; for (const [pid, e] of Object.entries(entries || {})) { const p = b.players[pid]; if (!p || p.manager_id !== managerId || p.status !== 'active' || !R.playerValid(p, round.number)) return fail(`Spieler ${pid} nicht im Kader`);
     const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2)`); clean[pid] = { pos }; }
   const probleme = R.posProblems(clean, b.players); if (probleme.length) return fail(`Unzulässige Aufstellung (Ziff. 5.1): ${probleme.join('; ')}`);
+  await writeLineup(u, roundId, managerId, clean); rev();
+  return ok('Aufstellung gespeichert');
+});
+async function writeLineup(u, roundId, managerId, clean) {
   await tx(async t => {
     const old = await t.one('select * from lineups where round_id=$1 and manager_id=$2', [roundId, managerId]);
     await t.q(`insert into lineups(round_id,manager_id,entries,free_in,updated_at,updated_by) values($1,$2,$3,$4,now(),$5)
@@ -50,9 +55,32 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
     // Jugendspieler verlieren den Status bei Aufstellung (Ziff. 4.3.4)
     await t.q('update players set jugend=false where jugend and id = any($1)', [Object.keys(clean)]);
   });
-  await audit(u.id, 'lineup', { roundId, managerId, entries: clean }); rev();
-  return ok('Aufstellung gespeichert');
-});
+  await audit(u.id, 'lineup', { roundId, managerId, entries: clean });
+}
+
+/* ---------- Admin: Aufstellungen aus eingefuegtem Text (Blog) ---------- */
+async function parsePaste(roundId, text) {
+  const round = await D.roundById(roundId); if (!round) throw new Error('Runde?'); const b = await D.base();
+  const kaders = {}; const pool = await q('select slug, name, club from bl_players');
+  for (const m of b.managers) kaders[m.id] = (await D.kader(m.id, round.number)).map(p => {
+    // voller kicker-Name als Alias ("Miguel" -> miguel-gutierrez), damit auch der Nachname im Blog passt
+    const bl = pool.filter(x => x.club === p.club && playerMatches(x.slug, x.name, p.name)); return { ...p, alias: bl.length === 1 ? bl[0].slug.split('-').filter(t => !/^\d+$/.test(t)) : [] }; });
+  return { round, b, parsed: parseLineupText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { clubs: (b.clubs || []).map(c => c.name || c.id), roundNumbers: [round.number, round.matchday].filter(Boolean), roundLabel: round.label }) };
+}
+export const previewLineupTextAction = wrap(async (roundId, text) => { await requireAdmin();
+  const { parsed } = await parsePaste(roundId, text);
+  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, unclear: parsed.unclear }); });
+export const applyLineupTextAction = wrap(async (roundId, text) => { const u = await requireAdmin();
+  const { parsed } = await parsePaste(roundId, text);
+  const log = []; let n = 0;
+  for (const x of parsed.blocks) {
+    if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})`); continue; }
+    await writeLineup(u, roundId, x.managerId, x.entries); n++;
+    log.push(`${x.name}: ${Object.keys(x.entries).length} Spieler gespeichert${x.notes.length ? ' – ' + x.notes.join('; ') : ''}${x.unmatched.length ? ' – nicht zugeordnet: ' + x.unmatched.join(', ') : ''}`);
+  }
+  if (parsed.missing.length) log.push(`Kein Block gefunden für: ${parsed.missing.join(', ')} (es gilt die Vorrunde)`);
+  await audit(u.id, 'lineup_paste', { roundId, n }); rev();
+  return ok(`${n} Aufstellung(en) übernommen · ` + log.join(' · ')); });
 
 /* ---------- Gebote (Manager: eigenes, offene Runde, bis Deadline) ---------- */
 export const submitBidAction = wrap(async (prev, fd) => {

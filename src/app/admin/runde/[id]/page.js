@@ -3,7 +3,7 @@ import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { q } from '@/lib/db';
 import { fmtDt } from '@/components/ui';
-import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker } from './RoundTools';
+import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker, LineupPaste as RLineupPaste } from './RoundTools';
 import { getSetting } from '@/lib/db';
 
 export default async function AdminRunde({ params }) {
@@ -27,6 +27,7 @@ export default async function AdminRunde({ params }) {
       <div className="card"><h3>Gebote ({bids.length})</h3>{bids.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventual für</th><th className="l">Status</th></tr></thead><tbody>{bids.map(x => <tr key={x.id}><td className="l">{x.manager_name}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{x.price}</td><td className="l">{x.release_name}</td><td className="l">{x.swap_name || '–'}</td><td className="l">{x.status} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : <div className="mini">keine Gebote</div>}
         <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} /></div>
     </div>
+    <div className="adminbox"><h3>Aufstellungen aus dem Blog einfügen</h3><p className="mini">Für Manager, die ihre Aufstellung im Blog statt in der App abgeben. Der Admin darf auch nach der Deadline speichern; eine bereits in der App gespeicherte Aufstellung des Managers wird dabei überschrieben. Unzulässige Aufstellungen (Ziff. 5.1) werden nicht übernommen, dann gilt die Vorrunde.</p><RLineupPaste roundId={round.id} /></div>
     <div className="adminbox"><h3>kicker-Import</h3><p className="mini">Liest pro Spiel die kicker-Seite «Aufstellung» (Startelf, Wechsel, Tore, Vorlagen, Karten) und die «Elf des Tages» (Team der Runde, Spieler des Tages) und schreibt die Werte direkt. Läuft automatisch, sobald alle Spiele der Runde beendet sind. Vom Admin geänderte Zeilen bleiben unverändert. Vorlagen bei Eigentoren werden nicht gezählt, aber im Protokoll genannt.</p><RKicker roundId={round.id} lastLog={kickerLog} /></div>
     <div className="card"><div className="eyebrow">Resultate (kicker)</div><h2>Aufstellungen &amp; Spielerwerte</h2><p className="mini">Einsatz, Assists, Tore, Karten (Gelb 1, Gelb-Rot 2, Rot 3, Rot mit Gelb 4) und Team der Runde kommen aus kicker; Tore zusätzlich aus OpenLigaDB. Manuelle Änderungen sperren die Zeile gegen den Import. Punkte und Shutouts werden berechnet.</p>
       {!passed && <div className="note">Deadline noch nicht vorbei: Aufstellungen können sich noch ändern. Fehlende Aufstellungen werden nach der Deadline automatisch aus der Vorrunde übernommen.</div>}

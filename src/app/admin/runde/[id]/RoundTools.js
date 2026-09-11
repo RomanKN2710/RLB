@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { previewLineupTextAction, applyLineupTextAction, importKickerAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -95,4 +95,21 @@ export function Kicker({ roundId, lastLog }) { const { msg, pending, run } = use
         if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte in zwei Durchgängen einfügen.` };
         const r = await importKickerHtmlAction(roundId, teile, eleven); if (r.ok) { setH1(''); setH3(''); } return r;
       })}>Aus eingefügtem HTML importieren</button><span className="mini">Es werden nur die Spieler der eingefügten Spiele geschrieben.</span></div></details>
+  </div>); }
+
+/* Aufstellungen aus dem Blog: Text in einem Rutsch einfuegen, Vorschau pruefen, uebernehmen. */
+export function LineupPaste({ roundId }) { const { msg, pending, run } = useRun(); const [text, setText] = useState(''); const [prev, setPrev] = useState(null);
+  return (<div className="stack" style={{ marginTop: 8 }}>
+    <p className="mini">Blog öffnen, alles markieren (Strg+A), kopieren und hier einfügen – so wie es ist. Die Posts werden an «Eingestellt von …» getrennt, der Manager wird am Titel erkannt («Roman Runde 3», «Arbi R3», «Mark 3»), sonst an der Signatur. Verstanden werden Nummern, Positionen (auch «V/M» oder auf eigener Zeile), Vereinsnamen hinter dem Spieler, Tabellen, «X für Y» / «anstelle» (Y zählt nicht) und kleine Tippfehler. Steht ein Manager zweimal im Text, zählt der untere Post.</p>
+    <textarea rows={8} placeholder={'Roman\nFlekken\nDavies, Chabot, Anton\n…\n\nMike:\nNicolas\n…'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
+    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewLineupTextAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
+      <button className="sm komm" disabled={pending || !prev || !prev.blocks.some(x => x.ok)} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyLineupTextAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Zulässige Aufstellungen übernehmen</button><M msg={msg} /></div>
+    {prev && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Erkannt</th><th className="l">Nicht zugeordnet</th><th className="l">Prüfung</th></tr></thead><tbody>
+      {prev.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b><div className="mini">{x.title}</div>{x.notes?.map(n => <div key={n} className="mini delta down">{n}</div>)}</td>
+        <td className="l small">{x.found.map(f => `${f.pos} ${f.name}${f.note ? ' (' + f.note + ')' : ''}`).join(', ')} <span className="mini">({x.found.length})</span></td>
+        <td className="l small muted">{x.unmatched.join(', ') || '–'}</td>
+        <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td></tr>)}
+      {prev.missing.length > 0 && <tr><td className="l muted" colSpan={4}>Ohne Post im Text: {prev.missing.join(', ')} – für sie gilt die Vorrunde.</td></tr>}
+      {prev.unclear?.length > 0 && <tr><td className="l muted" colSpan={4}>Nicht zuordenbar: {prev.unclear.join('; ')}</td></tr>}
+    </tbody></table></div>}
   </div>); }
