@@ -78,3 +78,18 @@ export async function applyAbgaenge(q, log = () => {}) {
 export const AUSSERHALB_DER_LIGA = [
   { id: 'dani-kolo-muani', grund: 'Gebot aus dem Ersatzdraft (weltweit erlaubt). Liegt ohne Wirkung im Kader, bis Dani ihn entlässt.' },
 ];
+
+/** Spieler aus AUSSERHALB_DER_LIGA wieder aktiv setzen, falls eine frühere Fassung sie
+    faelschlich als Abgang gebucht hat. Ein echter, im Admin gebuchter Abgang hinterlaesst
+    eine Transferzeile – der bleibt unangetastet. */
+export async function repariereKaderstatus(q, log = () => {}) {
+  for (const x of AUSSERHALB_DER_LIGA) {
+    const rows = await q('select * from players where id=$1', [x.id]);
+    if (!rows.length || rows[0].status !== 'abgang') continue;
+    const p = rows[0];
+    const echt = await q("select 1 from transfers where type='abgang' and manager_id=$1 and player_name=$2", [p.manager_id, p.name]);
+    if (echt.length) continue;
+    await q("update players set status='active', valid_to=null where id=$1", [p.id]);
+    log(`Kaderstatus zurückgesetzt: ${p.name} steht wieder aktiv im Kader. ${x.grund}`);
+  }
+}
