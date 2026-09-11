@@ -29,11 +29,13 @@ export function playerMatches(kSlug, kName, ourName) {
   const a = stripInitials(tokens(kSlug)), b = stripInitials(tokens(ourName)), n = stripInitials(tokens(kName));
   if (!a.length || !b.length) return false;
   if (b.join('') === a.join('') || b.join('') === n.join('')) return true;
-  if (b.every(t => a.includes(t) || n.includes(t))) return true;          // alle unsere Namensteile kommen bei kicker vor
+  // Unser letzter Namensteil ist der Nachname; der muss bei kicker als Nachname (letzter Slug-Teil oder
+  // Anzeigename) vorkommen. Ein blosser Vorname-Treffer reicht nicht: "Nicolas" (Torwart Moritz Nicolas)
+  // darf nicht auch auf "nicolas-kuehn" passen, sonst ueberschreibt der eine den anderen.
   const la = a[a.length - 1], lb = b[b.length - 1];
-  if (la === lb) return true;                                             // gleicher Nachname
-  if (b.length === 1 && (a.join('-').endsWith(b[0]) || n.join('-').endsWith(b[0]))) return true;  // "Fuellkrug" vs "niclas-fuellkrug"
-  return false;
+  const surname = la === lb || n.includes(lb) || a.join('-').endsWith(lb) || n.join('-').endsWith(lb);  // "Fuellkrug" vs "niclas-fuellkrug"
+  if (!surname) return false;
+  return b.every(t => a.includes(t) || n.includes(t) || t === lb);        // alle uebrigen Namensteile kommen bei kicker vor
 }
 /** kicker-Vereinsslug (z. B. "fc-bayern-muenchen") zu unserem Vereinsnamen ("Bayern"). */
 export function clubMatches(kTeamSlug, ourClub) {
@@ -137,11 +139,18 @@ export async function importRound(round, b, fetcher = fetchHtml, opts = {}) {
   const resolve = (kp) => { const hits = lineupPlayers.filter(p => clubMatches(kp.team, p.club) && playerMatches(kp.slug, kp.name, p.name)); if (hits.length === 1) return hits[0]; if (hits.length > 1) { log.push(`mehrdeutig: ${kp.name} (${kp.team}) → ${hits.map(h => h.name).join(', ')}`); } return null; };
   for (const path of paths) {
     let parsed; try { parsed = parseMatchPage(await fetcher(`${base}${path}/aufstellung`)); if (!parsed.starters.length) throw new Error('keine Aufstellung im HTML (Bot-Schutz oder Layout geändert)'); } catch (e) { log.push(`Fehler ${path}: ${e.message}`); continue; }
+    const paarung = parsed.teams.map(t => t.name).join(' – ');
+    // Dieselbe Seite zweimal eingefuegt (kommt beim Kopieren vor): nur einmal verarbeiten
+    if (importedTeamSlugs.includes(parsed.teams[0]?.slug)) { log.push(`${paarung}: doppelt eingefügt, übersprungen`); continue; }
     const stats = matchStats(parsed, opts); parsed.teams.forEach(t => importedTeamSlugs.push(t.slug));
     await upsertPool(Object.values(stats), b, round.matchday);
     allStarters.push(...Object.values(stats).filter(s => s.start === 1 && s.kpos).map(s => ({ ...s, formation: (parsed.teams.find(t => t.slug === s.team) || {}).formation })));
-    let n = 0; for (const s of Object.values(stats)) { const p = resolve(s); if (!p) continue; n++; perPlayer[p.id] = { start: s.start, assist: s.assist, tore: s.tore, karten: s.karten, kpos: s.kpos, notes: s.notes }; }
-    log.push(`${parsed.teams.map(t => t.name).join(' – ')}: ${Object.keys(stats).length} Spieler, ${n} in Aufstellungen`);
+    let n = 0; const seenPid = {};
+    for (const s of Object.values(stats)) { const p = resolve(s); if (!p) continue;
+      // Zwei kicker-Spieler auf denselben RLB-Spieler (Namensabgleich zu weit): nicht stillschweigend ueberschreiben
+      if (seenPid[p.id]) { log.push(`mehrdeutig: ${p.name} passt auf ${seenPid[p.id]} und ${s.name} – ${seenPid[p.id]} übernommen, bitte prüfen`); continue; }
+      seenPid[p.id] = s.name; n++; perPlayer[p.id] = { start: s.start, assist: s.assist, tore: s.tore, karten: s.karten, kpos: s.kpos, notes: s.notes }; }
+    log.push(`${paarung}: ${Object.keys(stats).length} Spieler, ${n} in Aufstellungen`);
   }
   // Positionserwerb (Ziff. 5.2) für alle RLB-Spieler (auch Ersatzbank), nicht nur Aufgestellte
   log.push(...await acquirePositions(allStarters, b, round));
