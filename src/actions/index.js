@@ -65,20 +65,40 @@ async function parsePaste(roundId, text) {
   for (const m of b.managers) kaders[m.id] = (await D.kader(m.id, round.number)).map(p => {
     // voller kicker-Name als Alias ("Miguel" -> miguel-gutierrez), damit auch der Nachname im Blog passt
     const bl = pool.filter(x => x.club === p.club && playerMatches(x.slug, x.name, p.name)); return { ...p, alias: bl.length === 1 ? bl[0].slug.split('-').filter(t => !/^\d+$/.test(t)) : [] }; });
-  return { round, b, parsed: parseLineupText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { clubs: (b.clubs || []).map(c => c.name || c.id), roundNumbers: [round.number, round.matchday].filter(Boolean), roundLabel: round.label }) };
+  const parsed = parseLineupText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { clubs: (b.clubs || []).map(c => c.name || c.id), roundNumbers: [round.number, round.matchday].filter(Boolean), roundLabel: round.label });
+  // Abgleich mit dem, was in der App schon steht: vom Manager selbst gespeichert, vom Admin, automatisch aus der
+  // Vorrunde uebernommen oder noch nichts (dann gilt die Vorrunde). Im Zweifel gilt der Blog; der Unterschied wird gezeigt.
+  const cur = await q('select l.*, u.role as by_role, u.manager_id as by_manager, u.name as by_name from lineups l left join users u on u.id=l.updated_by where l.round_id=$1', [round.id]);
+  for (const x of parsed.blocks) {
+    const c = cur.find(l => l.manager_id === x.managerId); const prev = c ? null : await D.prevLineup(round, x.managerId);
+    const app = c ? c.entries : (prev ? prev.entries : null);
+    x.bisher = !c ? (prev ? 'nichts gespeichert – es gilt die Vorrunde' : 'nichts gespeichert') : !c.updated_by ? `automatisch aus der Vorrunde (${fmtStamp(c.updated_at)})` : c.by_role === 'admin' && c.by_manager !== x.managerId ? `vom Admin gespeichert (${fmtStamp(c.updated_at)})` : `von ${x.name} selbst in der App gespeichert (${fmtStamp(c.updated_at)})`;
+    x.selbst = !!(c && c.updated_by && !(c.by_role === 'admin' && c.by_manager !== x.managerId));
+    if (app) { const name = pid => b.players[pid]?.name || pid;
+      const plus = Object.keys(x.entries).filter(pid => !(pid in app)).map(name), minus = Object.keys(app).filter(pid => !(pid in x.entries)).map(name);
+      const posw = Object.keys(x.entries).filter(pid => pid in app && app[pid].pos !== x.entries[pid].pos).map(pid => `${name(pid)} ${app[pid].pos}→${x.entries[pid].pos}`);
+      x.diff = [...plus.map(n => '+' + n), ...minus.map(n => '−' + n), ...posw]; x.gleich = !x.diff.length; }
+    else { x.diff = []; x.gleich = false; }
+  }
+  // Manager ohne Post: was gilt fuer sie?
+  parsed.ohnePost = parsed.missing.map(n => { const m = b.managers.find(y => y.name === n); const c = cur.find(l => l.manager_id === m.id);
+    return `${n}: ${!c ? 'Vorrunde' : !c.updated_by ? 'Vorrunde (automatisch übernommen)' : 'in der App gespeichert (' + fmtStamp(c.updated_at) + ')'}`; });
+  return { round, b, parsed };
 }
+const fmtStamp = d => d ? new Date(d).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 export const previewLineupTextAction = wrap(async (roundId, text) => { await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
-  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, unclear: parsed.unclear }); });
+  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear }); });
 export const applyLineupTextAction = wrap(async (roundId, text) => { const u = await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
   const log = []; let n = 0;
   for (const x of parsed.blocks) {
-    if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})`); continue; }
+    if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})${x.selbst ? ' – die in der App gespeicherte Aufstellung bleibt' : ''}`); continue; }
+    if (x.gleich) { log.push(`${x.name}: Blog und App identisch, nichts zu ändern`); continue; }
     await writeLineup(u, roundId, x.managerId, x.entries); n++;
-    log.push(`${x.name}: ${Object.keys(x.entries).length} Spieler gespeichert${x.notes.length ? ' – ' + x.notes.join('; ') : ''}${x.unmatched.length ? ' – nicht zugeordnet: ' + x.unmatched.join(', ') : ''}`);
+    log.push(`${x.name}: ${Object.keys(x.entries).length} Spieler aus dem Blog gespeichert${x.selbst ? ' – überschreibt die selbst in der App gespeicherte Aufstellung' : ''}${x.diff.length ? ' (' + x.diff.join(', ') + ')' : ''}${x.notes.length ? ' – ' + x.notes.join('; ') : ''}${x.unmatched.length ? ' – nicht zugeordnet: ' + x.unmatched.join(', ') : ''}`);
   }
-  if (parsed.missing.length) log.push(`Kein Block gefunden für: ${parsed.missing.join(', ')} (es gilt die Vorrunde)`);
+  if (parsed.ohnePost.length) log.push(`Ohne Post im Blog: ${parsed.ohnePost.join('; ')}`);
   await audit(u.id, 'lineup_paste', { roundId, n }); rev();
   return ok(`${n} Aufstellung(en) übernommen · ` + log.join(' · ')); });
 
