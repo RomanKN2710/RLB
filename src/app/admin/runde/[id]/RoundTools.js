@@ -12,6 +12,21 @@ const M = ({ msg }) => msg ? <span className={`mini ${msg.ok ? '' : 'delta down'
    style- und svg-Bloecke machen bei kicker aber den groessten Teil der Seite aus. Ohne
    das reisst die Nutzlast die Grenze der Server-Action, und der Abbruch ist im Browser
    nur ein Verbindungsfehler ohne Meldung. */
+/* Mehrere hintereinander eingefügte Seiten trennen. kicker-Quelltexte beginnen mit
+   <!doctype html> beziehungsweise <html …>; daran wird geschnitten. Ein einzelner Text
+   ohne solche Marke bleibt ein Stück. */
+function splitPages(text) {
+  if (!text || !text.trim()) return [];
+  // Eine Seite beginnt mit <!doctype html> UND enthaelt gleich darauf <html …>. Wuerde an
+  // beidem geschnitten, ergaeben neun Seiten achtzehn Stuecke. Darum die Doctype-Marken
+  // bevorzugen und nur auf <html> zurueckfallen, wenn es keine gibt.
+  const finde = re => { const out = []; let m; const r = new RegExp(re, 'gi'); while ((m = r.exec(text)) !== null) out.push(m.index); return out; };
+  const doctype = finde('<!doctype\\s+html');
+  const marks = (doctype.length ? doctype : finde('<html[\\s>]')).filter((x, i, a) => i === 0 || x - a[i - 1] > 200);
+  if (marks.length < 2) return [text];
+  return marks.map((start, i) => text.slice(start, marks[i + 1] ?? text.length)).filter(x => x.trim());
+}
+
 function slimHtml(html) {
   if (!html || !html.trim()) return '';
   try {
@@ -63,20 +78,21 @@ export function Results({ roundId, managerId, managerName, rows: init, totals })
 export function Goals({ roundId }) { const { msg, pending, run } = useRun();
   return <div className="row" style={{ marginTop: 8 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importGoalsAction(roundId))}>Tore aus OpenLigaDB übernehmen</button><span className="mini">Läuft nach der Deadline auch automatisch beim Sync; vom Admin geänderte Tore werden nicht überschrieben.</span><M msg={msg} /></div>; }
 
-export function Kicker({ roundId, lastLog }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h2, setH2] = useState(''); const [h3, setH3] = useState('');
+export function Kicker({ roundId, lastLog }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState('');
   return (<div className="stack" style={{ marginTop: 8 }}>
     <div className="row"><button className="komm" disabled={pending} onClick={() => run(() => importKickerAction(roundId))}>kicker importieren (alle Spiele + Elf des Tages)</button><button className="sm sec" disabled={pending} onClick={() => run(() => unlockResultsAction(roundId))}>Admin-Sperren aufheben</button><M msg={msg} /></div>
     {lastLog && <div className="mini">Letzter Import {lastLog.at ? new Date(lastLog.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' }) : ''}: {lastLog.log?.join(' · ')}</div>}
     <details><summary>Rückfall: kicker-HTML einfügen (falls der Abruf blockiert ist)</summary>
-      <p className="mini">Im Browser die kicker-Seite «Aufstellung» eines Spiels öffnen, Quelltext kopieren (Ctrl+U, alles markieren, kopieren) und hier einfügen; bis zu drei Spiele pro Durchgang, mehrfach ausführen. Elf des Tages ebenso. Es werden nur die Spieler der eingefügten Spiele geschrieben.</p>
-      <textarea rows={3} placeholder="Aufstellung Spiel 1 (HTML)" value={h1} onChange={e => setH1(e.target.value)} style={{ width: '100%' }} />
-      <textarea rows={3} placeholder="Aufstellung Spiel 2 (HTML)" value={h2} onChange={e => setH2(e.target.value)} style={{ width: '100%' }} />
-      <textarea rows={3} placeholder="Elf des Tages (HTML)" value={h3} onChange={e => setH3(e.target.value)} style={{ width: '100%' }} />
+      <p className="mini">Für jedes Spiel bei kicker die Seite «Aufstellung» öffnen, Quelltext kopieren (Strg+U, Strg+A, Strg+C) und hier <b>alle neun hintereinander</b> in dasselbe Feld einfügen – die Seiten werden automatisch getrennt. Skripte und Stile werden vor dem Senden entfernt, darum passen alle neun zusammen hinein. Die «Elf des Tages» kommt ins zweite Feld.</p>
+      <textarea rows={5} placeholder="Quelltexte der Aufstellungsseiten, beliebig viele hintereinander" value={h1} onChange={e => setH1(e.target.value)} style={{ width: '100%' }} />
+      <div className="mini">{(() => { const teile = splitPages(h1); if (!teile.length) return 'noch nichts eingefügt'; const mit = teile.filter(x => /kick__lineup__teamrow/.test(x)).length;
+        return `${teile.length} Seite(n) erkannt, davon ${mit} mit Aufstellung${mit < teile.length ? ' – die übrigen enthalten keine Aufstellungstabelle' : ''}`; })()}</div>
+      <textarea rows={3} placeholder="Elf des Tages (HTML), optional" value={h3} onChange={e => setH3(e.target.value)} style={{ width: '100%' }} />
       <div className="row"><button className="sm komm" disabled={pending} onClick={() => run(async () => {
-        const parts = [h1, h2].map(slimHtml), eleven = slimHtml(h3);
-        const bytes = [...parts, eleven].reduce((n, x) => n + x.length, 0);
+        const teile = splitPages(h1).map(slimHtml).filter(Boolean), eleven = slimHtml(h3);
+        const bytes = [...teile, eleven].reduce((n, x) => n + x.length, 0);
         if (!bytes) return { ok: false, msg: 'Nichts eingefügt' };
-        if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte nur ein Spiel pro Durchgang einfügen.` };
-        const r = await importKickerHtmlAction(roundId, parts, eleven); if (r.ok) { setH1(''); setH2(''); setH3(''); } return r;
-      })}>Aus eingefügtem HTML importieren</button><span className="mini">Skripte und Stile werden vor dem Senden entfernt.</span></div></details>
+        if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte in zwei Durchgängen einfügen.` };
+        const r = await importKickerHtmlAction(roundId, teile, eleven); if (r.ok) { setH1(''); setH3(''); } return r;
+      })}>Aus eingefügtem HTML importieren</button><span className="mini">Es werden nur die Spieler der eingefügten Spiele geschrieben.</span></div></details>
   </div>); }
