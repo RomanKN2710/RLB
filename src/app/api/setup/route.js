@@ -5,7 +5,7 @@ import { q, dbHint } from '@/lib/db';
 import { applySquads } from '@/lib/squads';
 import { applyStartelfSeed } from '@/lib/kicker';
 import { applyRunde2 } from '@/lib/seed-runde2';
-import { applyKorrekturen } from '@/lib/korrekturen';
+import { applyKorrekturen, applyAbgaenge } from '@/lib/korrekturen';
 import { base } from '@/lib/data';
 import { runSeed } from '../../../../db/seed/seed-core.mjs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +38,7 @@ export async function GET(req) {
     // Datenkorrekturen an Kaderspielern zuletzt: sie betreffen auch Spieler, die erst der
     // Runde-2-Import anlegt (siehe lib/korrekturen.js).
     await applyKorrekturen(q, m => logs.push(m));
+    await applyAbgaenge(q, m => logs.push(m));
     // Admin-Konto: der Seed legt es nur an, solange die users-Tabelle leer ist. Darum hier
     // Diagnose und, mit ?admin=reset, ein Zuruecksetzen auf das aktuelle ADMIN_PASSWORD.
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();

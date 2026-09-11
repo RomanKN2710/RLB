@@ -15,6 +15,7 @@ export const KORREKTUREN = [
   { id: 'mark-el-ouadih', name: 'El Ouahdi', grund: 'Schreibweise laut kicker: Zakaria El Ouahdi (Hamburg).' },
   { id: 'rofe-johanesson-r2', name: 'Johannesson', grund: 'Schreibweise laut kicker: Isak Bergmann Johannesson (Köln).' },
   { id: 'rofe-illic', name: 'Ilic', grund: 'Schreibweise laut kicker: Andrej Ilic (Union, Sturm) – identischer Verein und identische Position.' },
+  { id: 'arbi-ulrich', name: 'Ullrich', grund: 'Schreibweise laut kicker: Lukas Ullrich (Gladbach, Abwehr), mit zwei l. Der Paderborner Laurin Ulrich mit einem l ist ein anderer Spieler und bleibt im Transfermarkt frei.' },
 ];
 
 /** Korrekturen anwenden; meldet nur, was tatsächlich geändert wurde. Mehrfach aufrufbar. */
@@ -33,10 +34,35 @@ export async function applyKorrekturen(q, log = () => {}) {
   }
 }
 
-/* Vereinsabweichungen, die geprüft und in Ordnung sind: hier passt der Name zwar auf einen
-   Pooleintrag, aber in einem anderen Verein – und es ist nachweislich ein anderer Spieler.
-   Sie werden aus der Warnung in /api/status ausgenommen, damit der Bericht nicht dauerhaft
-   auf Bekanntes zeigt. */
-export const GEPRUEFT_OK = [
-  { id: 'arbi-ulrich', grund: 'Laut Roman der Gladbacher Ulrich. Laurin Ulrich in Paderborn ist ein anderer Spieler und steht zu Recht als frei im Transfermarkt. kicker führt bei Gladbach keinen Ulrich, seine Werte lassen sich daher nicht automatisch importieren.' },
+/* Vereinsabweichungen, die geprüft und in Ordnung sind (Name passt, Verein nicht, aber es
+   ist nachweislich ein anderer Spieler). Zurzeit keine: der Fall "Ulrich" war ein
+   Schreibfehler und steht oben als Korrektur. */
+export const GEPRUEFT_OK = [];
+
+/* Spieler, die die Bundesliga verlassen haben (Ziff. 7.4): Status auf "abgang", der Wert
+   wird dem Kaufbudget gutgeschrieben. Genau das, was der Admin-Knopf "Abgang buchen" tut,
+   nur ohne Klick – von Roman bestätigt. Wird nur einmal gebucht. */
+export const ABGAENGE = [
+  { id: 'arbi-belocian', grund: 'Liga verlassen: zu Racing Santander (von Roman bestätigt).' },
+  { id: 'dani-vogt', grund: 'Liga verlassen (von Roman bestätigt).' },
 ];
+
+/** Abgänge buchen: Status, Gutschrift aufs Kaufbudget, Transferzeile. Mehrfach aufrufbar. */
+export async function applyAbgaenge(q, log = () => {}) {
+  for (const a of ABGAENGE) {
+    const rows = await q('select * from players where id=$1', [a.id]);
+    if (!rows.length) continue;
+    const p = rows[0];
+    if (p.status === 'abgang') continue;
+    const schon = await q("select 1 from transfers where type='abgang' and manager_id=$1 and player_name=$2", [p.manager_id, p.name]);
+    const letzte = await q("select * from rounds where status='final' order by number desc limit 1");
+    const r = letzte[0] || null;
+    const wert = Number(p.price) || 0;
+    await q("update players set status='abgang', valid_to=$2 where id=$1", [p.id, r ? r.number : 0]);
+    if (!schon.length) {
+      await q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'gutschrift',$3,$4)", [p.manager_id, r ? r.id : null, wert, `Abgang ${p.name} aus der Bundesliga (Ziff. 7.4)`]);
+      await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'abgang',$3,$4,'Wert dem Kaufbudget gutgeschrieben')", [r ? r.id : null, p.manager_id, p.name, wert]);
+    }
+    log(`Abgang gebucht: ${p.name} (${p.club}) – ${wert} dem Kaufbudget gutgeschrieben. ${a.grund}`);
+  }
+}
