@@ -14,6 +14,7 @@ export const KORREKTUREN = [
   { id: 'mark-veermann', name: 'Veerman', grund: 'Schreibweise laut kicker: Joey Veerman (Dortmund).' },
   { id: 'mark-el-ouadih', name: 'El Ouahdi', grund: 'Schreibweise laut kicker: Zakaria El Ouahdi (Hamburg).' },
   { id: 'rofe-johanesson-r2', name: 'Johannesson', grund: 'Schreibweise laut kicker: Isak Bergmann Johannesson (Köln).' },
+  { id: 'rofe-illic', name: 'Ilic', grund: 'Schreibweise laut kicker: Andrej Ilic (Union, Sturm) – identischer Verein und identische Position.' },
 ];
 
 /** Korrekturen anwenden; meldet nur, was tatsächlich geändert wurde. Mehrfach aufrufbar. */
