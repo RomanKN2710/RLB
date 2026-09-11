@@ -42,7 +42,7 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   const b = await D.base();
   const clean = {}; for (const [pid, e] of Object.entries(entries || {})) { const p = b.players[pid]; if (!p || p.manager_id !== managerId || p.status !== 'active' || !R.playerValid(p, round.number)) return fail(`Spieler ${pid} nicht im Kader`);
     const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2)`); clean[pid] = { pos }; }
-  const chk = R.posCheck(clean, b.players); if (!chk.ok) return fail(chk.n !== 11 ? `Genau 11 Spieler (aktuell ${chk.n})` : `Positionsregel verletzt: ${chk.bad.join(', ')} (1 T, 3–5 V, 3–6 M, 1–3 S)`);
+  const probleme = R.posProblems(clean, b.players); if (probleme.length) return fail(`Unzulässige Aufstellung (Ziff. 5.1): ${probleme.join('; ')}`);
   await tx(async t => {
     const old = await t.one('select * from lineups where round_id=$1 and manager_id=$2', [roundId, managerId]);
     await t.q(`insert into lineups(round_id,manager_id,entries,free_in,updated_at,updated_by) values($1,$2,$3,$4,now(),$5)

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { saveLineupAction } from '@/actions';
-import { POSRULE, SWAP_PCT } from '@/lib/rules';
+import { POSRULE, SWAP_PCT, posProblems } from '@/lib/rules';
 import { chf, Msg } from '@/components/ui';
 
 export default function LineupEditor({ roundId, managerId, players, initial, prevEntries, freeIn, isFirst }) {
@@ -11,6 +11,9 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
   const byId = Object.fromEntries(players.map(p => [p.id, p]));
   const cnt = { T: 0, V: 0, M: 0, S: 0 }; Object.entries(entries).forEach(([pid, e]) => { const pos = e.pos || byId[pid]?.base_pos; if (cnt[pos] !== undefined) cnt[pos]++; });
   const n = Object.keys(entries).length; const bad = Object.entries(POSRULE).filter(([k, [lo, hi]]) => cnt[k] < lo || cnt[k] > hi).map(([k]) => k);
+  // Ziff. 5.1: 11 Spieler, 1 T, 3-5 V, 3-6 M, 1-3 S. Solange das verletzt ist, wird gar nicht erst gespeichert;
+  // der Server prueft dieselbe Regel nochmals (saveLineupAction).
+  const probleme = posProblems(entries, byId); const zulaessig = probleme.length === 0;
   const free = new Set(freeIn || []);
   const swaps = isFirst || !prevEntries ? [] : Object.keys(entries).filter(pid => !(pid in prevEntries) && !free.has(pid)).map(pid => ({ name: byId[pid]?.name, cost: (byId[pid]?.price || 0) * SWAP_PCT }));
   const swapTotal = swaps.reduce((a, x) => a + x.cost, 0);
@@ -31,7 +34,10 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
           <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j">Eventualauftrag</span>}</td>
           <td className="l muted">{p.club}</td><td>{p.price}</td></tr>); })}</tbody>
     </table></div>
+    {!zulaessig && <div className="err"><b>Unzulässige Aufstellung – so kann sie nicht abgegeben werden.</b>
+      <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{probleme.map(x => <li key={x}>{x}</li>)}</ul>
+      <span className="mini">Regel (Ziff. 5.1): genau 11 Spieler, davon 1 Torwart, 3–5 Verteidiger, 3–6 Mittelfeld, 1–3 Sturm. Solange nichts Gültiges gespeichert ist, gilt die Aufstellung der Vorrunde.</span></div>}
     <Msg state={msg} />
-    <div className="row"><button onClick={save} disabled={pending}>{pending ? 'Speichern…' : 'Aufstellung speichern'}</button><span className="mini">Speichern ist bis zur Deadline beliebig oft möglich; es gilt der letzte Stand.</span></div>
+    <div className="row"><button onClick={save} disabled={pending || !zulaessig} title={zulaessig ? '' : 'Aufstellung ist unzulässig (siehe Hinweis)'}>{pending ? 'Speichern…' : 'Aufstellung speichern'}</button><span className="mini">{zulaessig ? 'Speichern ist bis zur Deadline beliebig oft möglich; es gilt der letzte Stand.' : 'Speichern ist gesperrt, bis die Aufstellung zulässig ist.'}</span></div>
   </div>);
 }

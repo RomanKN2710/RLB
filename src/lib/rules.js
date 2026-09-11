@@ -50,6 +50,16 @@ export function posCheck(entries, players) {
   return { cnt, bad, n, ok: n === 11 && bad.length === 0 };
 }
 
+export const POSNAME = { T: 'Torwart', V: 'Verteidiger', M: 'Mittelfeld', S: 'Sturm' };
+/** Verstösse gegen Ziff. 5.1 als lesbare Sätze (leer = zulässig). Für Editor und Server gleich. */
+export function posProblems(entries, players) {
+  const { cnt, bad, n } = posCheck(entries, players); const out = [];
+  if (n < 11) out.push(`Zu wenige Spieler: ${n} statt 11 (es fehlen ${11 - n})`);
+  if (n > 11) out.push(`Zu viele Spieler: ${n} statt 11 (${n - 11} zu viel)`);
+  for (const k of bad) { const [lo, hi] = POSRULE[k]; out.push(`${POSNAME[k]}: ${cnt[k]} aufgestellt, erlaubt ${lo === hi ? `genau ${lo}` : `${lo} bis ${hi}`}`); }
+  return out;
+}
+
 /** Wechselkosten (Ziff. 5.1): 50 % des Werts jedes neu aufgestellten Spielers; Grundaufstellung und Eventualaufträge gratis. */
 export function swapCosts(entries, prevEntries, freeIn, players, isFirstRound) {
   if (isFirstRound || !prevEntries) return { items: [], total: 0 };
