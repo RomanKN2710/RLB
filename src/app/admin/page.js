@@ -20,6 +20,8 @@ export default async function Admin() {
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
   const now = Date.now();
   return (<>
+    <div className="adminbox"><h3>Admin · Aufstellungs-Blog</h3>
+      <p className="mini"><Link className="btn sm sec" href="/admin/blog">Rohansicht öffnen</Link> Zeigt, was die App im Blog (rotisseryleaguebundesliga.blogspot.com) liest – Vorstufe für die automatische Übernahme der Aufstellungen nach der Deadline.</p></div>
     <div className="adminbox"><h3>Admin · Spielplan (OpenLigaDB)</h3>
       <div className="row"><Sync /><span className="mini">Letzter Voll-Sync: {lastSync ? fmtDt(lastSync.at) : 'nie'} · aktuelle Spieltage: {lastCur ? fmtDt(lastCur.at) : 'nie'}. Beim Seitenaufruf wird automatisch aktualisiert (stündlich Resultate, täglich der ganze Spielplan).</span></div>
       {postponed.length > 0 && <div className="note" style={{ marginTop: 8 }}><b>Verschobene Spiele</b> (Kandidaten für Nachtragsrunden, Ziff. 8): {postponed.map(m => <div key={m.id} className="row">{fmtDt(m.kickoff)} · {b.teamToClub[m.team1]} – {b.teamToClub[m.team2]} (aktuell in {m.round_label}) <Split matchId={m.id} /></div>)}</div>}
