@@ -8,10 +8,16 @@
 import { q, one, getSetting, setSetting } from './db';
 import { norm } from './rules';
 
+/* Seed-Version. Wird sie erhoeht, gleicht der naechste Setup-Aufruf Aufstellungen und
+   Resultate erneut aus dem Seed ab. Solange sie unveraendert bleibt, bleiben Aenderungen,
+   die der Admin an dieser Runde vorgenommen hat, erhalten. */
+const VERSION = 4;
+
 export async function applyRunde2(seed, log = () => {}) {
   const done = await getSetting('runde2_seed');
   const erstmals = !done;
   const alteVersion = (done && done.version) || (done ? 1 : 0);
+  const abgleichen = erstmals || alteVersion < VERSION;
   const md = seed.matchday || 2; const number = md * 10;
   const managers = await q('select * from managers'); const mid = {}; managers.forEach(m => mid[m.name] = m.id);
   let round = await one("select * from rounds where type='regulaer' and matchday=$1", [md]);
@@ -43,12 +49,15 @@ export async function applyRunde2(seed, log = () => {}) {
     for (const v of seed.vereinswechsel || []) { const p = findP(await players(), v.manager, v.name); if (p) await q('update players set club=$2 where id=$1', [p.id, v.club]); }
     for (const g of seed.gutschriften || []) await q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'gutschrift',$3,$4)", [mid[g.manager], round.id, g.amount, g.text]);
   } else {
-    log('Runde 2: Käufe, Entlassungen und Gutschriften waren schon gebucht – nur Aufstellungen und Resultate werden abgeglichen.');
+    log(abgleichen ? 'Runde 2: Käufe, Entlassungen und Gutschriften waren schon gebucht – nur Aufstellungen und Resultate werden abgeglichen.' : 'Runde 2: war schon importiert, es gibt nichts nachzutragen.');
   }
 
-  // Aufstellungen und Resultate: bei jedem Aufruf, damit Korrekturen ankommen.
+  // Aufstellungen und Resultate nur beim ersten Lauf und nach einer Seed-Korrektur. Sonst
+  // wuerde jeder Setup-Aufruf eine Aenderung ueberschreiben, die der Admin nachtraeglich an
+  // dieser Runde vorgenommen hat.
   const list = await players();
-  for (const [m, entries] of Object.entries(seed.lineups || {})) {
+  if (!abgleichen) log('Runde 2: Aufstellungen und Resultate bleiben, wie sie sind – der Seed ist unveraendert.');
+  for (const [m, entries] of Object.entries(abgleichen ? (seed.lineups || {}) : {})) {
     const ent = {}; const free = [];
     for (const e of entries) { const p = findP(list, m, e.name); if (!p) { missing.push('Aufstellung ' + m + ' ' + e.name); continue; }
       ent[p.id] = { pos: e.pos };
@@ -65,15 +74,15 @@ export async function applyRunde2(seed, log = () => {}) {
   // gewertet. Nur beim Versionswechsel setzen, damit ein spaeter von Hand geaenderter
   // Status nicht bei jedem Setup-Aufruf zurueckgedreht wird.
   let statusGesetzt = false;
-  if (alteVersion < 4) { const r = await q("update rounds set status='final' where id=$1 and status<>'final' returning id", [round.id]); statusGesetzt = r.length > 0; }
+  if (abgleichen) { const r = await q("update rounds set status='final' where id=$1 and status<>'final' returning id", [round.id]); statusGesetzt = r.length > 0; }
 
   const mrows = await q('select count(*)::int as n from matches where round_id=$1', [round.id]);
   if (!mrows[0].n) {
     await q("update rounds set deadline=coalesce(deadline, now() - interval '1 day') where id=$1 and not deadline_manual", [round.id]);
     log('Runde 2: noch keine Spiele in der Datenbank. Vereinspunkte und Zu-null kommen so lange aus den im Excel hinterlegten Vereinsergebnissen; sobald der Spielplan geladen ist, gelten die echten Spiele. Deadline vorläufig gesetzt, damit die Runde in der Tabelle erscheint.');
   }
-  const info = { at: new Date().toISOString(), version: 4, missing };
+  const info = { at: new Date().toISOString(), version: VERSION, missing };
   await setSetting('runde2_seed', info);
-  log(`Runde 2 ${erstmals ? 'importiert' : 'abgeglichen'}: ${Object.keys(seed.lineups || {}).length} Aufstellungen mit ${Object.values(seed.lineups || {}).reduce((n, x) => n + x.length, 0)} Einträgen${missing.length ? ' · nicht zugeordnet: ' + missing.join(', ') : ''}. Runde ${statusGesetzt ? 'als gewertet markiert' : 'steht auf ' + (await one('select status from rounds where id=$1', [round.id])).status}; die Excel-Werte sind gegen Überschreiben gesperrt.`);
+  log(`Runde 2 ${erstmals ? 'importiert' : abgleichen ? 'abgeglichen' : 'unveraendert gelassen'}: ${Object.keys(seed.lineups || {}).length} Aufstellungen mit ${Object.values(seed.lineups || {}).reduce((n, x) => n + x.length, 0)} Einträgen${missing.length ? ' · nicht zugeordnet: ' + missing.join(', ') : ''}. Runde ${statusGesetzt ? 'als gewertet markiert' : 'steht auf ' + (await one('select status from rounds where id=$1', [round.id])).status}; die Excel-Werte sind gegen Überschreiben gesperrt.`);
   return info;
 }
