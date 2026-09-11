@@ -32,3 +32,11 @@ export async function applyKorrekturen(q, log = () => {}) {
     log(`Korrektur ${p.name}${p.club ? ' (' + p.club + ')' : ''} → ${k.name || p.name}${k.club ? ' (' + k.club + ')' : ''}: ${k.grund}`);
   }
 }
+
+/* Vereinsabweichungen, die geprüft und in Ordnung sind: hier passt der Name zwar auf einen
+   Pooleintrag, aber in einem anderen Verein – und es ist nachweislich ein anderer Spieler.
+   Sie werden aus der Warnung in /api/status ausgenommen, damit der Bericht nicht dauerhaft
+   auf Bekanntes zeigt. */
+export const GEPRUEFT_OK = [
+  { id: 'arbi-ulrich', grund: 'Laut Roman der Gladbacher Ulrich. Laurin Ulrich in Paderborn ist ein anderer Spieler und steht zu Recht als frei im Transfermarkt. kicker führt bei Gladbach keinen Ulrich, seine Werte lassen sich daher nicht automatisch importieren.' },
+];

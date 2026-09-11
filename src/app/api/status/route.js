@@ -4,6 +4,7 @@ import { base, openRound, pendingRounds, lastFinalRound } from '@/lib/data';
 import { rlbLeavers } from '@/lib/squads';
 import { playerMatches } from '@/lib/kicker';
 import { norm } from '@/lib/rules';
+import { GEPRUEFT_OK } from '@/lib/korrekturen';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Neon-Kaltstart einrechnen
 
@@ -57,6 +58,19 @@ export async function GET(req) {
       .filter(p => !bl.some(x => playerMatches(x.slug, x.name, p.name) || norm(x.name) === norm(p.name)))
       .map(p => ({ spieler: p.name, verein: p.club, manager: b.managerName[p.manager_id] }));
     if (out.kader_ohne_kicker.length) out.warnungen.push(`${out.kader_ohne_kicker.length} Kaderspieler ohne kicker-Zuordnung (Schreibweise prüfen – sie erscheinen sonst als frei im Transfermarkt)`);
+
+    // Die gefaehrlichere Sorte: der Name passt auf einen Pooleintrag, aber in einem anderen
+    // Verein. Dann haelt freeAgents den Spieler fuer frei, obwohl er jemandem gehoert – so
+    // ist Arijon Ibrahimovic im Markt aufgetaucht. Wer im eigenen Verein einen Treffer hat,
+    // ist unauffaellig; nur wer dort keinen hat und anderswo schon, gehoert angeschaut.
+    const ok = new Set(GEPRUEFT_OK.map(x => x.id));
+    const passt = (x, p) => playerMatches(x.slug, x.name, p.name) || norm(x.name) === norm(p.name);
+    out.kader_verein_abweichend = aktive
+      .filter(p => !ok.has(p.id))
+      .map(p => ({ p, anderswo: bl.filter(x => passt(x, p) && norm(x.club) !== norm(p.club)) }))
+      .filter(x => x.anderswo.length && !bl.some(y => passt(y, x.p) && norm(y.club) === norm(x.p.club)))
+      .map(x => ({ spieler: x.p.name, verein_bei_uns: x.p.club, manager: b.managerName[x.p.manager_id], laut_kicker: x.anderswo.map(y => `${y.name} (${y.club})`) }));
+    if (out.kader_verein_abweichend.length) out.warnungen.push(`${out.kader_verein_abweichend.length} Kaderspieler stehen bei uns in einem anderen Verein als bei kicker (sie erscheinen sonst als frei im Transfermarkt)`);
 
     const geboteOffen = await one("select count(*)::int as n from bids where status='sealed'");
     out.gebote_versiegelt = geboteOffen.n;
