@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { q, one, getSetting, schemaReady, dbHint } from '@/lib/db';
 import { base, openRound, pendingRounds, lastFinalRound } from '@/lib/data';
 import { rlbLeavers } from '@/lib/squads';
+import { playerMatches } from '@/lib/kicker';
+import { norm } from '@/lib/rules';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Neon-Kaltstart einrechnen
 
@@ -45,6 +47,16 @@ export async function GET(req) {
     const leavers = await rlbLeavers(b);
     out.offene_abgaenge = leavers.map(l => ({ spieler: l.player.name, verein: l.player.club, manager: b.managerName[l.player.manager_id], seit: l.since }));
     if (leavers.length) out.warnungen.push(`${leavers.length} offene(r) Abgang/Abgänge zu buchen`);
+
+    // Kaderspieler, zu denen es im kicker-Pool keinen Eintrag gibt. Meist ein Tippfehler im
+    // Namen – und der ist teuer: der Spieler taucht dann im Transfermarkt als frei auf,
+    // obwohl er jemandem gehört.
+    const bl = await q('select slug, name, club from bl_players where in_squad');
+    const aktive = b.playersArr.filter(p => p.status === 'active');
+    out.kader_ohne_kicker = aktive
+      .filter(p => !bl.some(x => playerMatches(x.slug, x.name, p.name) || norm(x.name) === norm(p.name)))
+      .map(p => ({ spieler: p.name, verein: p.club, manager: b.managerName[p.manager_id] }));
+    if (out.kader_ohne_kicker.length) out.warnungen.push(`${out.kader_ohne_kicker.length} Kaderspieler ohne kicker-Zuordnung (Schreibweise prüfen – sie erscheinen sonst als frei im Transfermarkt)`);
 
     const geboteOffen = await one("select count(*)::int as n from bids where status='sealed'");
     out.gebote_versiegelt = geboteOffen.n;
