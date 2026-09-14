@@ -97,7 +97,9 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
       if (!line || stop) continue;
       if (SIG.test(line)) { stop = true; continue; }                 // Grussformel, Signatur, Mail-Disclaimer: ab hier nichts mehr
       if (/^(system|aufstellung|startaufstellung|wechsel|einwechslung|auswechslung|pos\b)/i.test(line) && !/[,\t]/.test(line.replace(/^\S+\s*:?/, '')) && words(line).length <= 4) continue;
-      line = line.split(/\s+(?:für|fuer|anstelle|anstatt|statt|ersetzt)\s+|\s+f\s+/i)[0];   // "X für Y": Y ist der ersetzte Spieler
+      // "X für Y" / "anstelle Y": Y ist der ersetzte Spieler. Auch wenn "für Y" als eigene Zeile daherkommt
+      // (Tabellenzelle beim Kopieren umgebrochen), sonst wuerde Y als zwoelfter Spieler gezaehlt.
+      line = line.split(/(?:^|\s+)(?:für|fuer|anstelle|anstatt|statt|ersetzt|f)\s+/i)[0].trim(); if (!line) continue;
       if (posList(line).length && words(line).length === 1) { pending = posList(line); continue; }   // Position auf eigener Zeile (naechste Zeile ist der Spieler)
       const chunks = line.split(/\s*[,;|]\s*(?![^(]*\))|\s+[\/–]\s+|\s+-\s+|\s+(?:u|und|&)\s+/).filter(Boolean);
       for (const rawChunk of chunks) {

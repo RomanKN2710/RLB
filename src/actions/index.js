@@ -91,7 +91,7 @@ async function parsePaste(roundId, text) {
     const other = alle.find(p => p.manager_id !== mgrId && p.status === 'active' && (n(p.name) === nn || (nn.length >= 5 && n(p.name).includes(nn)))); if (other) return `${name} (im Kader von ${b.managerName[other.manager_id]})`;
     const own = alle.find(p => p.manager_id === mgrId && (n(p.name) === nn || (nn.length >= 5 && n(p.name).includes(nn)))); if (own) return `${name} (${own.status === 'released' ? 'entlassen' : own.status}${own.valid_from > round.number ? ', gültig erst ab Runde ' + own.valid_from : ''})`;
     return `${name} (nicht im Kader)`; };
-  for (const x of parsed.blocks) x.unmatched = x.unmatched.map(u => erklaere(x.managerId, u));
+  for (const x of parsed.blocks) { x.unmatched = x.unmatched.map(u => erklaere(x.managerId, u)); x.kaderN = (kaders[x.managerId] || []).length; x.kaderSpaeter = alle.filter(p => p.manager_id === x.managerId && p.status === 'active' && p.valid_from > round.number).map(p => `${p.name} (ab Runde ${p.valid_from})`); }
   parsed.warnung = !round.bids_resolved && bids.some(x => x.status === 'sealed') ? `Die Gebote dieser Runde (${bids.filter(x => x.status === 'sealed').length}) sind noch nicht ausgewertet. Neu gekaufte Spieler fehlen deshalb in den Kadern und werden hier nicht erkannt – zuerst «Gebote auswerten», dann den Blog übernehmen.` : null;
   // Manager ohne Post: was gilt fuer sie?
   parsed.ohnePost = parsed.missing.map(n => { const m = b.managers.find(y => y.name === n); const c = cur.find(l => l.manager_id === m.id);
