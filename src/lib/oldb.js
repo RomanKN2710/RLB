@@ -114,7 +114,9 @@ export async function postponedCandidates() {
 }
 
 /* ---------- Torschützen-Import (Ziff. 8, Kategorie Tore) ---------- */
-const normName = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+// Akzente weg und ae/oe/ue zusammengezogen: OpenLigaDB schreibt "Füllkrug"/"Mittelstädt", unser Kader "Fuellkrug"/"Mittelstaedt" - beide
+// Tore blieben deshalb am 3. Spieltag unzugeordnet.
+const normName = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z ]/g, ' ').replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u').replace(/\s+/g, ' ').trim();
 /** Tokens eines Namens ohne Initialen ("D. Upamecano" -> [upamecano], "Luis Diaz" -> [luis, diaz]). */
 const tokens = s => normName(s).split(' ').filter(t => t.length > 1);
 /** Passt der OpenLigaDB-Name zu unserem Spielernamen? Nachname muss übereinstimmen; Vornamen/Initialen dürfen fehlen. */

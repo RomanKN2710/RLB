@@ -16,7 +16,8 @@ export const positionsOf = p => [p.base_pos, ...(p.extra_pos || [])];
 export const isDef = pos => pos === 'T' || pos === 'V';
 export const playerValid = (p, roundNumber) => (p.valid_from ?? 1) <= roundNumber && (p.valid_to == null || roundNumber <= p.valid_to);
 export const value = p => Number(p.price) || 0;
-export const norm = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+// Umlaute: "Füllkrug" (OpenLigaDB, Blog) und "Fuellkrug" (Kader) muessen gleich werden - Akzente weg, dann ae/oe/ue zusammenziehen
+export const norm = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z]/g, '').replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
 
 /** Vereinsergebnis-Karte {clubId: {pts, cs}} aus den Spielen einer Runde (nur beendete Spiele). */
 export function clubResults(matches, teamToClub) {
