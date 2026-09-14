@@ -99,7 +99,10 @@ export const applyLineupTextAction = wrap(async (roundId, text) => { const u = a
     log.push(`${x.name}: ${Object.keys(x.entries).length} Spieler aus dem Blog gespeichert${x.selbst ? ' – überschreibt die selbst in der App gespeicherte Aufstellung' : ''}${x.diff.length ? ' (' + x.diff.join(', ') + ')' : ''}${x.notes.length ? ' – ' + x.notes.join('; ') : ''}${x.unmatched.length ? ' – nicht zugeordnet: ' + x.unmatched.join(', ') : ''}`);
   }
   if (parsed.ohnePost.length) log.push(`Ohne Post im Blog: ${parsed.ohnePost.join('; ')}`);
-  await audit(u.id, 'lineup_paste', { roundId, n }); rev();
+  // Protokoll dauerhaft ablegen (wie beim kicker-Import), damit ein Lauf spaeter nachvollziehbar ist
+  const prevLog = (await getSetting(`lineup_paste_${roundId}`)) || { runs: [] };
+  await setSetting(`lineup_paste_${roundId}`, { runs: [...(prevLog.runs || []).slice(-9), { at: new Date().toISOString(), by: u.name || u.email, n, log, text: String(text || '').slice(0, 20000) }] });
+  await audit(u.id, 'lineup_paste', { roundId, n, log }); rev();
   return ok(`${n} Aufstellung(en) übernommen · ` + log.join(' · ')); });
 
 /* ---------- Gebote (Manager: eigenes, offene Runde, bis Deadline) ---------- */
