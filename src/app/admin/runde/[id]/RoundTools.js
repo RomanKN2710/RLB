@@ -104,6 +104,7 @@ export function LineupPaste({ roundId }) { const { msg, pending, run } = useRun(
     <textarea rows={8} placeholder={'Roman\nFlekken\nDavies, Chabot, Anton\n…\n\nMike:\nNicolas\n…'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
     <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewLineupTextAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
       <button className="sm komm" disabled={pending || !prev || !prev.blocks.some(x => x.ok)} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyLineupTextAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Zulässige Aufstellungen übernehmen</button><M msg={msg} /></div>
+    {prev?.warnung && <div className="err"><b>Gebote zuerst auswerten.</b> {prev.warnung}</div>}
     {prev && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Erkannt (Blog)</th><th className="l">Nicht zugeordnet</th><th className="l">Prüfung</th><th className="l">Bisher in der App</th></tr></thead><tbody>
       {prev.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b><div className="mini">{x.title}</div>{x.notes?.map(n => <div key={n} className="mini delta down">{n}</div>)}</td>
         <td className="l small">{x.found.map(f => `${f.pos} ${f.name}${f.note ? ' (' + f.note + ')' : ''}`).join(', ')} <span className="mini">({x.found.length})</span></td>

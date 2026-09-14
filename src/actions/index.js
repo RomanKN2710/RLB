@@ -80,6 +80,19 @@ async function parsePaste(roundId, text) {
       x.diff = [...plus.map(n => '+' + n), ...minus.map(n => '−' + n), ...posw]; x.gleich = !x.diff.length; }
     else { x.diff = []; x.gleich = false; }
   }
+  // Nicht zugeordnete Namen erklaeren: offenes Gebot dieser Runde (Gebote zuerst auswerten!), Kader eines anderen
+  // Managers, entlassen oder gar nicht im Spiel. Haeufigster Fall: der Manager stellt einen Spieler auf, den er in
+  // dieser Runde erst kauft - der ist bis zur Auswertung der Gebote nicht in seinem Kader.
+  const bids = await q('select * from bids where round_id=$1', [round.id]);
+  const alle = b.playersArr || Object.values(b.players || {});
+  const erklaere = (mgrId, name) => { const n = name => R.norm(name); const nn = n(name);
+    const bid = bids.find(x => x.manager_id === mgrId && (n(x.player_name) === nn || n(x.player_name).includes(nn) || nn.includes(n(x.player_name))));
+    if (bid) return `${name} (Gebot in dieser Runde${bid.status === 'sealed' ? ', noch nicht ausgewertet – zuerst Gebote auswerten' : bid.status === 'won' ? ', gewonnen' : ', ' + bid.status})`;
+    const other = alle.find(p => p.manager_id !== mgrId && p.status === 'active' && (n(p.name) === nn || (nn.length >= 5 && n(p.name).includes(nn)))); if (other) return `${name} (im Kader von ${b.managerName[other.manager_id]})`;
+    const own = alle.find(p => p.manager_id === mgrId && (n(p.name) === nn || (nn.length >= 5 && n(p.name).includes(nn)))); if (own) return `${name} (${own.status === 'released' ? 'entlassen' : own.status}${own.valid_from > round.number ? ', gültig erst ab Runde ' + own.valid_from : ''})`;
+    return `${name} (nicht im Kader)`; };
+  for (const x of parsed.blocks) x.unmatched = x.unmatched.map(u => erklaere(x.managerId, u));
+  parsed.warnung = !round.bids_resolved && bids.some(x => x.status === 'sealed') ? `Die Gebote dieser Runde (${bids.filter(x => x.status === 'sealed').length}) sind noch nicht ausgewertet. Neu gekaufte Spieler fehlen deshalb in den Kadern und werden hier nicht erkannt – zuerst «Gebote auswerten», dann den Blog übernehmen.` : null;
   // Manager ohne Post: was gilt fuer sie?
   parsed.ohnePost = parsed.missing.map(n => { const m = b.managers.find(y => y.name === n); const c = cur.find(l => l.manager_id === m.id);
     return `${n}: ${!c ? 'Vorrunde' : !c.updated_by ? 'Vorrunde (automatisch übernommen)' : 'in der App gespeichert (' + fmtStamp(c.updated_at) + ')'}`; });
@@ -88,10 +101,11 @@ async function parsePaste(roundId, text) {
 const fmtStamp = d => d ? new Date(d).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 export const previewLineupTextAction = wrap(async (roundId, text) => { await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
-  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear }); });
+  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear, warnung: parsed.warnung }); });
 export const applyLineupTextAction = wrap(async (roundId, text) => { const u = await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
   const log = []; let n = 0;
+  if (parsed.warnung) log.push('ACHTUNG: ' + parsed.warnung);
   for (const x of parsed.blocks) {
     if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})${x.selbst ? ' – die in der App gespeicherte Aufstellung bleibt' : ''}`); continue; }
     if (x.gleich) { log.push(`${x.name}: Blog und App identisch, nichts zu ändern`); continue; }
