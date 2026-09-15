@@ -230,3 +230,14 @@ Pott Gewinnkasse
 Spieler Fussballer, die im Spiel gekauft werden können
 Versteigerung Phase 1 des Drafts
 Vertrag 2- oder 3-jahres Vertrag mit Stammspielern
+
+---
+
+## Gelebte Regeln und Präzisierungen (Entscheide der Administration)
+
+Diese Punkte stehen so nicht im Regelwerk V4, werden aber so gespielt und sind in der App entsprechend umgesetzt.
+
+- **Team der Runde / Spieler des Tages (zu Ziff. 8.7):** Jede Ernennung in die kicker-Elf des Tages gibt 1 Punkt. Der Spieler des Tages erhält zusätzlich 1 Punkt – steht er auch in der Elf, sind es 2. (Entscheid Roman, 15.09.2026; so seit Runde 1 im Excel: Suzuki R1, Matanovic R3.)
+- **Gutschrift bei Bundesliga-Abgang (zu Ziff. 7.4):** Der Wert des Spielers wird dem Kaufbudget gutgeschrieben *und* von den Auslagen des Managers abgezogen, weil der Pott die Summe der Auslagen ist. (Entscheid Roman, 10.09./15.09.2026.)
+- **Wechselkosten (Ziff. 5.1):** Regeltext gilt wörtlich – jeder neu in die Elf gestellte Spieler kostet 50 % seines Werts, Grundaufstellung Runde 1 und Eventualaufträge sind gratis. Nicht belastete Wechsel im Excel der Runden 2/3 (Hendriks, Bensebaini, Lemperle, Vagnoman) waren Fehler. (Entscheid Roman, 15.09.2026.)
+- **Positionserwerb im Zweifelsfall (Ziff. 5.2):** Aussenverteidiger, die kicker in einer Dreierkette als Mittelfeldspieler führt, erwerben die Position nicht automatisch; der Admin entscheidet.
