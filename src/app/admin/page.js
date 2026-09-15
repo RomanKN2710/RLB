@@ -20,6 +20,8 @@ export default async function Admin() {
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
   const now = Date.now();
   return (<>
+    <div className="adminbox"><h3>Admin · Datenabzug</h3>
+      <p className="mini"><a className="btn sm sec" href="/api/export">Alle Daten als JSON herunterladen</a> Kader, Runden, Aufstellungen, Resultate, Gebote, Transfers, Buchungen und Protokolle – ohne Passwörter. Zum Nachprüfen des Spielstands ausserhalb der App (z. B. Abgleich mit dem Excel).</p></div>
     <div className="adminbox"><h3>Admin · Aufstellungs-Blog</h3>
       <p className="mini"><Link className="btn sm sec" href="/admin/blog">Rohansicht öffnen</Link> Zeigt, was die App im Blog (rotisseryleaguebundesliga.blogspot.com) liest – Vorstufe für die automatische Übernahme der Aufstellungen nach der Deadline.</p></div>
     <div className="adminbox"><h3>Admin · Spielplan (OpenLigaDB)</h3>
