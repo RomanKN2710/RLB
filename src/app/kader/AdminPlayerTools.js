@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { removePositionAction, addPositionAction, setContractAction, setJugendAction, releasePlayerAction, abgangPlayerAction } from '@/actions';
+import { removePositionAction, addPositionAction, setContractAction, setJugendAction, releasePlayerAction, abgangPlayerAction, editPlayerAction } from '@/actions';
 
 export default function AdminPlayerTools({ player: p }) {
   const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); const [arm, setArm] = useState(null);
@@ -14,6 +14,7 @@ export default function AdminPlayerTools({ player: p }) {
     <button className="sm sec" title="Jugendstatus" disabled={pending} onClick={() => run(() => setJugendAction(p.id, !p.jugend))}>J:{p.jugend ? 'ja' : 'nein'}</button>
     {arm === 'rel' ? <button className="sm danger" onClick={() => run(() => releasePlayerAction(p.id))}>{p.name} entlassen?</button> : <button className="sm sec" onClick={() => setArm('rel')}>Entl.</button>}
     {arm === 'abg' ? <button className="sm danger" onClick={() => run(() => abgangPlayerAction(p.id))}>Abgang, {p.price} gutschreiben?</button> : <button className="sm sec" title="Verlässt die Bundesliga: Wert wird dem Kaufbudget gutgeschrieben (7.4)" onClick={() => setArm('abg')}>Abg.</button>}
+    <button className="sm sec" title="Name (kicker-Schreibweise) oder Verein korrigieren" disabled={pending} onClick={() => { const nm = window.prompt('Name (wie bei kicker geschrieben):', p.name); if (nm === null) return; const cl = window.prompt('Verein (Kurzname wie in der App, z. B. Augsburg):', p.club); if (cl === null) return; run(() => editPlayerAction(p.id, nm, cl)); }}>Bearb.</button>
     {msg && <span className="mini">{msg}</span>}
   </span>);
 }
