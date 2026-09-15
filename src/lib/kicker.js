@@ -220,11 +220,15 @@ export async function acquirePositions(starters, b, round) {
     const hits = active.filter(p => clubMatches(s.team, p.club) && playerMatches(s.slug, s.name, p.name));
     if (hits.length !== 1) continue; const p = hits[0];
     if (s.kpos === p.base_pos || (p.extra_pos || []).includes(s.kpos)) continue;
+    // Ziff. 5.2: "Im Zweifelsfall wird kein Positionserwerb gewaehrt." Zweifelsfall ist der Aussenverteidiger, den
+    // kicker in einer Dreierkette als Mittelfeldspieler fuehrt (3-4-3, 3-5-2, 3-6-1): nicht automatisch gewaehren,
+    // nur melden - der Admin kann die Zusatzposition auf der Kaderseite von Hand geben (+M).
+    const doubt = s.formation && /^3-/.test(s.formation) && p.base_pos === 'V' && s.kpos === 'M';
+    if (doubt) { log.push(`${p.name}: Startelf als M in Formation ${s.formation} – Zweifelsfall (Aussenverteidiger in Dreierkette), Zusatzposition M NICHT automatisch gewährt (Ziff. 5.2); bei Bedarf im Kader von Hand +M`); continue; }
     await q('update players set extra_pos = array_append(extra_pos, $1) where id=$2 and not ($1 = any(extra_pos))', [s.kpos, p.id]); p.extra_pos = [...(p.extra_pos || []), s.kpos];
     const ex = await q("select 1 from transfers where type='position' and manager_id=$1 and player_name=$2 and note like $3", [p.manager_id, p.name, `Zusatzposition ${s.kpos}%`]);
     if (!ex.length) await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'position',$3,0,$4)", [round.id, p.manager_id, p.name, `Zusatzposition ${s.kpos} erworben (kicker-Startelf ${round.label}, Ziff. 5.2) – ab Folgerunde ${p.base_pos}/${[...new Set(p.extra_pos)].join('/')}`]);
-    const doubt = s.formation && /^3-/.test(s.formation) && p.base_pos === 'V' && s.kpos === 'M' ? ' – Formation ' + s.formation + ': Aussenverteidiger als M gezählt, im Zweifel −Pos (5.2)' : '';
-    log.push(`${p.name}: Zusatzposition ${s.kpos} (Startelf laut kicker, ${round.label})${doubt}`);
+    log.push(`${p.name}: Zusatzposition ${s.kpos} (Startelf laut kicker, ${round.label})`);
   }
   return log;
 }

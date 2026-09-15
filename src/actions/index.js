@@ -165,8 +165,15 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
     const names = async ids => (await x.q('select name from players where id=any($1)', [ids])).map(r => r.name).join(', ');
     await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'trade',$3,$4,$5)", [roundId, t.from_manager, await names(t.give), R.TRADE_FEE, 'erhält ' + await names(t.get_)]);
     await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'trade',$3,$4,$5)", [roundId, t.to_manager, await names(t.get_), R.TRADE_FEE, 'erhält ' + await names(t.give)]);
-    // Getauschte Spieler aus der offenen Aufstellung des abgebenden Managers entfernen (Ziff. 6: Aufstellung muss angepasst werden)
-    if (open) for (const [m, ids] of [[t.from_manager, t.give], [t.to_manager, t.get_]]) { const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, m]); if (lu) { const e = { ...lu.entries }; ids.forEach(id => delete e[id]); await x.q('update lineups set entries=$1 where round_id=$2 and manager_id=$3', [JSON.stringify(e), open.id, m]); } }
+    // Ziff. 6: Die erworbenen Spieler ersetzen provisorisch die Aufstellungsstelle inkl. Position der abgegebenen
+    // (paarweise: give[i] gegen get[i]); das ist kein kostenpflichtiger Wechsel (free_in). Passt die Position nicht
+    // zum neuen Spieler, faellt die Stelle weg und der Manager muss vor der Deadline nachbessern.
+    if (open) { const rows = await x.q('select * from players where id = any($1)', [t.give.concat(t.get_)]); const P = Object.fromEntries(rows.map(p => [p.id, p]));
+      for (const [m, out, inn] of [[t.from_manager, t.give, t.get_], [t.to_manager, t.get_, t.give]]) {
+        const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, m]); if (!lu) continue;
+        const e = { ...lu.entries }; const free = (lu.free_in || []).slice();
+        out.forEach((id, i) => { if (!e[id]) return; const pos = e[id].pos; delete e[id]; const np = P[inn[i]]; if (np && R.positionsOf(np).includes(pos)) { e[np.id] = { pos }; free.push(np.id); } });
+        await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, open.id, m]); } }
     await x.q("update trades set status='done', done_at=now(), round_id=$2 where id=$1", [tradeId, roundId]);
   });
   await audit(u.id, 'trade_done', { tradeId }); rev(); return ok('Trade vollzogen, je CHF 5 gebucht');
