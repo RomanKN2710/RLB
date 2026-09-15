@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { korrektur20260915Action, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
+import { importKickerInboxMatchdayAction, clearKickerInboxMatchdayAction, korrektur20260915Action, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -27,3 +27,18 @@ export function PoolPaste() { const [s, a] = useFormState(poolPasteAction, null)
 export function Korrektur({ done }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
   if (done) return <span className="mini">Eingespielt am {new Date(done.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {done.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{done.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span>;
   return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260915Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 15.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
+
+/* kicker-Eingang vom Handy: alle Spieltage mit Stand und Import-Knopf */
+export function InboxList({ items }) { const { msg, pending, run } = useRun(); const [unlock, setUnlock] = useState(true);
+  if (!items.length) return <p className="mini">Noch keine Seiten empfangen. Vom Handy aus mit dem Lesezeichen-Skript oder Tampermonkey auf jeder kicker-Aufstellungsseite und der Elf des Tages senden – der Spieltag wird automatisch erkannt.</p>;
+  return (<div className="stack">
+    <label className="mini"><input type="checkbox" checked={unlock} onChange={e => setUnlock(e.target.checked)} /> Sperren der Runde aufheben (Excel-Import und Admin-Änderungen werden durch kicker überschrieben)</label>
+    <div className="tbl"><table><thead><tr><th className="l">Spieltag</th><th className="l">Eingang</th><th className="l">Paarungen</th><th className="l">Zuletzt</th><th></th></tr></thead><tbody>
+      {items.map(it => <tr key={it.matchday}><td className="l"><b>{it.label || `Spieltag ${it.matchday}`}</b>{it.status && <div className="mini">{it.status}{it.locked ? ` · ${it.locked} gesperrte Zeilen` : ''}</div>}</td>
+        <td className="l"><span className={`pill ${it.n >= 9 && it.elf ? 'ok' : 'open'}`}>{it.n}/9 Spiele{it.elf ? ' + Elf des Tages' : ' · Elf des Tages fehlt'}</span></td>
+        <td className="l mini">{it.matches.map(m => m.title).join(' · ')}</td>
+        <td className="l mini">{it.at ? new Date(it.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</td>
+        <td className="l"><span className="row"><button className="sm komm" disabled={pending || !it.hasRound} onClick={() => run(() => importKickerInboxMatchdayAction(it.matchday, unlock))}>Importieren</button><button className="sm sec" disabled={pending} onClick={() => run(() => clearKickerInboxMatchdayAction(it.matchday))}>Leeren</button></span></td></tr>)}
+    </tbody></table></div>
+    {msg && <div className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</div>}
+  </div>); }

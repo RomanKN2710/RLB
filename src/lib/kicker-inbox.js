@@ -22,7 +22,8 @@ export function classify(html, hintUrl = '') {
   if (elfMd || /Elf des Tages/i.test(title)) return { kind: 'elf', matchday: elfMd ? Number(elfMd) : null, id: 'elf', title: title || 'Elf des Tages' };
   const hasLineup = /kick__lineup__teamrow/.test(h);
   const id = (h.match(/rel="canonical" href="[^"]*?-(\d+)\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)?"?/) || h.match(/\/([0-9]{6,})\/aufstellung/) || hintUrl.match(/-(\d+)\/\w*$/) || [])[1];
-  const md = (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || [])[1];
+  // Spieltag: Tracking-Kennung "…_bundesliga_2026-27_3", sonst JSON "spieltag":3, sonst Brotkrumen/Titel "3. Spieltag"
+  const md = (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || h.match(/(\d{1,2})\.\s*Spieltag/) || [])[1];
   const teams = [...h.matchAll(/kick__lineup__teamrow__teamname[^>]*>\s*([^<]+?)\s*</g)].map(m => m[1].replace(/&#x([0-9a-f]+);/gi, (_, x) => String.fromCharCode(parseInt(x, 16))).replace(/&amp;/g, '&')).slice(0, 2);
   return { kind: hasLineup ? 'match' : 'unknown', matchday: md ? Number(md) : null, id: id || null, title: teams.length === 2 ? teams.join(' – ') : title.replace(/\s*\|.*$/, '') };
 }
@@ -52,3 +53,11 @@ export async function pages(matchday) {
 }
 
 export async function clear(matchday) { await ensureTable(); await q('delete from kicker_pages where matchday=$1', [matchday]); }
+
+/** Alle Eingaenge (je Spieltag) fuer die Admin-Uebersicht. */
+export async function allStatus() {
+  await ensureTable();
+  const rows = await q('select matchday, kind, page_id, title, at from kicker_pages order by matchday, at');
+  const out = {}; rows.forEach(r => { const o = out[r.matchday] ||= { matchday: r.matchday, matches: [], elf: false, n: 0, at: r.at }; if (r.kind === 'elf') o.elf = true; else { o.matches.push({ id: r.page_id, title: r.title }); o.n++; } if (r.at > o.at) o.at = r.at; });
+  return Object.values(out);
+}

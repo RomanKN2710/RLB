@@ -330,12 +330,17 @@ export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, html
   const r = await importRound(round, b, fetcher, { paths, partial: true }); await audit(a.id, 'kicker_import_paste', { roundId, n: paths.length }); rev();
   return ok(r.log.join(' · ')); });
 /* Eingang vom Handy (Kurzbefehl) importieren: dieselbe Logik wie das Einfuegen im Browser */
-export const importKickerInboxAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
+export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
   const pg = await Inbox.pages(round.matchday); if (!pg.matches.length && !pg.elf) return fail(`Eingang für Spieltag ${round.matchday} ist leer`);
   await D.ensureLineups(round, b);
+  // Gesperrte Zeilen (Excel-Import, Admin-Korrekturen) freigeben, damit kicker als Quelle wieder gilt
+  if (unlock) await q('update results set locked=false where round_id=$1', [round.id]);
   const pages = {}; const paths = []; pg.matches.forEach((h, i) => { const path = `/inbox-${i}`; pages[`${path}/aufstellung`] = h; paths.push(path); }); if (pg.elf) pages.elf = pg.elf;
   const fetcher = async url => { const u = new URL(url); if (u.pathname.includes('/elf-des-tages/')) { if (pages.elf) return pages.elf; throw new Error('keine Elf-des-Tages-Seite im Eingang'); } if (pages[u.pathname]) return pages[u.pathname]; throw new Error('nicht im Eingang: ' + u.pathname); };
   const r = await importRound(round, b, fetcher, { paths, partial: true }); await audit(a.id, 'kicker_import_inbox', { roundId, n: paths.length, elf: !!pg.elf }); rev();
   return ok(r.log.join(' · ')); });
+/* Eingang eines Spieltags von der Admin-Uebersicht aus importieren (Runde wird ueber den Spieltag gefunden) */
+export const importKickerInboxMatchdayAction = wrap(async (matchday, unlock = false) => { const round = await one("select * from rounds where type='regulaer' and matchday=$1", [matchday]); if (!round) return fail(`Keine Runde für Spieltag ${matchday}`); return importKickerInboxAction(round.id, unlock); });
+export const clearKickerInboxMatchdayAction = wrap(async (matchday) => { await requireAdmin(); await Inbox.clear(matchday); rev(); return ok(`Eingang Spieltag ${matchday} geleert`); });
 export const clearKickerInboxAction = wrap(async (roundId) => { await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); await Inbox.clear(round.matchday); rev(); return ok('Eingang geleert'); });
 export const removePositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); if (pos === p.base_pos) return fail('Grundposition kann nicht entfernt werden'); await q('update players set extra_pos=array_remove(extra_pos,$1) where id=$2', [pos, pid]); rev(); return ok(`${p.name}: Zusatzposition ${pos} entfernt`); });
