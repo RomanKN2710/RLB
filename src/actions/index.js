@@ -8,6 +8,7 @@ import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } from '@/lib/oldb';
 import { importRound, playerMatches } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
+import { applyKorrektur20260915 } from '@/lib/korrektur-20260915';
 
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
 const fail = msg => ({ ok: false, msg });
@@ -304,6 +305,8 @@ export const importGoalsAction = wrap(async (roundId) => { const a = await requi
   const r = await importGoals(roundId, b.players, b.teamToClub); await audit(a.id, 'goals_import', { roundId, n: r.assigned.length }); rev();
   return ok(`Tore übernommen: ${r.assigned.map(x => `${x.player} ${x.tore}`).join(', ') || 'keine'}${r.unmatched.length ? ' · mehrdeutig: ' + r.unmatched.map(u => u.name).join(', ') : ''}`); });
 
+/* ---------- Admin: einmalige Datenkorrektur 15.09.2026 ---------- */
+export const korrektur20260915Action = wrap(async () => { const a = await requireAdmin(); const r = await applyKorrektur20260915(a.id); rev(); return ok(r.log.join(' · ')); });
 /* ---------- Admin: kicker-Import (Startelf, Wechsel, Tore, Vorlagen, Karten, Elf des Tages) ---------- */
 export const importKickerAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
   await D.ensureLineups(round, b);

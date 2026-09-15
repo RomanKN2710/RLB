@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import { q, getSetting } from '@/lib/db';
 import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
-import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste } from './AdminTools';
+import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, Korrektur } from './AdminTools';
 import { SquadSync, Leavers } from './SquadTools';
 import { rlbLeavers } from '@/lib/squads';
 import clubSlugs from '../../../db/seed/kicker-clubs.json';
@@ -18,8 +18,12 @@ export default async function Admin() {
   const lineupCounts = await q('select round_id, count(*)::int as n from lineups group by round_id');
   const postponed = await postponedCandidates();
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
+  const korrDone = await getSetting('korrektur_20260915');
   const now = Date.now();
   return (<>
+    <div className="adminbox"><h3>Admin · Datenkorrektur 15.09.2026</h3>
+      <p className="mini">Ergebnis des Abgleichs mit den Excel-Auswertungen und kicker: Spielernamen auf kicker-Schreibweise (Veerman, Ullrich, Amaimouni-Echghouyab, Johannesson, El Ouahdi, Ilic), Ibrahimovic → Augsburg, Käufe Spieltag 3 (Doan 12, Maksimovic 4, Grüll 3) mit Entlassungen (Belocian, Vidovic, Ljubicic), Arbis Aufstellung Spieltag 3, Karten Burger/Miguel/Maza und Vieira-Einsatz Spieltag 2, fehlende Einsätze Spieltag 3 (Davies, El Aynaoui, Kübler, Banzuzi, Vagnoman, Moore, Mensah, Veerman, Ache, Doan, Lemperle, Bensebaini – Quelle Excel, nicht gesperrt).</p>
+      <Korrektur done={korrDone} /></div>
     <div className="adminbox"><h3>Admin · Datenabzug</h3>
       <p className="mini"><a className="btn sm sec" href="/api/export">Alle Daten als JSON herunterladen</a> Kader, Runden, Aufstellungen, Resultate, Gebote, Transfers, Buchungen und Protokolle – ohne Passwörter. Zum Nachprüfen des Spielstands ausserhalb der App (z. B. Abgleich mit dem Excel).</p></div>
     <div className="adminbox"><h3>Admin · Aufstellungs-Blog</h3>

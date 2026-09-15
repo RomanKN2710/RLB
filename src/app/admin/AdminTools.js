@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
+import { korrektur20260915Action, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -22,3 +22,8 @@ export function Manual({ managers, clubs }) { const [s1, a1] = useFormState(manu
 export function PoolPaste() { const [s, a] = useFormState(poolPasteAction, null);
   return <div className="adminbox"><h3>Spielerpool ergänzen</h3><p className="mini">Eine Zeile pro Spieler: <code>Name; Verein; Position</code> (Verein und Position optional). Der Pool füllt sich sonst automatisch aus den kicker-Aufstellungen.</p>
     <form action={a} className="stack"><textarea name="text" rows={5} placeholder={'Nwaneri; Dortmund; M\nDoué; Leverkusen; V'} /><div className="row"><button className="sm sec">In Pool übernehmen</button><Msg state={s} /></div></form></div>; }
+
+/* Einmalige Datenkorrektur vom 15.09.2026 (Abgleich Excel/kicker): Namen, Ibrahimovic-Verein, Kaeufe/Entlassungen Spieltag 3, Arbis Elf, fehlende Werte Spieltag 2/3 */
+export function Korrektur({ done }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
+  if (done) return <span className="mini">Eingespielt am {new Date(done.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {done.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{done.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span>;
+  return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260915Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 15.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
