@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { previewLineupTextAction, applyLineupTextAction, importKickerAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { importKickerInboxAction, clearKickerInboxAction, previewLineupTextAction, applyLineupTextAction, importKickerAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -78,8 +78,10 @@ export function Results({ roundId, managerId, managerName, rows: init, totals })
 export function Goals({ roundId }) { const { msg, pending, run } = useRun();
   return <div className="row" style={{ marginTop: 8 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importGoalsAction(roundId))}>Tore aus OpenLigaDB übernehmen</button><span className="mini">Läuft nach der Deadline auch automatisch beim Sync; vom Admin geänderte Tore werden nicht überschrieben.</span><M msg={msg} /></div>; }
 
-export function Kicker({ roundId, lastLog }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState('');
+export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState('');
   return (<div className="stack" style={{ marginTop: 8 }}>
+    <div className="row"><span className="mini"><b>Eingang vom Handy</b> (Spieltag {inbox?.matchday}): {inbox && inbox.n ? `${inbox.n}/9 Spiele${inbox.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'} – ${inbox.matches.map(m => m.title).join(' · ')}` : 'leer'}</span>
+      {inbox && (inbox.n > 0 || inbox.elf) && <><button className="sm komm" disabled={pending} onClick={() => run(() => importKickerInboxAction(roundId))}>Eingang importieren</button><button className="sm sec" disabled={pending} onClick={() => run(() => clearKickerInboxAction(roundId))}>Eingang leeren</button></>}</div>
     <div className="row"><button className="komm" disabled={pending} onClick={() => run(() => importKickerAction(roundId))}>kicker importieren (alle Spiele + Elf des Tages)</button><button className="sm sec" disabled={pending} onClick={() => run(() => unlockResultsAction(roundId))}>Admin-Sperren aufheben</button><M msg={msg} /></div>
     {lastLog && <div className="mini">Letzter Import {lastLog.at ? new Date(lastLog.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' }) : ''}: {lastLog.log?.join(' · ')}</div>}
     <details><summary>Rückfall: kicker-HTML einfügen (falls der Abruf blockiert ist)</summary>
