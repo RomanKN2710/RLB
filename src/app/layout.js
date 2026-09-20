@@ -31,6 +31,7 @@ export default async function RootLayout({ children }) {
             <Link href="/kader">Kader &amp; Trades</Link>
             <Link href="/statistik">Statistik</Link>
             <Link href="/abrechnung">Abrechnung</Link>
+            <Link href="/archiv">Archiv</Link>
             <Link href="/regeln">Regeln</Link>
             <Link href="/konto">Konto</Link>
             {user.role === 'admin' && <Link href="/admin">Admin</Link>}

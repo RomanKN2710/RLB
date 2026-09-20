@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { importKickerInboxMatchdayAction, clearKickerInboxMatchdayAction, korrektur20260915Action, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
+import { importKickerInboxMatchdayAction, clearKickerInboxMatchdayAction, korrektur20260915Action, korrektur20260920Action, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -27,6 +27,11 @@ export function PoolPaste() { const [s, a] = useFormState(poolPasteAction, null)
 export function Korrektur({ done }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
   if (done) return <span className="mini">Eingespielt am {new Date(done.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {done.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{done.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span>;
   return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260915Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 15.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
+
+/* Einmalige Datenkorrektur vom 20.09.2026 (Gesamt-Abgleich Blog/kicker/Excel) */
+export function Korrektur2({ done }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
+  if (done) return <span className="mini">Eingespielt am {new Date(done.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {done.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{done.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span>;
+  return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260920Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 20.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
 
 /* kicker-Eingang vom Handy: alle Spieltage mit Stand und Import-Knopf */
 export function InboxList({ items }) { const { msg, pending, run } = useRun(); const [unlock, setUnlock] = useState(true);

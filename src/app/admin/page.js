@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import { q, getSetting } from '@/lib/db';
 import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
-import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, Korrektur, InboxList } from './AdminTools';
+import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, Korrektur, Korrektur2, InboxList } from './AdminTools';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
 import { SquadSync, Leavers } from './SquadTools';
 import { rlbLeavers } from '@/lib/squads';
@@ -19,7 +19,7 @@ export default async function Admin() {
   const lineupCounts = await q('select round_id, count(*)::int as n from lineups group by round_id');
   const postponed = await postponedCandidates();
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
-  const korrDone = await getSetting('korrektur_20260915');
+  const korrDone = await getSetting('korrektur_20260915'); const korrDone2 = await getSetting('korrektur_20260920');
   const inboxRaw = await inboxAll().catch(() => []);
   const lockedRows = await q('select round_id, count(*)::int as n from results where locked group by round_id');
   const inbox = inboxRaw.map(it => { const r = rounds.find(x => x.type === 'regulaer' && x.matchday === it.matchday); return { ...it, hasRound: !!r, label: r?.label, status: r ? r.status : 'keine Runde', locked: r ? (lockedRows.find(l => l.round_id === r.id) || {}).n || 0 : 0 }; });
@@ -28,13 +28,16 @@ export default async function Admin() {
     <div className="adminbox"><h3>Admin · kicker-Eingang vom Handy</h3>
       <p className="mini">Seiten, die per Lesezeichen-Skript oder Tampermonkey von kicker gesendet wurden, landen hier nach Spieltag sortiert. Import schreibt Startelf, Wechsel, Tore, Vorlagen, Karten und Team der Runde der betreffenden Runde – auch für bereits abgeschlossene Runden (Tabelle rechnet sich neu).</p>
       <InboxList items={inbox} /></div>
+    <div className="adminbox"><h3>Admin · Datenkorrektur 20.09.2026 (Gesamt-Abgleich Blog · kicker · Excel)</h3>
+      <p className="mini">Aufstellungen laut Blog: Mike Spieltag 3 Diaby statt El Mala, Dani Spieltag 2 Vagnoman statt Günter (mit kicker-Werten: Startelf, Vorlage, Tor). Werte laut kicker-Spielbericht: Ullrich Startelf Spieltag 1, Juranovic 2 Vorlagen Spieltag 1. Positionen laut kicker: Daghim S/M, Moore M, Conté M/S, Grüll S/M, El Ouahdi V/M, Bülter S/M. Arbis Doan-Einwechslung Spieltag 3 gratis (Eventualauftrag). Buchungen: Mikes Vertragsauflösung betrifft Theate, Gutschrift 2 für Arbi (Belocian). Verträge (1J/2J) aus den Keeper-Posts. Blog-Archiv mit allen 63 Einträgen seit Saisonstart.</p>
+      <Korrektur2 done={korrDone2} /></div>
     <div className="adminbox"><h3>Admin · Datenkorrektur 15.09.2026</h3>
       <p className="mini">Ergebnis des Abgleichs mit den Excel-Auswertungen und kicker: Spielernamen auf kicker-Schreibweise (Veerman, Ullrich, Amaimouni-Echghouyab, Johannesson, El Ouahdi, Ilic), Ibrahimovic → Augsburg, Käufe Spieltag 3 (Doan 12, Maksimovic 4, Grüll 3) mit Entlassungen (Belocian, Vidovic, Ljubicic), Arbis Aufstellung Spieltag 3, Karten Burger/Miguel/Maza und Vieira-Einsatz Spieltag 2, fehlende Einsätze Spieltag 3 (Davies, El Aynaoui, Kübler, Banzuzi, Vagnoman, Moore, Mensah, Veerman, Ache, Doan, Lemperle, Bensebaini – Quelle Excel, nicht gesperrt).</p>
       <Korrektur done={korrDone} /></div>
     <div className="adminbox"><h3>Admin · Datenabzug</h3>
       <p className="mini"><a className="btn sm sec" href="/api/export">Alle Daten als JSON herunterladen</a> Kader, Runden, Aufstellungen, Resultate, Gebote, Transfers, Buchungen und Protokolle – ohne Passwörter. Zum Nachprüfen des Spielstands ausserhalb der App (z. B. Abgleich mit dem Excel).</p></div>
-    <div className="adminbox"><h3>Admin · Aufstellungs-Blog</h3>
-      <p className="mini"><Link className="btn sm sec" href="/admin/blog">Rohansicht öffnen</Link> Zeigt, was die App im Blog (rotisseryleaguebundesliga.blogspot.com) liest – Vorstufe für die automatische Übernahme der Aufstellungen nach der Deadline.</p></div>
+    <div className="adminbox"><h3>Admin · Blog-Archiv</h3>
+      <p className="mini"><Link className="btn sm sec" href="/archiv">Archiv öffnen</Link> Alle Blog-Einträge (Aufstellungen, Gebote, Verträge) je Runde neben Kader und Aufstellung in der App. Neue Einträge per Copy-Paste aus dem Blog einspielen; der Blog selbst ist von Vercel aus nicht lesbar (<Link href="/admin/blog">Rohansicht</Link>).</p></div>
     <div className="adminbox"><h3>Admin · Spielplan (OpenLigaDB)</h3>
       <div className="row"><Sync /><span className="mini">Letzter Voll-Sync: {lastSync ? fmtDt(lastSync.at) : 'nie'} · aktuelle Spieltage: {lastCur ? fmtDt(lastCur.at) : 'nie'}. Beim Seitenaufruf wird automatisch aktualisiert (stündlich Resultate, täglich der ganze Spielplan).</span></div>
       {postponed.length > 0 && <div className="note" style={{ marginTop: 8 }}><b>Verschobene Spiele</b> (Kandidaten für Nachtragsrunden, Ziff. 8): {postponed.map(m => <div key={m.id} className="row">{fmtDt(m.kickoff)} · {b.teamToClub[m.team1]} – {b.teamToClub[m.team2]} (aktuell in {m.round_label}) <Split matchId={m.id} /></div>)}</div>}

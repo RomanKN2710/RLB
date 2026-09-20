@@ -9,6 +9,8 @@ import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } f
 import { importRound, playerMatches } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
 import { applyKorrektur20260915 } from '@/lib/korrektur-20260915';
+import { applyKorrektur20260920 } from '@/lib/korrektur-20260920';
+import * as Blog from '@/lib/blog-archiv';
 import * as Inbox from '@/lib/kicker-inbox';
 
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
@@ -315,6 +317,17 @@ export const importGoalsAction = wrap(async (roundId) => { const a = await requi
 
 /* ---------- Admin: einmalige Datenkorrektur 15.09.2026 ---------- */
 export const korrektur20260915Action = wrap(async () => { const a = await requireAdmin(); const r = await applyKorrektur20260915(a.id); rev(); return ok(r.log.join(' · ')); });
+export const korrektur20260920Action = wrap(async () => { const a = await requireAdmin(); const r = await applyKorrektur20260920(a.id); rev(); return ok(r.log.join(' · ')); });
+
+/* ---------- Blog-Archiv ---------- */
+export const blogImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const text = String(fd.get('text') || ''); const date = String(fd.get('date') || '') || null;
+  if (!text.trim()) return fail('Kein Text');
+  const b = await base(); const rounds = await q("select * from rounds where type='regulaer' order by number");
+  const posts = Blog.parseBlogText(text, { defaultDate: date }); if (!posts.length) return fail('Keine Einträge erkannt. Erwartet wird der Blog-Text (Titel, Text, «Eingestellt von … um HH:MM») oder der Textexport (### Titel / Datum: … | Autor: …).');
+  const r = await Blog.importPosts(posts, b.managers, rounds, 'paste'); await audit(a.id, 'blog_import', { neu: r.neu, vorhanden: r.vorhanden }); rev(); revalidatePath('/archiv');
+  return ok(`${posts.length} Einträge erkannt, ${r.neu} neu gespeichert, ${r.vorhanden} schon vorhanden.${r.log.length ? ' ' + r.log.join(' · ') : ''}`); });
+export const blogMetaAction = wrap(async (id, kind, managerId, roundNumber) => { await requireAdmin(); await Blog.setPostMeta(id, { kind, manager_id: managerId ? Number(managerId) : null, round_number: roundNumber ? Number(roundNumber) : null }); revalidatePath('/archiv'); return ok('Gespeichert'); });
+export const blogDeleteAction = wrap(async (id) => { await requireAdmin(); await Blog.deletePost(id); revalidatePath('/archiv'); return ok('Gelöscht'); });
 /* ---------- Admin: kicker-Import (Startelf, Wechsel, Tore, Vorlagen, Karten, Elf des Tages) ---------- */
 export const importKickerAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
   await D.ensureLineups(round, b);
