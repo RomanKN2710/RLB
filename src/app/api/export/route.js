@@ -10,7 +10,7 @@ export async function GET(req) {
   const u = await getUser(); const key = new URL(req.url).searchParams.get('key');
   if (!(u && u.role === 'admin') && !(process.env.CRON_SECRET && key === process.env.CRON_SECRET)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const out = { exportiert: new Date().toISOString(), von: u ? u.email : 'cron' };
-  const tables = ['managers', 'clubs', 'players', 'rounds', 'matches', 'lineups', 'results', 'corrections', 'bids', 'trades', 'ledger', 'transfers', 'finance', 'settings', 'squad_log'];
+  const tables = ['managers', 'clubs', 'players', 'rounds', 'matches', 'lineups', 'results', 'corrections', 'bids', 'trades', 'ledger', 'transfers', 'finance', 'settings', 'squad_log', 'blog_posts'];
   for (const t of tables) { try { out[t] = await q(`select * from ${t}`); } catch (e) { out[t] = { fehler: e.message }; } }
   out.users = await q('select id, email, name, role, manager_id, must_change_pw, created_at from users');
   out.bl_players = await q('select slug, name, club, pos, squad_pos, played_pos, games, last_matchday from bl_players');
