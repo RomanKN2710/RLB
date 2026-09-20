@@ -114,6 +114,8 @@ export async function applyAufstellungenST4(userId = null) {
     log.push(`${r.label} ${mname}: Elf laut Blog ${QUELLE4[mname]} gesetzt (${diff.join(', ')})${probs.length ? ' – UNZULÄSSIG: ' + probs.join('; ') : ''}`);
   }
   log.push(`${r.label} Mike, Lazar: kein Blog-Post, bisherige Elf gilt (Ziff. 5.1)`);
+  // Spieltag 3 abschliessen (Werte sind abgeglichen: Blog, kicker, Excel)
+  { const r3 = await one("select * from rounds where type='regulaer' and matchday=3"); if (r3 && r3.status !== 'final') { await q("update rounds set status='final' where id=$1", [r3.id]); log.push(`${r3.label}: abgeschlossen (Status final)`); } }
   await setSetting('korrektur_20260920_st4', { at: new Date().toISOString(), log }); await audit(userId, 'korrektur_20260920_st4', { n: log.length });
   return { done: false, log };
 }
