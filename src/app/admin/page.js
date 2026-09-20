@@ -19,7 +19,7 @@ export default async function Admin() {
   const lineupCounts = await q('select round_id, count(*)::int as n from lineups group by round_id');
   const postponed = await postponedCandidates();
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
-  const korrDone = await getSetting('korrektur_20260915'); const korrDone2 = await getSetting('korrektur_20260920');
+  const korrDone = await getSetting('korrektur_20260915'); const korrDone2 = await getSetting('korrektur_20260920'); const korrDone4 = await getSetting('korrektur_20260920_st4');
   const inboxRaw = await inboxAll().catch(() => []);
   const lockedRows = await q('select round_id, count(*)::int as n from results where locked group by round_id');
   const inbox = inboxRaw.map(it => { const r = rounds.find(x => x.type === 'regulaer' && x.matchday === it.matchday); return { ...it, hasRound: !!r, label: r?.label, status: r ? r.status : 'keine Runde', locked: r ? (lockedRows.find(l => l.round_id === r.id) || {}).n || 0 : 0 }; });
@@ -30,7 +30,8 @@ export default async function Admin() {
       <InboxList items={inbox} /></div>
     <div className="adminbox"><h3>Admin · Datenkorrektur 20.09.2026 (Gesamt-Abgleich Blog · kicker · Excel)</h3>
       <p className="mini">Aufstellungen laut Blog: Mike Spieltag 3 Diaby statt El Mala, Dani Spieltag 2 Vagnoman statt Günter (mit kicker-Werten: Startelf, Vorlage, Tor). Werte laut kicker-Spielbericht: Ullrich Startelf Spieltag 1, Juranovic 2 Vorlagen Spieltag 1. Positionen laut kicker: Daghim S/M, Moore M, Conté M/S, Grüll S/M, El Ouahdi V/M, Bülter S/M. Arbis Doan-Einwechslung Spieltag 3 gratis (Eventualauftrag). Buchungen: Mikes Vertragsauflösung betrifft Theate, Gutschrift 2 für Arbi (Belocian). Verträge (1J/2J) aus den Keeper-Posts. Blog-Archiv mit allen 63 Einträgen seit Saisonstart.</p>
-      <Korrektur2 done={korrDone2} /></div>
+      <p className="mini">Teil 2: Aufstellungen Spieltag 4 laut Blog für Pädi, Arbi, Röfe, Mark, Roman, Dani, René, David (Mike und Lazar ohne Post, bisherige Elf gilt). Arbis Elf ist unzulässig (Lemperle als M) und wird wie gepostet gespeichert; das Archiv zeigt den Fehler, die Admins entscheiden.</p>
+      <Korrektur2 done={korrDone2} done4={korrDone4} /></div>
     <div className="adminbox"><h3>Admin · Datenkorrektur 15.09.2026</h3>
       <p className="mini">Ergebnis des Abgleichs mit den Excel-Auswertungen und kicker: Spielernamen auf kicker-Schreibweise (Veerman, Ullrich, Amaimouni-Echghouyab, Johannesson, El Ouahdi, Ilic), Ibrahimovic → Augsburg, Käufe Spieltag 3 (Doan 12, Maksimovic 4, Grüll 3) mit Entlassungen (Belocian, Vidovic, Ljubicic), Arbis Aufstellung Spieltag 3, Karten Burger/Miguel/Maza und Vieira-Einsatz Spieltag 2, fehlende Einsätze Spieltag 3 (Davies, El Aynaoui, Kübler, Banzuzi, Vagnoman, Moore, Mensah, Veerman, Ache, Doan, Lemperle, Bensebaini – Quelle Excel, nicht gesperrt).</p>
       <Korrektur done={korrDone} /></div>

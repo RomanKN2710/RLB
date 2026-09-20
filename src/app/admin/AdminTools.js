@@ -29,9 +29,10 @@ export function Korrektur({ done }) { const { msg, pending, run } = useRun(); co
   return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260915Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 15.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
 
 /* Einmalige Datenkorrektur vom 20.09.2026 (Gesamt-Abgleich Blog/kicker/Excel) */
-export function Korrektur2({ done }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
-  if (done) return <span className="mini">Eingespielt am {new Date(done.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {done.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{done.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span>;
-  return <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260920Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>Korrektur vom 20.09.2026 einspielen…</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
+export function Korrektur2({ done, done4 }) { const { msg, pending, run } = useRun(); const [arm, setArm] = useState(false);
+  const Proto = ({ d, title }) => d ? <span className="mini">{title} eingespielt am {new Date(d.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}: {d.log.length} Schritte. <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{d.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details></span> : null;
+  return <div className="stack"><Proto d={done} title="Teil 1 (Spieltag 1–3, Positionen, Verträge, Blog-Archiv)" /><Proto d={done4} title="Teil 2 (Aufstellungen Spieltag 4 laut Blog)" />
+    {(!done || !done4) && <span className="row">{arm ? <button className="komm sm" disabled={pending} onClick={() => run(korrektur20260920Action)}>Jetzt einspielen (einmalig)</button> : <button className="sec sm" onClick={() => setArm(true)}>{done ? 'Teil 2: Aufstellungen Spieltag 4 einspielen…' : 'Korrektur vom 20.09.2026 einspielen…'}</button>}{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>}</div>; }
 
 /* kicker-Eingang vom Handy: alle Spieltage mit Stand und Import-Knopf */
 export function InboxList({ items }) { const { msg, pending, run } = useRun(); const [unlock, setUnlock] = useState(true);

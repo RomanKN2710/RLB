@@ -80,3 +80,40 @@ export async function applyKorrektur20260920(userId = null) {
   await setSetting('korrektur_20260920', { at: new Date().toISOString(), log }); await audit(userId, 'korrektur_20260920', { n: log.length });
   return { done: false, log };
 }
+
+/* Teil 2: Aufstellungen Spieltag 4 laut Blog (letzter Post je Manager vor der Deadline 18.09. 19:00).
+   Mike und Lazar haben nicht gepostet: bisherige Elf gilt (Ziff. 5.1, ensureLineups). Arbis Elf ist unzulässig
+   (Lemperle als M, hat nur S) und wird wie gepostet gespeichert, damit die Admins entscheiden; das Archiv zeigt den Fehler. */
+const ELF4 = {
+  'Pädi': [['Zentner', 'T'], ['Coufal', 'V'], ['Caci', 'V'], ['Posch', 'V'], ['Mwene', 'V'], ['Conté', 'M'], ['Nkunku', 'M'], ['Grüll', 'M'], ['Moore', 'M'], ['Moreira', 'S'], ['Undav', 'S']],
+  'Arbi': [['Kobel', 'T'], ['Mensah', 'V'], ['Raum', 'V'], ['Ryerson', 'V'], ['Doan', 'M'], ['Nmecha', 'M'], ['Musiala', 'M'], ['Lemperle', 'M'], ['Mokwa', 'S'], ['Hlozek', 'S'], ['Gregoritsch', 'S']],
+  'Röfe': [['Dahmen', 'T'], ['Gadou', 'V'], ['Hajdari', 'V'], ['Lienhart', 'V'], ['Karaman', 'M'], ['Aleix Garcia', 'M'], ['Amiri', 'M'], ['Petkov', 'M'], ['Burkardt', 'S'], ['Pejcinovic', 'S'], ['Kane', 'S']],
+  'Mark': [['Backhaus', 'T'], ['Baku', 'V'], ['Quansah', 'V'], ['Miguel', 'V'], ['El Ouahdi', 'V'], ['Nwaneri', 'M'], ['Daghim', 'M'], ['Grönbaek', 'M'], ['Führich', 'M'], ['Tietz', 'S'], ['Kofane', 'S']],
+  'Roman': [['Flekken', 'T'], ['Svensson', 'V'], ['Chabot', 'V'], ['Davies', 'V'], ['Anton', 'V'], ['Medina', 'V'], ['Avdullahu', 'M'], ['Eggestein', 'M'], ['Ibrahimovic', 'M'], ['Rieder', 'M'], ['Fuellkrug', 'S']],
+  'Dani': [['Vandevoordt', 'T'], ['Brown', 'V'], ['Makengo', 'V'], ['Vagnoman', 'V'], ['Fabio Silva', 'M'], ['Beste', 'M'], ['Banzuzi', 'M'], ['Engelhardt', 'M'], ['Guirassy', 'S'], ['Luis Diaz', 'S'], ['Matanovic', 'S']],
+  'René': [['Heuer Fernandes', 'T'], ['Schlotterbeck N.', 'V'], ['Ginter', 'V'], ['Rots', 'V'], ['Tapsoba', 'V'], ['Jeltsch', 'V'], ['Suzuki', 'M'], ['Honorat', 'M'], ['Lee', 'M'], ['Ache', 'S'], ['Becker', 'S']],
+  'David': [['Neuer', 'T'], ['Baum', 'V'], ['Tah', 'V'], ['Laimer', 'V'], ['Upamecano', 'V'], ['El Aynaoui', 'M'], ['Pavlovic', 'M'], ['Sano', 'M'], ['Gruda', 'M'], ['Grifo', 'M'], ['Gomis', 'S']],
+};
+const QUELLE4 = { 'Pädi': '«Aufstellung Runde 4 - Pädi» 18.09. 15:26', 'Arbi': '«Arbi R4» 18.09. 15:22', 'Röfe': '«Aufstellung Team Röfe - Runde 4» 18.09. 17:01', 'Mark': '«Mark 4 NEU» 18.09. 16:53', 'Roman': '«Roman Runde 4» 18.09. 17:44', 'Dani': '«Team Dani Runde 4» 16.09. 12:35', 'René': '«René R4» 18.09. 16:41', 'David': '«David Runde 4» 18.09. 14:47' };
+
+export async function applyAufstellungenST4(userId = null) {
+  const done = await getSetting('korrektur_20260920_st4'); if (done) return { done: true, log: ['Aufstellungen Spieltag 4 wurden bereits eingespielt am ' + done.at] };
+  const log = []; const managers = await q('select * from managers'); const r = await one("select * from rounds where type='regulaer' and matchday=4"); if (!r) throw new Error('Spieltag 4 nicht gefunden');
+  for (const [mname, elf] of Object.entries(ELF4)) {
+    const m = managers.find(x => x.name === mname); if (!m) { log.push(`${mname}: Manager fehlt`); continue; }
+    const all = await q('select * from players where manager_id=$1', [m.id]); const byId = Object.fromEntries(all.map(p => [p.id, p]));
+    const entries = {}; const missing = [];
+    for (const [name, pos] of elf) { const p = all.filter(x => x.name === name).sort((a, b) => (b.status === 'active') - (a.status === 'active'))[0]; if (!p) missing.push(name); else entries[p.id] = { pos }; }
+    if (missing.length) { log.push(`${r.label} ${mname}: NICHT gesetzt, Spieler fehlen: ${missing.join(', ')}`); continue; }
+    const old = await one('select * from lineups where round_id=$1 and manager_id=$2', [r.id, m.id]);
+    const same = old && Object.keys(old.entries).length === Object.keys(entries).length && Object.entries(entries).every(([pid, e]) => old.entries[pid] && old.entries[pid].pos === e.pos);
+    if (same) { log.push(`${r.label} ${mname}: Elf entspricht schon dem Blog (${QUELLE4[mname]})`); continue; }
+    await q(`insert into lineups(round_id,manager_id,entries,free_in,updated_at,updated_by) values($1,$2,$3,$4,now(),$5) on conflict(round_id,manager_id) do update set entries=excluded.entries, updated_at=now(), updated_by=excluded.updated_by`, [r.id, m.id, JSON.stringify(entries), old ? old.free_in : [], userId]);
+    const probs = posProblems(entries, byId);
+    const diff = old ? [...Object.keys(entries).filter(pid => !old.entries[pid]).map(pid => '+' + byId[pid].name), ...Object.keys(old.entries).filter(pid => !entries[pid]).map(pid => '−' + (byId[pid]?.name || pid))] : ['neu'];
+    log.push(`${r.label} ${mname}: Elf laut Blog ${QUELLE4[mname]} gesetzt (${diff.join(', ')})${probs.length ? ' – UNZULÄSSIG: ' + probs.join('; ') : ''}`);
+  }
+  log.push(`${r.label} Mike, Lazar: kein Blog-Post, bisherige Elf gilt (Ziff. 5.1)`);
+  await setSetting('korrektur_20260920_st4', { at: new Date().toISOString(), log }); await audit(userId, 'korrektur_20260920_st4', { n: log.length });
+  return { done: false, log };
+}

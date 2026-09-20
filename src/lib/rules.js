@@ -58,6 +58,8 @@ export function posProblems(entries, players) {
   if (n < 11) out.push(`Zu wenige Spieler: ${n} statt 11 (es fehlen ${11 - n})`);
   if (n > 11) out.push(`Zu viele Spieler: ${n} statt 11 (${n - 11} zu viel)`);
   for (const k of bad) { const [lo, hi] = POSRULE[k]; out.push(`${POSNAME[k]}: ${cnt[k]} aufgestellt, erlaubt ${lo === hi ? `genau ${lo}` : `${lo} bis ${hi}`}`); }
+  // Positionsfähigkeit (Ziff. 5.2): nur Grundposition oder erworbene Zusatzpositionen
+  for (const [pid, e] of Object.entries(entries)) { const p = players[pid]; if (p && p.base_pos && !positionsOf(p).includes(e.pos)) out.push(`${p.name}: als ${e.pos} aufgestellt, hat nur ${positionsOf(p).join('/')}`); }
   return out;
 }
 
