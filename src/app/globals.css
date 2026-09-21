@@ -49,3 +49,5 @@ details summary{cursor:pointer;font-weight:600}
 
 .dropdown{position:absolute;top:100%;left:0;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:260px;box-shadow:0 6px 20px rgba(0,0,0,.12)}
 .dd-item{padding:6px 10px;cursor:pointer;font-size:13px}.dd-item:hover{background:var(--line)}
+
+.bericht h2{margin-top:18px}.bericht h3{margin:16px 0 4px;color:var(--komm)}.bericht p{margin:6px 0;line-height:1.5}.bericht ul{margin:4px 0 8px 18px}

@@ -2,17 +2,27 @@
   - Local:        http://localhost:3111
 
  ✓ Starting...
- ✓ Ready in 1010ms
- ✓ Compiled /src/middleware in 245ms (152 modules)
+ ✓ Ready in 1632ms
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 536ms (152 modules)
+ ○ Compiling /api/bericht ...
+ ✓ Compiled /api/bericht in 1982ms (572 modules)
+ POST /api/bericht?round_id=3&key=test 500 in 2742ms
  ○ Compiling /login ...
- ✓ Compiled /login in 1495ms (865 modules)
- GET /login 200 in 1777ms
+ ✓ Compiled /login in 3.3s (1102 modules)
+ GET /login 200 in 3767ms
  ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
 Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
- ✓ Compiled / in 331ms (870 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 1201ms (1093 modules)
 Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
- POST /login 303 in 773ms
- ✓ Compiled /admin in 391ms (885 modules)
+ POST /login 303 in 1715ms
+ ✓ Compiled /potential in 254ms (1097 modules)
 Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
- GET /admin 200 in 769ms
-[?25h
+ GET /potential 200 in 596ms
+ GET /login 200 in 25ms
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ POST /login 303 in 291ms
+ ✓ Compiled /bericht in 279ms (1104 modules)
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ GET /bericht 200 in 468ms
