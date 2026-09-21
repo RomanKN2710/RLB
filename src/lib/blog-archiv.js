@@ -68,7 +68,7 @@ export function classify(p, managers, rounds) {
   if (!manager && p.author) { for (const m of managers) if (hasName(p.author, m.name)) { manager = m; break; } }
   // Massgebliches Datum: bei weitergeleiteten Gebots-Mails das Datum der Mail ("Von: …, Freitag, 4. September 2026, 12:13")
   let when = p.posted_at ? new Date(p.posted_at).getTime() : null;
-  const vm = body.match(/^Von:.*?(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})/m);
+  const vm = body.match(/^(?:Von|Gesendet):.*?(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4}),?(?:\s*um)?\s*(\d{1,2}):(\d{2})/m);
   if (vm && MONTHS[vm[2].toLowerCase()]) when = new Date(`${vm[3]}-${String(MONTHS[vm[2].toLowerCase()]).padStart(2, '0')}-${String(vm[1]).padStart(2, '0')}T${vm[4].padStart(2, '0')}:${vm[5]}:00+02:00`).getTime();
   let round = null;
   if (when && (kind === 'aufstellung' || kind === 'gebot')) round = rounds.find(r => r.deadline && new Date(r.deadline).getTime() >= when) || null;
