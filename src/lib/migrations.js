@@ -6,6 +6,7 @@ import { applyKorrektur20260915 } from './korrektur-20260915';
 import { applyKorrektur20260920, applyAufstellungenST4 } from './korrektur-20260920';
 import { applyStatsSeed } from './kicker';
 import { applyGeboteST4 } from './korrektur-st4-gebote';
+import { applyKariusRevert } from './korrektur-karius';
 import statsSeed from '../../db/seed/kicker-stats-st1-3.json';
 
 export const STEPS = [
@@ -13,6 +14,7 @@ export const STEPS = [
   { key: 'korrektur_20260920', title: 'Datenkorrektur 20.09.2026, Teil 1 (Blog/kicker/Excel, Positionen, Verträge, Blog-Archiv)', run: applyKorrektur20260920 },
   { key: 'korrektur_20260920_st4', title: 'Datenkorrektur 20.09.2026, Teil 2 (Aufstellungen Spieltag 4 laut Blog, Spieltag 3 abgeschlossen)', run: applyAufstellungenST4 },
   { key: 'gebote_st4', title: 'Gebote Spieltag 4 laut Blog (Karius → Pädi, Fellhauer → René, Konstantelias → Mike) und Mikes Aufstellung Spieltag 4', run: applyGeboteST4 },
+  { key: 'karius_rene_revert', title: 'Karius Spieltag 4: Zuschlag an Pädi, Renés Kauf zurückgenommen, kicker-Werte neu eingelesen', run: applyKariusRevert },
   { key: 'bankwerte_st1_3', title: 'kicker-Werte aller Kaderspieler Spieltag 1–3 (Grundlage der Potential-Tabelle)', run: async userId => { const log = await applyStatsSeed(statsSeed, await base()); await setSetting('bankwerte_st1_3', { at: new Date().toISOString(), log }); return { log }; } },
 ];
 

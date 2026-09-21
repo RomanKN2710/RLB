@@ -12,6 +12,7 @@ export async function GET(req) {
   const out = { exportiert: new Date().toISOString(), von: u ? u.email : 'cron' };
   const tables = ['managers', 'clubs', 'players', 'rounds', 'matches', 'lineups', 'results', 'corrections', 'bids', 'trades', 'ledger', 'transfers', 'finance', 'settings', 'squad_log', 'blog_posts'];
   for (const t of tables) { try { out[t] = await q(`select * from ${t}`); } catch (e) { out[t] = { fehler: e.message }; } }
+  out.kicker_pages = await q("select matchday, page_id, kind, title, at, length(html) as bytes, case when kind='elf' then html end as html from kicker_pages order by matchday, at").catch(() => []);
   out.users = await q('select id, email, name, role, manager_id, must_change_pw, created_at from users');
   out.bl_players = await q('select slug, name, club, pos, squad_pos, played_pos, games, last_matchday from bl_players');
   out.audit = await q('select * from audit order by id desc limit 500');
