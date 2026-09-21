@@ -10,7 +10,7 @@ import { importPages, playerMatches, ensureColumns as ensureKickerColumns } from
 import { parseLineupText } from '@/lib/aufstellungstext';
 import * as Blog from '@/lib/blog-archiv';
 import { waitUntil } from '@vercel/functions';
-import { createAndSend as berichtCreateAndSend } from '@/lib/bericht';
+import { createReport as berichtCreate } from '@/lib/bericht';
 import * as Inbox from '@/lib/kicker-inbox';
 
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
@@ -233,11 +233,11 @@ export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const 
   return ok(`Team der Runde: ${tdrPids.size} von ${names.length} Namen in Aufstellungen${sdtPid ? ', Spieler des Tages +1' : ''}, ${written} Zeilen geändert.${notes.length ? ' ' + notes.join(' · ') : ''}`); });
 export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin(); await q('update rounds set status=$1 where id=$2', [final ? 'final' : 'open', roundId]); await audit(a.id, 'round_status', { roundId, final }); rev();
   if (!final) return ok('Runde wieder geöffnet');
-  // Spieltagsbericht und Sammel-Mail laufen im Hintergrund weiter (eigene Funktion mit längerer Laufzeit)
+  // Spieltagsbericht entsteht im Hintergrund (eigene Funktion mit längerer Laufzeit)
   const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'http://127.0.0.1:' + (process.env.PORT || 3000));
   if (process.env.CRON_SECRET) waitUntil(fetch(`${base}/api/bericht?round_id=${roundId}&key=${process.env.CRON_SECRET}`, { method: 'POST' }).catch(e => console.error('Bericht', e.message)));
-  return ok('Runde abgeschlossen. Der Spieltagsbericht wird jetzt erstellt und an alle Manager gemailt (siehe Seite «Bericht»).'); });
-export const berichtAction = wrap(async (roundId, opts = {}) => { await requireAdmin(); try { const log = await berichtCreateAndSend(roundId, opts); revalidatePath('/bericht'); return ok(log.join(' · ')); } catch (e) { revalidatePath('/bericht'); return fail(e.message); } });
+  return ok('Runde abgeschlossen. Der Spieltagsbericht wird jetzt erstellt (Seite «Bericht»).'); });
+export const berichtAction = wrap(async (roundId, opts = {}) => { await requireAdmin(); try { const log = await berichtCreate(roundId, opts); revalidatePath('/bericht'); return ok(log.join(' · ')); } catch (e) { revalidatePath('/bericht'); return fail(e.message); } });
 export const splitNachtragAction = wrap(async (matchId) => { const a = await requireAdmin();
   const m = await one('select * from matches where id=$1', [matchId]); if (!m) return fail('Spiel nicht gefunden');
   const teams = await q('select id, full_name from clubs where oldb_team_id in ($1,$2)', [m.team1, m.team2]);

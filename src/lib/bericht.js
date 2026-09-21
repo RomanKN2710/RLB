@@ -1,7 +1,6 @@
 /* Spieltagsbericht: nach Abschluss einer Runde schreibt Claude aus den Fakten der Runde (Aufstellungen, kicker-Werte, Tabelle,
-   Potential, Blog-Einträge) einen unterhaltsamen Bericht mit einem Abschnitt je Manager. Der Bericht wird gespeichert, auf der
-   Seite /bericht gezeigt und einmal als Sammel-Mail an alle Manager verschickt, mit Tabelle und Potential-Tabelle und der Bitte,
-   die Werte zu kontrollieren. Benötigt ANTHROPIC_API_KEY sowie RESEND_API_KEY oder SMTP_URL und MAIL_FROM. */
+   Potential, Blog-Einträge) einen unterhaltsamen Bericht mit Kommentar zur Gesamttabelle und einem Abschnitt je Manager.
+   Der Bericht wird gespeichert und auf der Seite /bericht gezeigt. Benötigt ANTHROPIC_API_KEY. */
 import Anthropic from '@anthropic-ai/sdk';
 import { q, one, getSetting } from './db';
 import * as D from './data';
@@ -47,9 +46,9 @@ const SYSTEM = `Du schreibst den Spieltagsbericht für die "Rotissery League Bun
 
 Regeln:
 - Nur Fakten aus den gelieferten Daten verwenden. Nichts erfinden, keine Ereignisse behaupten, die nicht in den Daten stehen. Zahlen exakt übernehmen.
-- Aufbau: kurze Lage (Tabelle, Aufsteiger, Absteiger), dann ein Abschnitt je Manager (alle zehn, in Tabellenreihenfolge), dann "Elf des Tages" (kurz), dann "Ausblick" (zwei Sätze).
+- Aufbau: 1) "Die Lage": kurz, was der Spieltag gebracht hat. 2) "Das Rennen": Kommentar zur Gesamttabelle nach dieser Runde – wer führt und mit welchem Vorsprung, wer sind die Verfolger auf den Top-Plätzen, wer hat sich am meisten bewegt (Rang vorher → nachher), wer steht auf dem letzten Platz und wie weit ist es bis zum Anschluss; bei knappen Abständen das auch so benennen. 3) Ein Abschnitt je Manager (alle zehn, in Tabellenreihenfolge). 4) "Elf des Tages" (kurz). 5) "Ausblick" (zwei Sätze).
 - Je Manager: was seine Spieler geleistet haben (Tore, Vorlagen, Zu-null, Karten, Team der Runde), wer nicht gespielt hat, was die Aufstellung war (Wechsel laut Blog, späte Updates, keine Abgabe), und was die Potential-Daten sagen (beste Elf im Nachhinein, Bankspieler die gezündet hätten). Offensichtliche Fehler humorvoll kommentieren, aber niemanden blossstellen.
-- Länge: 600 bis 900 Wörter. Markdown mit ## für die Lage und ### je Manager. Fettdruck sparsam.
+- Länge: 700 bis 1000 Wörter. Markdown mit ## für die Abschnitte und ### je Manager. Fettdruck sparsam.
 - Keine Einleitung über dich selbst, keine Hinweise auf Datenquellen oder KI.`;
 
 /** Bericht mit Claude schreiben. */
@@ -83,53 +82,15 @@ export function md2html(md) {
   return out.join('\n');
 }
 
-function tableHtml(rows, cols) { return `<table cellpadding="4" style="border-collapse:collapse;font-size:13px"><tr>${cols.map(c => `<th align="left" style="border-bottom:1px solid #999">${c[1]}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td style="border-bottom:1px solid #eee">${r[c[0]] ?? ''}</td>`).join('')}</tr>`).join('')}</table>`; }
-
-/** Mail an alle Manager (eine Sammel-Mail). Resend (RESEND_API_KEY) oder SMTP (SMTP_URL). */
-export async function sendReportMail(round, report, facts) {
-  const to = (await q("select email from users where email is not null and email <> ''")).map(u => u.email);
-  if (!to.length) throw new Error('Keine Empfänger');
-  const from = process.env.MAIL_FROM; if (!from) throw new Error('MAIL_FROM fehlt');
-  const app = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'https://rlb-nine.vercel.app');
-  const fmt = n => Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
-  const tab = tableHtml(facts.tabelle.map(t => ({ ...t, rangpunkte: fmt(t.rangpunkte) })), [['rang', '#'], ['manager', 'Manager'], ['rangpunkte', 'Rangpunkte'], ['Punkte', 'Pkt'], ['Zu-null', 'Zu-null'], ['Assists', 'Ass'], ['Tore', 'Tore'], ['Karten', 'Karten'], ['Team der Runde', 'TdR'], ['Starts', 'Starts']]);
-  const pot = facts.potential_tabelle ? tableHtml(facts.potential_tabelle.map(t => ({ ...t, rangpunkte: fmt(t.rangpunkte) })), [['rang', '#'], ['manager', 'Manager'], ['rangpunkte', 'Rangpunkte (alle optimal)'], ['echt_rang', 'echter Rang']]) : '';
-  const miss = facts.verpasste_rangpunkte ? tableHtml(facts.verpasste_rangpunkte.map(t => ({ ...t, echt: fmt(t.echt), allein_optimal: fmt(t.allein_optimal), verpasst: fmt(t.verpasst) })), [['manager', 'Manager'], ['echt', 'echt'], ['allein_optimal', 'allein optimal'], ['verpasst', 'verpasst']]) : '';
-  const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:720px;line-height:1.45">
-    <p style="color:#666;font-size:13px">RLB Managerspiel · ${round.label}</p>
-    ${md2html(report.text)}
-    <h2>Tabelle nach ${round.label}</h2>${tab}
-    ${pot ? `<h2>Potential-Tabelle</h2><p style="font-size:13px;color:#666">Alle Manager mit ihrer im Nachhinein besten Elf.</p>${pot}<h3>Verpasste Rangpunkte</h3><p style="font-size:13px;color:#666">Jeder allein optimal, die anderen wie gespielt.</p>${miss}` : ''}
-    <hr><p><b>Bitte kontrollieren:</b> Schaut eure Aufstellung und Werte für ${round.label} in der App nach (<a href="${app}/runde/${round.id}">${app}/runde/${round.id}</a>). Stimmt etwas nicht, meldet euch bei den Admins. Bericht und Tabellen findet ihr auch unter <a href="${app}/bericht">${app}/bericht</a>.</p>
-    <p style="color:#999;font-size:12px">Automatisch erstellt nach Abschluss der Runde.</p></div>`;
-  const subject = `RLB ${round.label}: Spieltagsbericht, Tabelle und Potential`;
-  const text = report.text + `\n\nTabelle: ${facts.tabelle.map(t => `${t.rang}. ${t.manager} ${fmt(t.rangpunkte)}`).join(', ')}\n\nBitte kontrolliert eure Werte in der App: ${app}/runde/${round.id}`;
-  if (process.env.RESEND_API_KEY) {
-    const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from, to, subject, html, text }) });
-    if (!r.ok) throw new Error('Resend: ' + r.status + ' ' + (await r.text()).slice(0, 300));
-  } else if (process.env.SMTP_URL) {
-    const nodemailer = (await import('nodemailer')).default;
-    const tr = nodemailer.createTransport(process.env.SMTP_URL); await tr.sendMail({ from, to, subject, html, text });
-  } else throw new Error('Kein Mailversand konfiguriert (RESEND_API_KEY oder SMTP_URL)');
-  return to;
-}
-
-/** Bericht erstellen (falls fehlend oder force) und Mail versenden (falls noch nicht gesendet oder force). */
-export async function createAndSend(roundId, { force = false, resend = false } = {}) {
+/** Bericht erstellen, falls er fehlt (oder force). */
+export async function createReport(roundId, { force = false } = {}) {
   await ensureTable(); const round = await D.roundById(roundId); if (!round) throw new Error('Runde fehlt');
   if (round.status !== 'final') throw new Error('Runde ist nicht abgeschlossen');
-  let rep = await one('select * from reports where round_id=$1', [roundId]); const log = [];
-  if (!rep || !rep.text || force) {
-    const facts = await buildFacts(roundId);
-    try { const g = await generateReportText(facts);
-      await q(`insert into reports(round_id,text,facts,model,created_at,error) values($1,$2,$3,$4,now(),null) on conflict(round_id) do update set text=excluded.text, facts=excluded.facts, model=excluded.model, created_at=now(), error=null, sent_at=case when $5 then null else reports.sent_at end`, [roundId, g.text, JSON.stringify(facts), g.model, force]);
-      log.push('Bericht erstellt (' + g.model + ')'); }
-    catch (e) { await q(`insert into reports(round_id,facts,error) values($1,$2,$3) on conflict(round_id) do update set facts=excluded.facts, error=excluded.error`, [roundId, JSON.stringify(facts), e.message]); throw e; }
-    rep = await one('select * from reports where round_id=$1', [roundId]);
-  }
-  if (!rep.sent_at || resend) {
-    try { const to = await sendReportMail(round, rep, rep.facts); await q('update reports set sent_at=now(), sent_to=$2, error=null where round_id=$1', [roundId, to]); log.push(`Mail an ${to.length} Empfänger`); }
-    catch (e) { await q('update reports set error=$2 where round_id=$1', [roundId, 'Mail: ' + e.message]); log.push('Mail fehlgeschlagen: ' + e.message); }
-  }
-  return log;
+  const rep = await one('select * from reports where round_id=$1', [roundId]);
+  if (rep && rep.text && !force) return ['Bericht vorhanden'];
+  const facts = await buildFacts(roundId);
+  try { const g = await generateReportText(facts);
+    await q(`insert into reports(round_id,text,facts,model,created_at,error) values($1,$2,$3,$4,now(),null) on conflict(round_id) do update set text=excluded.text, facts=excluded.facts, model=excluded.model, created_at=now(), error=null`, [roundId, g.text, JSON.stringify(facts), g.model]);
+    return ['Bericht erstellt (' + g.model + ')']; }
+  catch (e) { await q(`insert into reports(round_id,facts,error) values($1,$2,$3) on conflict(round_id) do update set facts=excluded.facts, error=excluded.error`, [roundId, JSON.stringify(facts), e.message]); throw e; }
 }
