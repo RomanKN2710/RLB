@@ -210,7 +210,25 @@ export const setDeadlineAction = wrap(async (roundId, isoOrEmpty) => { const a =
   if (!isoOrEmpty) { await q('update rounds set deadline_manual=false where id=$1', [roundId]); await refreshDeadlines(); }
   else await q('update rounds set deadline=$1, deadline_manual=true where id=$2', [new Date(isoOrEmpty).toISOString(), roundId]);
   await audit(a.id, 'deadline', { roundId, isoOrEmpty }); rev(); return ok('Deadline gesetzt'); });
-export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { await requireAdmin(); await q('update rounds set tdr=$1, sdt=$2, label=coalesce(nullif($3,\'\'),label) where id=$4', [tdr, sdt || null, label || '', roundId]); rev(); return ok('Gespeichert'); });
+/* Team der Runde / Spieler des Tages von Hand: Namen werden gegen die Aufstellungen der Runde aufgelöst und als TdR-Punkte
+   geschrieben (Elf des Tages 1, Spieler des Tages zusätzlich 1). Nicht zuordenbare Namen werden gemeldet. */
+export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  const b = await D.base(); await D.ensureLineups(round, b);
+  const lus = await q('select l.*, m.name as manager_name from lineups l join managers m on m.id=l.manager_id where round_id=$1', [roundId]);
+  const inLineup = []; lus.forEach(l => Object.keys(l.entries || {}).forEach(pid => { const p = b.players[pid]; if (p) inLineup.push({ ...p, manager_name: l.manager_name }); }));
+  const names = String(tdr || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
+  const findAll = txt => { const m = txt.match(/^(.*?)\s*\(([^)]+)\)\s*$/); const name = m ? m[1].trim() : txt; const club = m ? m[2].trim() : null;
+    let hits = inLineup.filter(p => (!club || R.norm(p.club) === R.norm(club) || R.norm(p.club).includes(R.norm(club))) && (R.norm(p.name) === R.norm(name) || playerMatches(name.toLowerCase().replace(/\s+/g, '-'), name, p.name) || playerMatches(p.name.toLowerCase().replace(/\s+/g, '-'), p.name, name)));
+    return { name, hits }; };
+  const tdrPids = new Set(); const notes = [];
+  for (const n of names) { const { name, hits } = findAll(n); if (hits.length === 1) tdrPids.add(hits[0].id); else if (hits.length > 1) notes.push(`«${name}» mehrdeutig (${hits.map(h => h.name + ', ' + h.manager_name).join(' / ')}) – mit Verein in Klammern angeben`); else notes.push(`«${name}» in keiner Aufstellung (kein TdR-Punkt)`); }
+  let sdtPid = null; if (sdt && sdt.trim()) { const { name, hits } = findAll(sdt.trim()); if (hits.length === 1) sdtPid = hits[0].id; else if (hits.length > 1) notes.push(`Spieler des Tages «${name}» mehrdeutig`); else notes.push(`Spieler des Tages «${name}» in keiner Aufstellung`); }
+  let written = 0;
+  for (const p of inLineup) { const v = (tdrPids.has(p.id) ? 1 : 0) + (sdtPid === p.id ? 1 : 0);
+    const r = await one(`insert into results(round_id,player_id,tdr,source) values($1,$2,$3,'admin') on conflict(round_id,player_id) do update set tdr=excluded.tdr where results.tdr is distinct from excluded.tdr returning player_id`, [roundId, p.id, v]); if (r) written++; }
+  await q("update rounds set tdr=$1, sdt=$2, label=coalesce(nullif($3,''),label) where id=$4", [names, sdt || null, label || '', roundId]);
+  await audit(a.id, 'round_tdr_manual', { roundId, n: tdrPids.size, sdt: sdtPid }); rev();
+  return ok(`Team der Runde: ${tdrPids.size} von ${names.length} Namen in Aufstellungen${sdtPid ? ', Spieler des Tages +1' : ''}, ${written} Zeilen geändert.${notes.length ? ' ' + notes.join(' · ') : ''}`); });
 export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin(); await q('update rounds set status=$1 where id=$2', [final ? 'final' : 'open', roundId]); await audit(a.id, 'round_status', { roundId, final }); rev(); return ok(final ? 'Runde abgeschlossen' : 'Runde wieder geöffnet'); });
 export const splitNachtragAction = wrap(async (matchId) => { const a = await requireAdmin();
   const m = await one('select * from matches where id=$1', [matchId]); if (!m) return fail('Spiel nicht gefunden');

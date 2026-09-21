@@ -1,0 +1,21 @@
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3111
+
+ ✓ Starting...
+ ✓ Ready in 1965ms
+ ✓ Compiled /src/middleware in 243ms (152 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 4.4s (882 modules)
+ GET /login 200 in 4853ms
+ ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ ○ Compiling / ...
+ ✓ Compiled / in 2.1s (873 modules)
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ POST /login 303 in 2924ms
+ ✓ Compiled /admin/runde/[id] in 347ms (882 modules)
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ GET /admin/runde/1 200 in 1410ms
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ POST /admin/runde/1 200 in 220ms
+[?25h
