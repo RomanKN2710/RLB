@@ -2,20 +2,52 @@
   - Local:        http://localhost:3111
 
  ✓ Starting...
- ✓ Ready in 1965ms
- ✓ Compiled /src/middleware in 243ms (152 modules)
+ ✓ Ready in 1635ms
+ ✓ Compiled /src/middleware in 207ms (152 modules)
+ ○ Compiling /api/korrektur ...
+ ✓ Compiled /api/korrektur in 1447ms (300 modules)
+ GET /api/korrektur?key=test&v=20260920 200 in 2005ms
+ ✓ Compiled /api/kicker-inbox/import in 266ms (400 modules)
+ POST /api/kicker-inbox/import?matchday=1&key=test 200 in 1042ms
+ POST /api/kicker-inbox/import?matchday=2&key=test 200 in 947ms
+ POST /api/kicker-inbox/import?matchday=3&key=test 200 in 468ms
  ○ Compiling /login ...
- ✓ Compiled /login in 4.4s (882 modules)
- GET /login 200 in 4853ms
+ ✓ Compiled /login in 1178ms (899 modules)
+ GET /login 200 in 1364ms
  ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
 Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
- ○ Compiling / ...
- ✓ Compiled / in 2.1s (873 modules)
+ ✓ Compiled / in 353ms (904 modules)
 Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
- POST /login 303 in 2924ms
- ✓ Compiled /admin/runde/[id] in 347ms (882 modules)
+ POST /login 303 in 682ms
+ ✓ Compiled /potential in 236ms (909 modules)
 Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
- GET /admin/runde/1 200 in 1410ms
+ ⨯ src/app/potential/page.js (17:425) @ label
+ ⨯ TypeError: Cannot read properties of undefined (reading 'label')
+    at Potential (./src/app/potential/page.js:62:65)
+digest: "4294333917"
+[0m [90m 15 |[39m   [36mreturn[39m ([33m<[39m[33m>[39m[0m
+[0m [90m 16 |[39m     [33m<[39m[33mdiv[39m className[33m=[39m[32m"card"[39m[33m>[39m[33m<[39m[33mdiv[39m className[33m=[39m[32m"eyebrow"[39m[33m>[39m[33mSpielerei[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[33m<[39m[33mh2[39m[33m>[39m[33mManager[39m[33m-[39m[33mPotential[39m[33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 17 |[39m       [33m<[39m[33mp[39m className[33m=[39m[32m"mini"[39m[33m>[39m[33mWas[39m wäre gewesen[33m,[39m hätte jeder [33mManager[39m jede [33mRunde[39m im [33mNachhinein[39m die beste zulässige [33mElf[39m aus seinem damaligen [33mKader[39m gestellt[33m?[39m «Beste» heisst grösste [33mKategoriensumme[39m ([33mPunkte[39m [33m+[39m [33mZu[39m[33m-[39m[36mnull[39m [33m+[39m [33mAssists[39m [33m+[39m [33mTore[39m − [33mKarten[39m [33m+[39m [33mTeam[39m der [33mRunde[39m [33m+[39m [33mStarts[39m)[33m,[39m [33mPositionen[39m wie damals gültig[33m,[39m [33mWechselkosten[39m ausser [33mAcht[39m[33m.[39m [33mRangpunkte[39m hängen von den anderen ab[33m,[39m darum zwei [33mSichten[39m[33m.[39m [33mStand[39m nach {[33mP[39m[33m.[39mrounds[[33mP[39m[33m.[39mrounds[33m.[39mlength [33m-[39m [35m1[39m][33m.[39mround[33m.[39mlabel}[33m,[39m rechnet sich mit jedem kicker[33m-[39m[33mImport[39m neu[33m.[39m[33m<[39m[33m/[39m[33mp[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m    |[39m                                                                                                                                                                                                                                                                                                                                                                                                                                         [31m[1m^[22m[39m[0m
+[0m [90m 18 |[39m     [33m<[39m[33mdiv[39m className[33m=[39m[32m"grid2"[39m[33m>[39m[0m
+[0m [90m 19 |[39m       [33m<[39m[33mdiv[39m className[33m=[39m[32m"card"[39m[33m>[39m[33m<[39m[33mdiv[39m className[33m=[39m[32m"eyebrow"[39m[33m>[39m[33mSicht[39m [35m1[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[33m<[39m[33mh2[39m[33m>[39m[33mPotential[39m[33m-[39m[33mTabelle[39m[33m<[39m[33m/[39m[33mh2[39m[33m>[39m[33m<[39m[33mp[39m className[33m=[39m[32m"mini"[39m[33m>[39m[33mAlle[39m zehn gleichzeitig mit ihrer besten [33mElf[39m[33m:[39m die [33mRangfolge[39m der [33mKaderstärke[39m[33m.[39m[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 20 |[39m         [33m<[39m[33mdiv[39m className[33m=[39m[32m"tbl"[39m[33m>[39m[33m<[39m[33mtable[39m[33m>[39m[33m<[39m[33mthead[39m[33m>[39m[33m<[39m[33mtr[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33m#[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m className[33m=[39m[32m"l"[39m[33m>[39m[33mManager[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33mRangpunkte[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39mecht[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33mΔ[39m [33mRang[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m{[33mR[39m[33m.[39m[33mCATS[39m[33m.[39mmap(([c[33m,[39m l]) [33m=>[39m [33m<[39m[33mth[39m key[33m=[39m{c} title[33m=[39m{l}[33m>[39m{l[33m.[39mslice([35m0[39m[33m,[39m [35m3[39m)}[33m<[39m[33m/[39m[33mth[39m[33m>[39m)}[33m<[39m[33m/[39m[33mtr[39m[33m>[39m[33m<[39m[33m/[39m[33mthead[39m[33m>[39m[33m<[39m[33mtbody[39m[33m>[39m[0m
+ ⨯ src/app/potential/page.js (17:425) @ label
+ ⨯ TypeError: Cannot read properties of undefined (reading 'label')
+    at Potential (./src/app/potential/page.js:62:65)
+digest: "4294333917"
+[0m [90m 15 |[39m   [36mreturn[39m ([33m<[39m[33m>[39m[0m
+[0m [90m 16 |[39m     [33m<[39m[33mdiv[39m className[33m=[39m[32m"card"[39m[33m>[39m[33m<[39m[33mdiv[39m className[33m=[39m[32m"eyebrow"[39m[33m>[39m[33mSpielerei[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[33m<[39m[33mh2[39m[33m>[39m[33mManager[39m[33m-[39m[33mPotential[39m[33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 17 |[39m       [33m<[39m[33mp[39m className[33m=[39m[32m"mini"[39m[33m>[39m[33mWas[39m wäre gewesen[33m,[39m hätte jeder [33mManager[39m jede [33mRunde[39m im [33mNachhinein[39m die beste zulässige [33mElf[39m aus seinem damaligen [33mKader[39m gestellt[33m?[39m «Beste» heisst grösste [33mKategoriensumme[39m ([33mPunkte[39m [33m+[39m [33mZu[39m[33m-[39m[36mnull[39m [33m+[39m [33mAssists[39m [33m+[39m [33mTore[39m − [33mKarten[39m [33m+[39m [33mTeam[39m der [33mRunde[39m [33m+[39m [33mStarts[39m)[33m,[39m [33mPositionen[39m wie damals gültig[33m,[39m [33mWechselkosten[39m ausser [33mAcht[39m[33m.[39m [33mRangpunkte[39m hängen von den anderen ab[33m,[39m darum zwei [33mSichten[39m[33m.[39m [33mStand[39m nach {[33mP[39m[33m.[39mrounds[[33mP[39m[33m.[39mrounds[33m.[39mlength [33m-[39m [35m1[39m][33m.[39mround[33m.[39mlabel}[33m,[39m rechnet sich mit jedem kicker[33m-[39m[33mImport[39m neu[33m.[39m[33m<[39m[33m/[39m[33mp[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m    |[39m                                                                                                                                                                                                                                                                                                                                                                                                                                         [31m[1m^[22m[39m[0m
+[0m [90m 18 |[39m     [33m<[39m[33mdiv[39m className[33m=[39m[32m"grid2"[39m[33m>[39m[0m
+[0m [90m 19 |[39m       [33m<[39m[33mdiv[39m className[33m=[39m[32m"card"[39m[33m>[39m[33m<[39m[33mdiv[39m className[33m=[39m[32m"eyebrow"[39m[33m>[39m[33mSicht[39m [35m1[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[33m<[39m[33mh2[39m[33m>[39m[33mPotential[39m[33m-[39m[33mTabelle[39m[33m<[39m[33m/[39m[33mh2[39m[33m>[39m[33m<[39m[33mp[39m className[33m=[39m[32m"mini"[39m[33m>[39m[33mAlle[39m zehn gleichzeitig mit ihrer besten [33mElf[39m[33m:[39m die [33mRangfolge[39m der [33mKaderstärke[39m[33m.[39m[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 20 |[39m         [33m<[39m[33mdiv[39m className[33m=[39m[32m"tbl"[39m[33m>[39m[33m<[39m[33mtable[39m[33m>[39m[33m<[39m[33mthead[39m[33m>[39m[33m<[39m[33mtr[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33m#[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m className[33m=[39m[32m"l"[39m[33m>[39m[33mManager[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33mRangpunkte[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39mecht[33m<[39m[33m/[39m[33mth[39m[33m>[39m[33m<[39m[33mth[39m[33m>[39m[33mΔ[39m [33mRang[39m[33m<[39m[33m/[39m[33mth[39m[33m>[39m{[33mR[39m[33m.[39m[33mCATS[39m[33m.[39mmap(([c[33m,[39m l]) [33m=>[39m [33m<[39m[33mth[39m key[33m=[39m{c} title[33m=[39m{l}[33m>[39m{l[33m.[39mslice([35m0[39m[33m,[39m [35m3[39m)}[33m<[39m[33m/[39m[33mth[39m[33m>[39m)}[33m<[39m[33m/[39m[33mtr[39m[33m>[39m[33m<[39m[33m/[39m[33mthead[39m[33m>[39m[33m<[39m[33mtbody[39m[33m>[39m[0m
+ GET /potential 500 in 549ms
+ ✓ Compiled in 200ms (660 modules)
+ GET /login 200 in 69ms
 Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
- POST /admin/runde/1 200 in 220ms
+ POST /login 303 in 330ms
+Sync fehlgeschlagen OpenLigaDB /getavailableteams/bl1/2026: HTTP 403
+ GET /potential 200 in 244ms
 [?25h

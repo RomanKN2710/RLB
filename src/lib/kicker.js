@@ -139,7 +139,7 @@ export async function importPages(round, b, pages, opts = {}) {
   const active = (b.playersArr || []).filter(p => p.status === 'active');
   const perPlayer = {}; const onPage = {}; // pid -> {status, kicker}
   const importedTeams = []; const pageNames = {}; // teamSlug -> [{slug,name}] aller auf der Seite genannten Spieler
-  const allStarters = []; const matches = [];
+  const allStarters = []; const matches = []; const benchStats = {};
   const fixSlug = async (p, slug, via) => { if (via === 'name' && !p.kicker_slug) { await q('update players set kicker_slug=$1 where id=$2 and kicker_slug is null', [slug, p.id]); p.kicker_slug = slug; const bp = b.players[p.id]; if (bp) bp.kicker_slug = slug; } };
   // 1) Spiele
   for (const html of pages.matches || []) {
@@ -153,6 +153,10 @@ export async function importPages(round, b, pages, opts = {}) {
     await upsertPool(Object.values(stats), b, round.matchday);
     allStarters.push(...Object.values(stats).filter(s => s.start === 1 && s.kpos).map(s => ({ ...s, formation: (parsed.teams.find(t => t.slug === s.team) || {}).formation })));
     const seen = {}; let n = 0;
+    // Werte der übrigen Kaderspieler (Ersatzbank der Manager): für die Potential-Tabelle; sie zählen nicht in der Wertung
+    const lineupIds = new Set(lineupPlayers.map(p => p.id));
+    for (const s of Object.values(stats)) { if (s.start === 0) continue; const r = resolveKickerPlayer(s, active.filter(p => !lineupIds.has(p.id)), null); if (!r) continue;
+      await fixSlug(r.player, s.slug, r.via); benchStats[r.player.id] = { start: s.start, assist: s.assist, tore: s.tore, karten: s.karten, kpos: s.kpos }; }
     for (const s of Object.values(stats)) {
       const r = resolveKickerPlayer(s, lineupPlayers, log); if (!r) continue; const p = r.player;
       if (seen[p.id]) { errors.push(`${p.name}: zwei kicker-Spieler passen (${seen[p.id]}, ${s.name}) – ${seen[p.id]} übernommen, bitte kicker-Namen im Kader festlegen`); continue; }
@@ -197,6 +201,10 @@ export async function importPages(round, b, pages, opts = {}) {
     if (r) written++; else skipped++;
     if (s.notes.length) log.push(`${c.name}: ${s.notes.join('; ')}`);
   }
+  for (const [pid, s] of Object.entries(benchStats)) { const tdr = elf && elf.elf.some(kp => { const r = resolveKickerPlayer(kp, [b.players[pid]].filter(Boolean), null); return r && r.player.id === pid; }) ? 1 : 0;
+    await q(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,kpos,source) values($1,$2,$3,$4,$5,$6,$7,$8,'kicker')
+      on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=case when $9 then excluded.tdr else results.tdr end, kpos=excluded.kpos, source='kicker' where results.locked=false`, [round.id, pid, s.start, s.assist, s.tore, s.karten, tdr, s.kpos, !!elf]); }
+  if (Object.keys(benchStats).length) log.push(`${Object.keys(benchStats).length} nicht aufgestellte Kaderspieler mit Werten gespeichert (für die Potential-Tabelle)`);
   if (round.type !== 'nachtrag' && elf && tdrNames.length) await q('update rounds set tdr=$1, sdt=coalesce($2, sdt) where id=$3', [tdrNames, elf.sdt ? elf.sdt.name : null, round.id]);
   log.push(`${written} Spielerzeilen geschrieben${skipped ? `, ${skipped} gesperrt (vom Admin geändert)` : ''}`);
   const summary = { at: new Date().toISOString(), games: matches.length, elf: !!elf, counts, errors, log, coverage };
@@ -261,4 +269,19 @@ export async function fetchHtml(url) {
   const r = await fetch(url, { headers: { 'user-agent': process.env.KICKER_UA || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36', accept: 'text/html,application/xhtml+xml', 'accept-language': 'de-CH,de;q=0.9' }, cache: 'no-store', redirect: 'follow' });
   if (!r.ok) throw new Error(`kicker ${url}: HTTP ${r.status}${[403, 429, 503].includes(r.status) ? ' – kicker lässt Abrufe von Servern nicht zu' : ''}`);
   return r.text();
+}
+
+/** Werte aller Kaderspieler aus einer gespeicherten Auswertung (db/seed/kicker-stats-st1-3.json: {matchday: {slug: {name, team, start, assist, tore, karten, kpos}}}).
+    Schreibt nur Zeilen, die noch fehlen oder nicht gesperrt sind und nicht zu aufgestellten Spielern gehören (deren Werte stehen schon). */
+export async function applyStatsSeed(seed, b) {
+  await ensureColumns(); const log = []; const active = (b.playersArr || []).filter(p => p.status === 'active' || p.valid_to != null);
+  for (const [md, players] of Object.entries(seed)) {
+    const round = await one("select * from rounds where type='regulaer' and matchday=$1", [Number(md)]); if (!round) continue;
+    const lus = await q('select entries from lineups where round_id=$1', [round.id]); const inLineup = new Set(lus.flatMap(l => Object.keys(l.entries || {})));
+    let n = 0;
+    for (const [slug, s] of Object.entries(players)) { if (!s.start) continue; const r = resolveKickerPlayer({ ...s, slug }, active.filter(p => !inLineup.has(p.id) && (p.valid_from ?? 0) <= round.number && (p.valid_to == null || p.valid_to >= round.number)), null); if (!r) continue;
+      await q(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,kpos,source) values($1,$2,$3,$4,$5,$6,0,$7,'kicker') on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, kpos=excluded.kpos, source='kicker' where results.locked=false`, [round.id, r.player.id, s.start, s.assist, s.tore, s.karten, s.kpos || null]); n++; }
+    log.push(`${round.label}: ${n} Bankspieler mit Werten`);
+  }
+  return log;
 }

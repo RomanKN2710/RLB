@@ -1,8 +1,11 @@
 /* Einmalige Datenkorrektur vom 20.09.2026: Ergebnis des Gesamt-Abgleichs Blog (alle 63 Einträge seit Saisonstart)
    ↔ kicker-Spielberichte Spieltag 1–3 ↔ Excel-Auswertungen ↔ App. Idempotent (settings korrektur_20260920). */
 import { q, one, setSetting, getSetting, audit } from './db';
+import { base } from './data';
 import { posProblems } from './rules';
 import { importPosts } from './blog-archiv';
+import { applyStatsSeed } from './kicker';
+import statsSeed from '../../db/seed/kicker-stats-st1-3.json';
 import blogSeed from '../../db/seed/blog-2026-08-09.json';
 
 // Aufstellungen laut Blog, die in App und Excel falsch waren: [Runde, Manager, raus, rein, Position von rein]
@@ -114,6 +117,8 @@ export async function applyAufstellungenST4(userId = null) {
     log.push(`${r.label} ${mname}: Elf laut Blog ${QUELLE4[mname]} gesetzt (${diff.join(', ')})${probs.length ? ' – UNZULÄSSIG: ' + probs.join('; ') : ''}`);
   }
   log.push(`${r.label} Mike, Lazar: kein Blog-Post, bisherige Elf gilt (Ziff. 5.1)`);
+  // Werte der nicht aufgestellten Kaderspieler Spieltag 1–3 (Basis der Potential-Tabelle)
+  { const b = await base(); log.push(...await applyStatsSeed(statsSeed, b)); }
   // Spieltag 3 abschliessen (Werte sind abgeglichen: Blog, kicker, Excel)
   { const r3 = await one("select * from rounds where type='regulaer' and matchday=3"); if (r3 && r3.status !== 'final') { await q("update rounds set status='final' where id=$1", [r3.id]); log.push(`${r3.label}: abgeschlossen (Status final)`); } }
   await setSetting('korrektur_20260920_st4', { at: new Date().toISOString(), log }); await audit(userId, 'korrektur_20260920_st4', { n: log.length });

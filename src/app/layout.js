@@ -30,6 +30,7 @@ export default async function RootLayout({ children }) {
             <Link href="/markt">Transfermarkt</Link>
             <Link href="/kader">Kader &amp; Trades</Link>
             <Link href="/statistik">Statistik</Link>
+            <Link href="/potential">Potential</Link>
             <Link href="/abrechnung">Abrechnung</Link>
             <Link href="/archiv">Archiv</Link>
             <Link href="/regeln">Regeln</Link>
