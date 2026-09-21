@@ -6,6 +6,7 @@ import { fmtDt } from '@/components/ui';
 import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker, LineupPaste as RLineupPaste } from './RoundTools';
 import { getSetting } from '@/lib/db';
 import { status as inboxStatus } from '@/lib/kicker-inbox';
+import { roundCheck } from '@/lib/rundencheck';
 
 export default async function AdminRunde({ params }) {
   const __u = await getUser(); if (!__u || __u.role !== 'admin') return null; const b = await D.base(); const round = await D.roundById(Number(params.id));
@@ -17,12 +18,19 @@ export default async function AdminRunde({ params }) {
   const kickerLog = await getSetting(`kicker_import_${round.id}`);
   const pasteLog = await getSetting(`lineup_paste_${round.id}`);
   const inbox = await inboxStatus(round.matchday).catch(() => null);
+  const check = await roundCheck(round, b, d);
   const dlLocal = round.deadline ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(round.deadline)).replace(' ', 'T') : '';
   return (<>
     <div className="adminbox"><h3>Admin · {round.label}</h3>
       <div className="kv"><b>Deadline</b><span>{fmtDt(round.deadline)} {round.deadline_manual ? '(manuell)' : '(aus Spielplan)'}</span><b>Status</b><span>{round.status}{passed ? ' · Deadline vorbei' : ' · offen'}</span><b>Spiele</b><span>{matches.filter(m => m.finished).length}/{matches.length} beendet</span></div>
       <RHeader round={{ id: round.id, label: round.label, status: round.status, tdr: round.tdr || [], sdt: round.sdt || '', deadlineLocal: dlLocal, bidsResolved: round.bids_resolved }} managers={b.managers.map(m => ({ id: m.id, name: m.name }))} corrections={d.corrections.map(k => ({ id: k.id, manager: b.managerName[k.manager_id], text: k.text, delta: k.delta }))} />
     </div>
+    <div className={`card ${check.ok ? '' : ''}`} style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Rundencheck</div>
+      <h3 style={{ margin: '4px 0' }}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Keine Probleme'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</h3>
+      {check.problems.length > 0 && <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{check.problems.map((x, i) => <li key={i} className="delta down">{x.text}</li>)}</ul>}
+      {check.warnings.length > 0 && <ul className="small" style={{ margin: '4px 0', paddingLeft: 18 }}>{check.warnings.map((x, i) => <li key={i}>{x.text}</li>)}</ul>}
+      {check.infos.length > 0 && <div className="mini">{check.infos.map(x => x.text).join(' · ')}</div>}
+      <p className="mini">Geprüft: Aufstellungen (11 Spieler, Positionen, Spielberechtigung), Kadergrösse und Verträge, Spiele, kicker-Import und Vollständigkeit, Elf des Tages (11 Namen und Spieler des Tages in der Datenbank, Punkte bei den Aufgestellten), Gebote.</p></div>
     <div className="grid2">
       <div className="card"><h3>Spiele &amp; Vereinsergebnisse</h3><table><tbody>{matches.map(m => { const c1 = d.clubRes[m.c1], c2 = d.clubRes[m.c2]; return <tr key={m.id}><td className="l">{fmtDt(m.kickoff)}</td><td className="l">{m.c1} – {m.c2}</td><td>{m.finished ? `${m.goals1}:${m.goals2}` : '–'}</td><td className="l mini">{c1 ? `${m.c1} ${c1.pts}P${c1.cs ? ' zu null' : ''} · ${m.c2} ${c2.pts}P${c2.cs ? ' zu null' : ''}` : ''}</td></tr>; })}</tbody></table><p className="mini">Punkte 3/1/0 und Zu-null werden aus den OpenLigaDB-Resultaten abgeleitet. Fehlt ein Resultat, Sync auslösen (Admin-Übersicht).</p>
         <div className="eyebrow">Torschützen (OpenLigaDB)</div><div className="small">{matches.flatMap(m => (m.goals || []).map((g, i) => <span key={m.id + '-' + i} className={g.ownGoal ? 'muted' : ''}>{g.name}{g.ownGoal ? ' (ET)' : ''}{g.penalty ? ' (E)' : ''} {g.minute}&#39;</span>)).reduce((acc, el, i) => acc.concat(i ? [', ', el] : [el]), [])}</div>

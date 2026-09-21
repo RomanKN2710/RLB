@@ -6,6 +6,7 @@ import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
 import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, MatchdayImport } from './AdminTools';
 import { runPending, status as migrationStatus } from '@/lib/migrations';
+import { roundCheck } from '@/lib/rundencheck';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
 import { SquadSync, Leavers } from './SquadTools';
 import { rlbLeavers } from '@/lib/squads';
@@ -31,11 +32,12 @@ export default async function Admin() {
   const lastPlayed = [...rounds].filter(r => r.type === 'regulaer' && r.deadline && new Date(r.deadline).getTime() < now).pop();
   const show = rounds.filter(r => r.type === 'nachtrag' || r.matchday <= (lastPlayed ? lastPlayed.matchday + 1 : 2));
   const cnt = (list, r) => (list.find(x => x.round_id === r.id) || {});
+  const checks = {}; for (const r of show) { if (r.deadline && new Date(r.deadline).getTime() < now) { try { checks[r.id] = await roundCheck(r, b, await D.roundData(r, b)); } catch (e) { checks[r.id] = { problems: [{ text: 'Check fehlgeschlagen: ' + e.message }], warnings: [], ok: false }; } } }
   const blogUrl = process.env.BLOG_URL || 'https://rotisseryleaguebundesliga.blogspot.com';
   return (<>
     <div className="card"><div className="eyebrow">Admin</div><h2>Spieltage auswerten</h2>
       <p className="mini">Ablauf je Spieltag: Aufstellungen aus dem <a href={blogUrl} target="_blank" rel="noreferrer">Blog</a> ins <Link href="/archiv">Archiv</Link> und in die Runde übernehmen → nach den Spielen die neun kicker-Aufstellungsseiten und die Elf des Tages vom Handy senden → importieren → Bericht prüfen (jeder aufgestellte Spieler muss «Startelf», «eingewechselt» oder «Bank» sein) → Runde abschliessen.</p>
-      <div className="tbl"><table><thead><tr><th className="l">Spieltag</th><th className="l">Deadline</th><th className="l">Status</th><th>Aufst.</th><th>Gebote</th><th className="l">kicker-Seiten</th><th className="l">Import</th><th className="l"></th></tr></thead><tbody>
+      <div className="tbl"><table><thead><tr><th className="l">Spieltag</th><th className="l">Deadline</th><th className="l">Status</th><th>Aufst.</th><th>Gebote</th><th className="l">kicker-Seiten</th><th className="l">Import</th><th className="l">Check</th><th className="l"></th></tr></thead><tbody>
         {show.map(r => { const passed = r.deadline && new Date(r.deadline).getTime() < now; const isOpen = open && open.id === r.id;
           const ib = inboxRaw.find(x => x.matchday === r.matchday && r.type === 'regulaer'); const imp = importOf(r); const c = imp?.counts || {}; const bad = (c.nicht_gefunden || 0) + (c.spiel_fehlt || 0) + (c.verein_unbekannt || 0) + (imp?.errors?.length || 0);
           const fin = cnt(finished, r); const lu = cnt(lineupCounts, r); const locked = cnt(lockedRows, r).n || 0;
@@ -45,6 +47,7 @@ export default async function Admin() {
             <td>{lu.n || 0}/{b.managers.length}</td><td>{cnt(bidCounts, r).n || 0}{r.bids_resolved && <span className="badge">aufgelöst</span>}</td>
             <td className="l">{ib ? <span className={`pill ${ib.n >= 9 && ib.elf ? 'ok' : 'open'}`}>{ib.n}/9{ib.elf ? ' + Elf' : ', Elf fehlt'}</span> : <span className="mini">–</span>}</td>
             <td className="l">{imp ? <div className="mini">{new Date(imp.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}: {imp.games ?? '?'} Spiele{imp.elf ? ' + Elf' : ''} · Startelf {c.startelf || 0}, eingew. {c.eingewechselt || 0}, Bank {c.bank || 0}{c.nicht_im_kader ? `, nicht im Kader ${c.nicht_im_kader}` : ''}{bad > 0 ? <b className="delta down"> · {bad} Problem(e)</b> : imp.counts ? <span className="pill ok" style={{ marginLeft: 4 }}>vollständig</span> : null}{locked > 0 && ` · ${locked} gesperrt`}</div> : <span className="mini">noch nicht</span>}</td>
+            <td className="l">{checks[r.id] ? (checks[r.id].problems.length ? <details><summary className="pill bad" style={{ cursor: 'pointer' }}>{checks[r.id].problems.length} Problem(e)</summary><ul className="mini" style={{ margin: '4px 0', paddingLeft: 16 }}>{checks[r.id].problems.map((x, i) => <li key={i}>{x.text}</li>)}</ul></details> : checks[r.id].warnings.length ? <details><summary className="pill open" style={{ cursor: 'pointer' }}>{checks[r.id].warnings.length} Hinweis(e)</summary><ul className="mini" style={{ margin: '4px 0', paddingLeft: 16 }}>{checks[r.id].warnings.map((x, i) => <li key={i}>{x.text}</li>)}</ul></details> : <span className="pill ok">ok</span>) : <span className="mini">–</span>}</td>
             <td className="l"><span className="row" style={{ gap: 4 }}>{ib && (ib.n > 0 || ib.elf) && r.type === 'regulaer' && <MatchdayImport matchday={r.matchday} />}<Link className="btn sm sec" href={`/admin/runde/${r.id}`}>Auswerten</Link></span></td></tr>); })}
       </tbody></table></div>
       <p className="mini">Offen ist immer nur die nächste Runde (kleinste Nummer mit Deadline in der Zukunft). Deadlines folgen dem Spielplan (90 Min. vor dem ersten Anpfiff) und können pro Runde überschrieben werden. Weitere Runden erscheinen, sobald sie an der Reihe sind.</p>
