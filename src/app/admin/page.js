@@ -4,7 +4,8 @@ import * as D from '@/lib/data';
 import { q, getSetting } from '@/lib/db';
 import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
-import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, Korrektur, Korrektur2, MatchdayImport } from './AdminTools';
+import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, MatchdayImport } from './AdminTools';
+import { runPending, status as migrationStatus } from '@/lib/migrations';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
 import { SquadSync, Leavers } from './SquadTools';
 import { rlbLeavers } from '@/lib/squads';
@@ -13,6 +14,7 @@ import clubSlugs from '../../../db/seed/kicker-clubs.json';
 /* Admin-Übersicht: 1) Spieltage auswerten (Aufstellungen → kicker-Seiten → Import → abschliessen), 2) Kader & Pool, 3) Konten & Einstellungen, 4) Werkzeuge. */
 export default async function Admin() {
   const __u = await getUser(); if (!__u || __u.role !== 'admin') return null;
+  const justRun = await runPending(__u.id); const migrations = await migrationStatus();
   const b = await D.base(); const rounds = await D.rounds(); const open = await D.openRound();
   const users = await q('select u.*, m.name as manager_name from users u left join managers m on m.id=u.manager_id order by u.role, u.name');
   const lastSync = await getSetting('last_sync'); const lastCur = await getSetting('last_sync_current');
@@ -22,7 +24,6 @@ export default async function Admin() {
   const finished = await q('select round_id, count(*)::int as n, count(*) filter (where finished)::int as f from matches group by round_id');
   const postponed = await postponedCandidates();
   const vorsaison = (await getSetting('vorsaison_reihenfolge')) || [];
-  const korrDone = await getSetting('korrektur_20260915'); const korrDone2 = await getSetting('korrektur_20260920'); const korrDone4 = await getSetting('korrektur_20260920_st4');
   const inboxRaw = await inboxAll().catch(() => []);
   const settings = await q("select key, value from settings where key like 'kicker_import_%'");
   const importOf = r => (settings.find(s => s.key === `kicker_import_${r.id}`) || {}).value || null;
@@ -79,10 +80,10 @@ export default async function Admin() {
         <div className="row"><Sync /><span className="mini">Spielplan und Resultate (OpenLigaDB). Letzter Voll-Sync: {lastSync ? fmtDt(lastSync.at) : 'nie'} · aktuelle Spieltage: {lastCur ? fmtDt(lastCur.at) : 'nie'}. Beim Seitenaufruf wird automatisch aktualisiert (stündlich Resultate, täglich der ganze Spielplan).</span></div>
         <div className="row"><a className="btn sm sec" href="/api/export">Datenabzug (JSON)</a><span className="mini">Alle Daten ohne Passwörter, zum Nachprüfen ausserhalb der App.</span></div>
         <div className="row"><Link className="btn sm sec" href="/archiv">Blog-Archiv</Link><span className="mini">Alle Blog-Einträge je Runde neben Aufstellung und Kader; neue Einträge per Copy-Paste einspielen.</span></div>
-        <div className="adminbox"><h3>Datenkorrektur 20.09.2026 (Gesamt-Abgleich Blog · kicker · Excel)</h3>
-          <p className="mini">Teil 1: Aufstellungen laut Blog (Mike ST3 Diaby, Dani ST2 Vagnoman), kicker-Werte (Ullrich ST1, Juranovic ST1, Vagnoman ST2), Positionen laut kicker (Daghim, Moore, Conté, Grüll, El Ouahdi, Bülter), Doan bei Arbi ST3 gratis, Buchungen (Theate, Belocian), Verträge aus den Keeper-Posts, Blog-Archiv. Teil 2: Aufstellungen Spieltag 4 laut Blog, Spieltag 3 abschliessen.</p>
-          <Korrektur2 done={korrDone2} done4={korrDone4} /></div>
-        <div className="adminbox"><h3>Datenkorrektur 15.09.2026</h3><Korrektur done={korrDone} /></div>
+        <details><summary className="mini">Einmalige Datenkorrekturen: {migrations.filter(m => m.at).length} von {migrations.length} eingespielt{justRun.length ? ` (${justRun.length} soeben)` : ''}{migrations.some(m => m.error) ? ' – Fehler!' : ''}</summary>
+          <p className="mini">Nachträge und Korrekturen aus den Abgleichen laufen automatisch beim Aufruf dieser Seite, jeder Schritt genau einmal.</p>
+          {migrations.map(m => <details key={m.key}><summary className="mini">{m.error ? '✗' : m.at ? '✓' : '…'} {m.title}{m.at ? ` – ${new Date(m.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}` : ''}{m.error ? ` – Fehler: ${m.error}` : ''}</summary><ul className="mini" style={{ paddingLeft: 18 }}>{m.log.map((l, i) => <li key={i}>{l}</li>)}</ul></details>)}
+        </details>
       </div></details>
   </>);
 }

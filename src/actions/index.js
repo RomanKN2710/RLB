@@ -8,8 +8,6 @@ import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } from '@/lib/oldb';
 import { importPages, playerMatches, ensureColumns as ensureKickerColumns } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
-import { applyKorrektur20260915 } from '@/lib/korrektur-20260915';
-import { applyKorrektur20260920, applyAufstellungenST4 } from '@/lib/korrektur-20260920';
 import * as Blog from '@/lib/blog-archiv';
 import * as Inbox from '@/lib/kicker-inbox';
 
@@ -338,9 +336,6 @@ export const importGoalsAction = wrap(async (roundId) => { const a = await requi
   const r = await importGoals(roundId, b.players, b.teamToClub); await audit(a.id, 'goals_import', { roundId, n: r.assigned.length }); rev();
   return ok(`Tore übernommen: ${r.assigned.map(x => `${x.player} ${x.tore}`).join(', ') || 'keine'}${r.unmatched.length ? ' · mehrdeutig: ' + r.unmatched.map(u => u.name).join(', ') : ''}`); });
 
-/* ---------- Admin: einmalige Datenkorrektur 15.09.2026 ---------- */
-export const korrektur20260915Action = wrap(async () => { const a = await requireAdmin(); const r = await applyKorrektur20260915(a.id); rev(); return ok(r.log.join(' · ')); });
-export const korrektur20260920Action = wrap(async () => { const a = await requireAdmin(); const r = await applyKorrektur20260920(a.id); const r4 = await applyAufstellungenST4(a.id); rev(); revalidatePath('/archiv'); return ok([...r.log, ...r4.log].join(' · ')); });
 
 /* ---------- Blog-Archiv ---------- */
 export const blogImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const text = String(fd.get('text') || ''); const date = String(fd.get('date') || '') || null;
