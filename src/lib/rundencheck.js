@@ -36,7 +36,8 @@ export async function roundCheck(round, b, d) {
       if (imp.games != null && imp.games < 9 && round.type !== 'nachtrag') add('bad', `kicker-Import: nur ${imp.games} von 9 Spielen`);
       if (imp.games == null) add('warn', 'kicker-Import stammt aus der alten Version ohne Vollständigkeitsbericht – bei Gelegenheit neu importieren');
       const c = imp.counts || {}; if (c.nicht_gefunden) add('bad', `kicker-Import: ${c.nicht_gefunden} Spieler «Name prüfen»`); if (c.spiel_fehlt) add('bad', `kicker-Import: ${c.spiel_fehlt} Spieler ohne Spiel`); if (c.verein_unbekannt) add('bad', `kicker-Import: ${c.verein_unbekannt} Spieler mit unbekanntem Verein`);
-      (imp.errors || []).forEach(e => add('bad', 'kicker-Import: ' + e));
+      // Elf-des-Tages-Fehler ist nur ein Hinweis, wenn die Elf von Hand vollständig erfasst ist (Prüfung unter 4)
+      (imp.errors || []).forEach(e => add(/^Elf des Tages/.test(e) && (round.tdr || []).length === 11 ? 'warn' : 'bad', 'kicker-Import: ' + e));
       if (!imp.elf && !(round.tdr || []).length) add('bad', 'Elf des Tages fehlt (weder importiert noch von Hand erfasst)');
     }
   }

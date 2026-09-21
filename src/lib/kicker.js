@@ -170,7 +170,7 @@ export async function importPages(round, b, pages, opts = {}) {
   log.push(...await acquirePositions(allStarters, b, round));
   // 3) Elf des Tages
   let elf = null; const tdrPids = new Set(); const tdrNames = []; let sdtPid = null;
-  if (pages.elf) { try { elf = parseElfDesTages(pages.elf); if (!elf.elf.length) throw new Error('keine Elf im Quelltext'); } catch (e) { errors.push('Elf des Tages: ' + e.message); elf = null; } }
+  if (pages.elf) { try { elf = parseElfDesTages(pages.elf); if (!elf.elf.length) throw new Error(/liegt noch nicht vor/i.test(pages.elf) ? 'auf kicker noch nicht veröffentlicht – Seite später erneut senden' : 'keine Elf im Quelltext'); } catch (e) { errors.push('Elf des Tages: ' + e.message); elf = null; } }
   if (elf) { for (const kp of elf.elf) { tdrNames.push(kp.name); const r = resolveKickerPlayer(kp, lineupPlayers, log); if (r) { tdrPids.add(r.player.id); await fixSlug(r.player, kp.slug, r.via); } }
     if (elf.sdt) { const r = resolveKickerPlayer(elf.sdt, lineupPlayers, log); if (r) sdtPid = r.player.id; }
     log.push(`Elf des Tages: ${elf.elf.length} Spieler, ${tdrPids.size} in RLB-Aufstellungen${elf.sdt ? ', Spieler des Tages ' + elf.sdt.name + (sdtPid ? ' (+1 TdR)' : '') : ''}`); }
