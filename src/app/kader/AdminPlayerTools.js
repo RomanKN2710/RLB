@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { removePositionAction, addPositionAction, setContractAction, setJugendAction, releasePlayerAction, abgangPlayerAction, editPlayerAction } from '@/actions';
+import { removePositionAction, addPositionAction, setContractAction, setJugendAction, releasePlayerAction, abgangPlayerAction, editPlayerAction, setKickerSlugAction } from '@/actions';
 
 export default function AdminPlayerTools({ player: p }) {
   const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); const [arm, setArm] = useState(null);
@@ -15,6 +15,7 @@ export default function AdminPlayerTools({ player: p }) {
     {arm === 'rel' ? <button className="sm danger" onClick={() => run(() => releasePlayerAction(p.id))}>{p.name} entlassen?</button> : <button className="sm sec" onClick={() => setArm('rel')}>Entl.</button>}
     {arm === 'abg' ? <button className="sm danger" onClick={() => run(() => abgangPlayerAction(p.id))}>Abgang, {p.price} gutschreiben?</button> : <button className="sm sec" title="Verlässt die Bundesliga: Wert wird dem Kaufbudget gutgeschrieben (7.4)" onClick={() => setArm('abg')}>Abg.</button>}
     <button className="sm sec" title="Name (kicker-Schreibweise) oder Verein korrigieren" disabled={pending} onClick={() => { const nm = window.prompt('Name (wie bei kicker geschrieben):', p.name); if (nm === null) return; const cl = window.prompt('Verein (Kurzname wie in der App, z. B. Augsburg):', p.club); if (cl === null) return; run(() => editPlayerAction(p.id, nm, cl)); }}>Bearb.</button>
+    <button className="sm sec" title={p.kicker_slug ? `kicker-Kennung: ${p.kicker_slug}` : 'kicker-Kennung festlegen (aus der kicker-Adresse des Spielers, z. B. said-el-mala)'} disabled={pending} onClick={() => { const v = window.prompt('kicker-Kennung (Teil der kicker-Adresse vor /spieler/, z. B. said-el-mala). Leer = automatisch beim nächsten Import:', p.kicker_slug || ''); if (v === null) return; run(() => setKickerSlugAction(p.id, v)); }}>k:{p.kicker_slug ? '✓' : '–'}</button>
     {msg && <span className="mini">{msg}</span>}
   </span>);
 }

@@ -46,6 +46,7 @@ create table if not exists players (
   jugend boolean not null default false,     -- Jugendspieler-Status (Ziff. 4.3.4)
   contract text check (contract in ('1J','2J')),
   contract_mandatory boolean not null default false,
+  kicker_slug text,                          -- kicker-Kennung (Slug), einmal zugeordnet, dann eindeutig
   note text
 );
 create index if not exists players_manager on players(manager_id);

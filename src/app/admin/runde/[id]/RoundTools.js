@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerInboxAction, clearKickerInboxAction, previewLineupTextAction, applyLineupTextAction, importKickerAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { importKickerInboxAction, clearKickerInboxAction, previewLineupTextAction, applyLineupTextAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -78,14 +78,26 @@ export function Results({ roundId, managerId, managerName, rows: init, totals })
 export function Goals({ roundId }) { const { msg, pending, run } = useRun();
   return <div className="row" style={{ marginTop: 8 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importGoalsAction(roundId))}>Tore aus OpenLigaDB übernehmen</button><span className="mini">Läuft nach der Deadline auch automatisch beim Sync; vom Admin geänderte Tore werden nicht überschrieben.</span><M msg={msg} /></div>; }
 
-export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState('');
+const STATUS = { startelf: ['Startelf', 'ok'], eingewechselt: ['eingewechselt', 'ok'], bank: ['Bank, nicht eingesetzt', 'grey'], nicht_im_kader: ['nicht im Spieltagskader', 'grey'], nicht_gefunden: ['Name prüfen', 'bad'], spiel_fehlt: ['Spiel fehlt', 'bad'], verein_unbekannt: ['Verein?', 'bad'] };
+export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState(''); const [unlock, setUnlock] = useState(false); const [showAll, setShowAll] = useState(false);
+  const c = lastLog?.counts || {}; const cov = lastLog?.coverage || []; const problems = cov.filter(x => ['nicht_gefunden', 'spiel_fehlt', 'verein_unbekannt', 'nicht_im_kader'].includes(x.status));
   return (<div className="stack" style={{ marginTop: 8 }}>
-    <div className="row"><span className="mini"><b>Eingang vom Handy</b> (Spieltag {inbox?.matchday}): {inbox && inbox.n ? `${inbox.n}/9 Spiele${inbox.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'} – ${inbox.matches.map(m => m.title).join(' · ')}` : 'leer'}</span>
-      {inbox && (inbox.n > 0 || inbox.elf) && <><button className="sm komm" disabled={pending} onClick={() => run(() => importKickerInboxAction(roundId))}>Eingang importieren</button><button className="sm sec" disabled={pending} onClick={() => run(() => clearKickerInboxAction(roundId))}>Eingang leeren</button></>}</div>
-    <div className="row"><button className="komm" disabled={pending} onClick={() => run(() => importKickerAction(roundId))}>kicker importieren (alle Spiele + Elf des Tages)</button><button className="sm sec" disabled={pending} onClick={() => run(() => unlockResultsAction(roundId))}>Admin-Sperren aufheben</button><M msg={msg} /></div>
-    {lastLog && <div className="mini">Letzter Import {lastLog.at ? new Date(lastLog.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' }) : ''}: {lastLog.log?.join(' · ')}</div>}
-    <details><summary>Rückfall: kicker-HTML einfügen (falls der Abruf blockiert ist)</summary>
-      <p className="mini">Für jedes Spiel bei kicker die Seite «Aufstellung» öffnen, Quelltext kopieren (Strg+U, Strg+A, Strg+C) und hier <b>alle neun hintereinander</b> in dasselbe Feld einfügen – die Seiten werden automatisch getrennt. Skripte und Stile werden vor dem Senden entfernt, darum passen alle neun zusammen hinein. Die «Elf des Tages» kommt ins zweite Feld.</p>
+    <div className="row"><span className="mini"><b>Eingang</b> (Spieltag {inbox?.matchday}): {inbox && inbox.n ? `${inbox.n}/9 Spiele${inbox.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'} – ${inbox.matches.map(m => m.title).join(' · ')}` : 'leer'}</span></div>
+    <div className="row"><button className="komm" disabled={pending || !(inbox && (inbox.n > 0 || inbox.elf))} onClick={() => run(() => importKickerInboxAction(roundId, unlock))}>Eingang importieren</button>
+      <label className="mini"><input type="checkbox" checked={unlock} onChange={e => setUnlock(e.target.checked)} /> gesperrte Zeilen (Admin/Excel) überschreiben</label>
+      {inbox && (inbox.n > 0 || inbox.elf) && <button className="sm sec" disabled={pending} onClick={() => run(() => clearKickerInboxAction(roundId))}>Eingang leeren</button>}<M msg={msg} /></div>
+    {lastLog && <div className="stack">
+      <div className="mini">Letzter Import {lastLog.at ? new Date(lastLog.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' }) : ''}: {lastLog.games ?? '?'} Spiele{lastLog.elf ? ' + Elf des Tages' : ', ohne Elf des Tages'} · Startelf {c.startelf || 0} · eingewechselt {c.eingewechselt || 0} · Bank {c.bank || 0} · nicht im Kader {c.nicht_im_kader || 0} · <b className={c.nicht_gefunden ? 'delta down' : ''}>Name prüfen {c.nicht_gefunden || 0}</b> · <b className={c.spiel_fehlt ? 'delta down' : ''}>Spiel fehlt {c.spiel_fehlt || 0}</b></div>
+      {lastLog.errors?.length > 0 && <div className="err"><b>{lastLog.errors.length} Problem(e):</b><ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{lastLog.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
+      {problems.length > 0 && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Spieler</th><th className="l">Verein</th><th className="l">Status</th><th className="l">Hinweis</th></tr></thead><tbody>
+        {problems.map(x => <tr key={x.pid}><td className="l">{x.manager}</td><td className="l">{x.name}</td><td className="l">{x.club}</td><td className="l"><span className={`pill ${STATUS[x.status]?.[1] || 'grey'}`}>{STATUS[x.status]?.[0] || x.status}</span></td><td className="l mini">{x.hint}</td></tr>)}</tbody></table></div>}
+      <details open={showAll} onToggle={e => setShowAll(e.target.open)}><summary className="mini">Alle {cov.length} aufgestellten Spieler mit kicker-Werten</summary>
+        <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Spieler</th><th className="l">kicker</th><th className="l">Status</th><th>St</th><th>A</th><th>T</th><th>K</th><th>TdR</th><th>Pos</th></tr></thead><tbody>
+          {cov.map(x => <tr key={x.pid}><td className="l">{x.manager}</td><td className="l">{x.pos} {x.name}</td><td className="l muted">{x.kicker || '–'}</td><td className="l"><span className={`pill ${STATUS[x.status]?.[1] || 'grey'}`}>{STATUS[x.status]?.[0] || x.status}</span></td><td>{x.start ?? 0}</td><td>{x.assist ?? 0}</td><td>{x.tore ?? 0}</td><td>{x.karten ?? 0}</td><td>{x.tdr ?? 0}</td><td>{x.kpos || ''}</td></tr>)}</tbody></table></div></details>
+      <details><summary className="mini">Protokoll</summary><ul className="mini" style={{ paddingLeft: 18 }}>{(lastLog.log || []).map((l, i) => <li key={i}>{l}</li>)}</ul></details>
+    </div>}
+    <details><summary>Quelltext einfügen (statt Eingang vom Handy)</summary>
+      <p className="mini">Für jedes Spiel bei kicker die Seite «Aufstellung» öffnen, Quelltext kopieren (Strg+U, Strg+A, Strg+C) und hier <b>alle neun hintereinander</b> in dasselbe Feld einfügen – die Seiten werden automatisch getrennt und in den Eingang gelegt. Die «Elf des Tages» kommt ins zweite Feld.</p>
       <textarea rows={5} placeholder="Quelltexte der Aufstellungsseiten, beliebig viele hintereinander" value={h1} onChange={e => setH1(e.target.value)} style={{ width: '100%' }} />
       <div className="mini">{(() => { const teile = splitPages(h1); if (!teile.length) return 'noch nichts eingefügt'; const mit = teile.filter(x => /kick__lineup__teamrow/.test(x)).length;
         return `${teile.length} Seite(n) erkannt, davon ${mit} mit Aufstellung${mit < teile.length ? ' – die übrigen enthalten keine Aufstellungstabelle' : ''}`; })()}</div>
@@ -95,8 +107,8 @@ export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run 
         const bytes = [...teile, eleven].reduce((n, x) => n + x.length, 0);
         if (!bytes) return { ok: false, msg: 'Nichts eingefügt' };
         if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte in zwei Durchgängen einfügen.` };
-        const r = await importKickerHtmlAction(roundId, teile, eleven); if (r.ok) { setH1(''); setH3(''); } return r;
-      })}>Aus eingefügtem HTML importieren</button><span className="mini">Es werden nur die Spieler der eingefügten Spiele geschrieben.</span></div></details>
+        const r = await importKickerHtmlAction(roundId, teile, eleven, unlock); if (r.ok) { setH1(''); setH3(''); } return r;
+      })}>In den Eingang legen und importieren</button></div></details>
   </div>); }
 
 /* Aufstellungen aus dem Blog: Text in einem Rutsch einfuegen, Vorschau pruefen, uebernehmen. */

@@ -1,7 +1,6 @@
 /* OpenLigaDB-Sync: Spielplan, Anstosszeiten, Resultate der Bundesliga (api.openligadb.de). */
 import { q, one, getSetting, setSetting } from './db';
 import { DEADLINE_MIN } from './rules';
-import { importRound } from './kicker';
 
 const API = 'https://api.openligadb.de';
 const season = () => process.env.SEASON || '2026';
@@ -85,14 +84,6 @@ export async function importGoalsPending() {
   const players = {}; (await q('select * from players')).forEach(p => players[p.id] = p);
   const teamToClub = {}; (await q('select * from clubs where oldb_team_id is not null')).forEach(c => teamToClub[c.oldb_team_id] = c.id);
   for (const r of rounds) { try { await importGoals(r.id, players, teamToClub); } catch (e) { console.error('Tore-Import', r.label, e.message); } }
-  // kicker-Import, sobald alle Spiele der Runde beendet sind (einmal automatisch; danach manuell über Admin)
-  const b = { players, teamToClub };
-  for (const r of rounds) {
-    const st = await q('select count(*)::int as n, count(*) filter (where finished)::int as f, max(updated_at) as u from matches where round_id=$1', [r.id]);
-    if (!st[0].n || st[0].f < st[0].n) continue;
-    const done = await getSetting(`kicker_import_${r.id}`); if (done && done.auto) continue;
-    try { const res = await importRound(r, b); await setSetting(`kicker_import_${r.id}`, { at: new Date().toISOString(), log: res.log, auto: true }); } catch (e) { console.error('kicker-Import', r.label, e.message); await setSetting(`kicker_import_${r.id}`, { at: new Date().toISOString(), log: ['Fehler: ' + e.message], auto: true }); }
-  }
 }
 
 /** Sync auslösen, wenn der letzte länger als maxAgeMin zurückliegt (wird beim Seitenaufruf verwendet). */

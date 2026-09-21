@@ -6,7 +6,7 @@ import { login, clearSession, requireUser, requireAdmin, hashPassword } from '@/
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } from '@/lib/oldb';
-import { importRound, playerMatches } from '@/lib/kicker';
+import { importPages, playerMatches, ensureColumns as ensureKickerColumns } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
 import { applyKorrektur20260915 } from '@/lib/korrektur-20260915';
 import { applyKorrektur20260920, applyAufstellungenST4 } from '@/lib/korrektur-20260920';
@@ -274,9 +274,12 @@ export const applyBidsAction = wrap(async (roundId) => { const a = await require
 
 /* ---------- Admin: Spieler, Buchungen ---------- */
 export const manualBuyAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const m = Number(fd.get('manager_id')), name = String(fd.get('name') || '').trim(), pos = String(fd.get('pos')), club = String(fd.get('club')), price = Number(fd.get('price')) || 0, from = Number(fd.get('valid_from')) || 0;
-  if (!m || !name) return fail('Manager und Name'); const id = `${m}-${name}-${Date.now().toString(36)}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const contract = price >= R.CONTRACT_MIN ? '1J' : null;
+  if (!m || !name) return fail('Manager und Name'); await ensureKickerColumns(); const id = `${m}-${name}-${Date.now().toString(36)}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const contract = price >= R.CONTRACT_MIN ? '1J' : null;
   const r = from ? await one('select * from rounds where number=$1', [from]) : await D.openRound();
-  await q("insert into players(id,manager_id,name,club,base_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory) values($1,$2,$3,$4,$5,$6,'bank','kauf','active',$7,false,$8,$9)", [id, m, name, club || null, pos, price, r ? r.number : 1, contract, !!contract]);
+  // Positionen aus dem kicker-Pool: Grundposition laut Kaderliste, Zusatzpositionen laut bisherigen Startelf-Einsätzen (Ziff. 5.2)
+  const pp = (await q('select * from bl_players where club=$1', [club])).find(x => playerMatches(x.slug, x.name, name));
+  const basePos = (pp && pp.squad_pos) || pos; const extra = pp ? [...new Set([...(pp.played_pos || []), pos].filter(x => x && x !== basePos))] : [];
+  await q("insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory,kicker_slug) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10,$11)", [id, m, name, club || null, basePos, extra, price, r ? r.number : 1, contract, !!contract, pp ? pp.slug : null]);
   await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,'manuell (Admin)')", [r ? r.id : null, m, name, price]); await audit(a.id, 'manual_buy', { id }); rev(); return ok(`${name} gebucht`); });
 export const releasePlayerAction = wrap(async (pid) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const open = await D.openRound(); const last = await one('select * from rounds where number < $1 order by number desc limit 1', [open ? open.number : 9999]);
   await q("update players set status='released', valid_to=$2 where id=$1", [pid, last ? last.number : 0]); await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,'manuell (Admin)')", [last ? last.id : null, p.manager_id, p.name, R.value(p)]); await audit(a.id, 'release', { pid }); rev(); return ok(`${p.name} entlassen`); });
@@ -329,31 +332,24 @@ export const blogImportAction = wrap(async (prev, fd) => { const a = await requi
 export const blogMetaAction = wrap(async (id, kind, managerId, roundNumber) => { await requireAdmin(); await Blog.setPostMeta(id, { kind, manager_id: managerId ? Number(managerId) : null, round_number: roundNumber ? Number(roundNumber) : null }); revalidatePath('/archiv'); return ok('Gespeichert'); });
 export const blogDeleteAction = wrap(async (id) => { await requireAdmin(); await Blog.deletePost(id); revalidatePath('/archiv'); return ok('Gelöscht'); });
 /* ---------- Admin: kicker-Import (Startelf, Wechsel, Tore, Vorlagen, Karten, Elf des Tages) ---------- */
-export const importKickerAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
-  await D.ensureLineups(round, b);
-  const r = await importRound(round, b); await audit(a.id, 'kicker_import', { roundId }); rev();
-  return ok(r.log.join(' · ')); });
-export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, htmlElf) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
-  await D.ensureLineups(round, b);
-  const pages = {}; const paths = [];
-  for (const [i, h] of (htmlAufstellung || []).entries()) { if (!h || !h.trim()) continue; const path = `/paste-${i}`; pages[`${path}/aufstellung`] = h; paths.push(path); }
-  if (htmlElf && htmlElf.trim()) pages['elf'] = htmlElf;
-  if (!paths.length && !pages.elf) return fail('Kein HTML eingefügt');
-  const fetcher = async url => { const u = new URL(url); if (u.pathname.includes('/elf-des-tages/')) { if (pages.elf) return pages.elf; throw new Error('keine Elf-des-Tages-Seite eingefügt'); } if (pages[u.pathname]) return pages[u.pathname]; throw new Error('nicht eingefügt: ' + u.pathname); };
-  const r = await importRound(round, b, fetcher, { paths, partial: true }); await audit(a.id, 'kicker_import_paste', { roundId, n: paths.length }); rev();
-  return ok(r.log.join(' · ')); });
-/* Eingang vom Handy (Kurzbefehl) importieren: dieselbe Logik wie das Einfuegen im Browser */
+export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, htmlElf, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  const matches = (htmlAufstellung || []).filter(h => h && h.trim()); const elf = htmlElf && htmlElf.trim() ? htmlElf : null;
+  if (!matches.length && !elf) return fail('Kein Quelltext eingefügt');
+  // Eingefügte Seiten landen im Eingang, damit der Import immer denselben Weg nimmt und wiederholbar ist
+  for (const h of matches) await Inbox.savePage(h, { matchday: round.matchday }); if (elf) await Inbox.savePage(elf, { matchday: round.matchday });
+  return importKickerInboxAction(roundId, unlock); });
+/* Eingang (Handy oder eingefügter Quelltext) importieren */
 export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
   const pg = await Inbox.pages(round.matchday); if (!pg.matches.length && !pg.elf) return fail(`Eingang für Spieltag ${round.matchday} ist leer`);
   await D.ensureLineups(round, b);
-  // Gesperrte Zeilen (Excel-Import, Admin-Korrekturen) freigeben, damit kicker als Quelle wieder gilt
   if (unlock) await q('update results set locked=false where round_id=$1', [round.id]);
-  const pages = {}; const paths = []; pg.matches.forEach((h, i) => { const path = `/inbox-${i}`; pages[`${path}/aufstellung`] = h; paths.push(path); }); if (pg.elf) pages.elf = pg.elf;
-  const fetcher = async url => { const u = new URL(url); if (u.pathname.includes('/elf-des-tages/')) { if (pages.elf) return pages.elf; throw new Error('keine Elf-des-Tages-Seite im Eingang'); } if (pages[u.pathname]) return pages[u.pathname]; throw new Error('nicht im Eingang: ' + u.pathname); };
-  const r = await importRound(round, b, fetcher, { paths, partial: true }); await audit(a.id, 'kicker_import_inbox', { roundId, n: paths.length, elf: !!pg.elf }); rev();
-  return ok(r.log.join(' · ')); });
-/* Eingang eines Spieltags von der Admin-Uebersicht aus importieren (Runde wird ueber den Spieltag gefunden) */
+  const r = await importPages(round, b, { matches: pg.matches, elf: pg.elf || null }); await audit(a.id, 'kicker_import', { roundId, games: r.games, elf: r.elf, counts: r.counts }); rev();
+  const c = r.counts; const parts = [`${r.games} Spiele${r.elf ? ' + Elf des Tages' : ''}`, `Startelf ${c.startelf || 0}`, `eingewechselt ${c.eingewechselt || 0}`, `Bank ${c.bank || 0}`, `nicht im Kader ${c.nicht_im_kader || 0}`, `Name prüfen ${c.nicht_gefunden || 0}`, `Spiel fehlt ${c.spiel_fehlt || 0}`];
+  if (r.errors.length) return fail(`Import mit ${r.errors.length} Problem(en): ${r.errors.join(' · ')} — ${parts.join(', ')}`);
+  return ok(`Import ok: ${parts.join(', ')}`); });
 export const importKickerInboxMatchdayAction = wrap(async (matchday, unlock = false) => { const round = await one("select * from rounds where type='regulaer' and matchday=$1", [matchday]); if (!round) return fail(`Keine Runde für Spieltag ${matchday}`); return importKickerInboxAction(round.id, unlock); });
 export const clearKickerInboxMatchdayAction = wrap(async (matchday) => { await requireAdmin(); await Inbox.clear(matchday); rev(); return ok(`Eingang Spieltag ${matchday} geleert`); });
 export const clearKickerInboxAction = wrap(async (roundId) => { await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); await Inbox.clear(round.matchday); rev(); return ok('Eingang geleert'); });
+export const setKickerSlugAction = wrap(async (pid, slug) => { await requireAdmin(); await ensureKickerColumns(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const v = String(slug || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').split('/')[0] || null;
+  await q('update players set kicker_slug=$1 where id=$2', [v, pid]); rev(); return ok(v ? `${p.name}: kicker-Kennung ${v}` : `${p.name}: kicker-Kennung entfernt`); });
 export const removePositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); if (pos === p.base_pos) return fail('Grundposition kann nicht entfernt werden'); await q('update players set extra_pos=array_remove(extra_pos,$1) where id=$2', [pos, pid]); rev(); return ok(`${p.name}: Zusatzposition ${pos} entfernt`); });
