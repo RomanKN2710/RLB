@@ -6,6 +6,7 @@ import { q, one, getSetting } from './db';
 import * as D from './data';
 import * as R from './rules';
 import { potential } from './potential';
+import { roundAwards } from './auszeichnungen';
 
 let ready = false;
 export async function ensureTable() { if (ready) return; await q(`create table if not exists reports (round_id int primary key references rounds(id), text text, facts jsonb, model text, created_at timestamptz not null default now(), sent_at timestamptz, sent_to text[], error text)`); ready = true; }
@@ -35,7 +36,8 @@ export async function buildFacts(roundId) {
       potential: pr ? { beste_elf: pr.picks.map(x => `${x.pos} ${b.players[x.pid]?.name}${entries[x.pid] ? '' : ' (sass auf der Bank)'}`), verpasste_kategoriensumme: pr.delta } : null,
       blog: postsM, transfers: transfers.filter(x => x.manager === b.managerName[m]).map(x => `${x.type} ${x.player_name} ${Number(x.price)}`) };
   });
-  return { runde: round.label, spieltag: round.matchday, spiele: matches, team_der_runde: round.tdr || [], spieler_des_tages: round.sdt || null,
+  const auszeichnungen = roundAwards(sd, i).map(a => ({ titel: a.title, manager: a.manager, begruendung: a.detail }));
+  return { runde: round.label, spieltag: round.matchday, auszeichnungen, spiele: matches, team_der_runde: round.tdr || [], spieler_des_tages: round.sdt || null,
     tabelle: table.map(t => ({ rang: t.rank, manager: b.managerName[t.manager_id], rangpunkte: t.total, ...Object.fromEntries(R.CATS.map(([c]) => [CATS_DE[c], t.tot[c]])) })),
     potential_tabelle: pot ? pot.potentialTable.map(t => ({ rang: t.rank, manager: b.managerName[t.manager_id], rangpunkte: t.total, echt_rang: pot.actual.find(x => x.manager_id === t.manager_id).rank })) : null,
     verpasste_rangpunkte: pot ? b.managerIds.map(m => ({ manager: b.managerName[m], echt: pot.alone[m].actualRp, allein_optimal: pot.alone[m].rp, verpasst: pot.alone[m].gain })) : null,
@@ -46,7 +48,7 @@ const SYSTEM = `Du schreibst den Spieltagsbericht für die "Rotissery League Bun
 
 Regeln:
 - Nur Fakten aus den gelieferten Daten verwenden. Nichts erfinden, keine Ereignisse behaupten, die nicht in den Daten stehen. Zahlen exakt übernehmen.
-- Aufbau: 1) "Die Lage": kurz, was der Spieltag gebracht hat. 2) "Das Rennen": Kommentar zur Gesamttabelle nach dieser Runde – wer führt und mit welchem Vorsprung, wer sind die Verfolger auf den Top-Plätzen, wer hat sich am meisten bewegt (Rang vorher → nachher), wer steht auf dem letzten Platz und wie weit ist es bis zum Anschluss; bei knappen Abständen das auch so benennen. 3) Ein Abschnitt je Manager (alle zehn, in Tabellenreihenfolge). 4) "Elf des Tages" (kurz). 5) "Ausblick" (zwei Sätze).
+- Aufbau: 1) "Die Lage": kurz, was der Spieltag gebracht hat. 2) "Das Rennen": Kommentar zur Gesamttabelle nach dieser Runde – wer führt und mit welchem Vorsprung, wer sind die Verfolger auf den Top-Plätzen, wer hat sich am meisten bewegt (Rang vorher → nachher), wer steht auf dem letzten Platz und wie weit ist es bis zum Anschluss; bei knappen Abständen das auch so benennen. 3) Ein Abschnitt je Manager (alle zehn, in Tabellenreihenfolge). 4) "Elf des Tages" (kurz). 5) "Auszeichnungen": die drei Auszeichnungen des Spieltags aus den Fakten (Titel, Manager, Begründung), je ein frecher Satz; gibt es keine, den Abschnitt weglassen. 6) "Ausblick" (zwei Sätze).
 - Je Manager: was seine Spieler geleistet haben (Tore, Vorlagen, Zu-null, Karten, Team der Runde), wer nicht gespielt hat, was die Aufstellung war (Wechsel laut Blog, späte Updates, keine Abgabe), und was die Potential-Daten sagen (beste Elf im Nachhinein, Bankspieler die gezündet hätten). Offensichtliche Fehler humorvoll kommentieren, aber niemanden blossstellen.
 - Länge: 700 bis 1000 Wörter. Markdown mit ## für die Abschnitte und ### je Manager. Fettdruck sparsam.
 - Keine Einleitung über dich selbst, keine Hinweise auf Datenquellen oder KI.`;

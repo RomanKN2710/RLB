@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { getUser } from '@/lib/auth';
 import * as D from '@/lib/data';
+import * as HOF from '@/lib/halloffame';
 import { q, getSetting } from '@/lib/db';
 import { postponedCandidates } from '@/lib/oldb';
 import { fmtDt } from '@/components/ui';
-import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, MatchdayImport } from './AdminTools';
+import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, MatchdayImport, HallOfFameAdmin } from './AdminTools';
 import { runPending, status as migrationStatus } from '@/lib/migrations';
 import { roundCheck } from '@/lib/rundencheck';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
@@ -15,7 +16,7 @@ import clubSlugs from '../../../db/seed/kicker-clubs.json';
 /* Admin-Übersicht: 1) Spieltage auswerten (Aufstellungen → kicker-Seiten → Import → abschliessen), 2) Kader & Pool, 3) Konten & Einstellungen, 4) Werkzeuge. */
 export default async function Admin() {
   const __u = await getUser(); if (!__u || __u.role !== 'admin') return null;
-  const justRun = await runPending(__u.id); const migrations = await migrationStatus();
+  const justRun = await runPending(__u.id); const migrations = await migrationStatus(); const hof = await HOF.all();
   const b = await D.base(); const rounds = await D.rounds(); const open = await D.openRound();
   const users = await q('select u.*, m.name as manager_name from users u left join managers m on m.id=u.manager_id order by u.role, u.name');
   const lastSync = await getSetting('last_sync'); const lastCur = await getSetting('last_sync_current');
@@ -78,6 +79,9 @@ export default async function Admin() {
           <Vorsaison list={vorsaison} managers={b.managers.map(m => m.name)} /></div>
       </div></details>
 
+    <details className="card"><summary><b>Hall of Fame</b> <span className="mini">Endstände vergangener Saisons erfassen</span></summary>
+      <div style={{ marginTop: 8 }}><HallOfFameAdmin seasons={hof.seasons} /></div>
+    </details>
     <details className="card"><summary><b>Werkzeuge</b> <span className="mini">Spielplan, Datenabzug, Blog-Archiv, einmalige Korrekturen</span></summary>
       <div className="stack" style={{ marginTop: 8 }}>
         <div className="row"><Sync /><span className="mini">Spielplan und Resultate (OpenLigaDB). Letzter Voll-Sync: {lastSync ? fmtDt(lastSync.at) : 'nie'} · aktuelle Spieltage: {lastCur ? fmtDt(lastCur.at) : 'nie'}. Beim Seitenaufruf wird automatisch aktualisiert (stündlich Resultate, täglich der ganze Spielplan).</span></div>

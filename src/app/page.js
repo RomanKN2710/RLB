@@ -3,7 +3,9 @@ import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import { CATS } from '@/lib/rules';
 import { fmtDt, fmtRp } from '@/components/ui';
-import Chart from '@/components/Chart';
+import Rennen from '@/components/Rennen';
+import Auszeichnungen from '@/components/Auszeichnungen';
+import { roundAwards } from '@/lib/auszeichnungen';
 
 export default async function Tabelle({ searchParams }) {
   const u = await requireUser();
@@ -16,8 +18,12 @@ export default async function Tabelle({ searchParams }) {
   const prev = sd.history.length > 1 ? sd.history[sd.history.length - 2].table : null;
   const prevRank = {}; if (prev) prev.forEach(r => prevRank[r.manager_id] = r.rank);
   const name = id => sd.base.managerName[id];
+  const awards = roundAwards(sd, sd.upto.length - 1);
   const rt = curData.totals; const rr = sd.base.managerIds.map(m => ({ m, t: rt[m] })).sort((a, b) => b.t.punkte - a.t.punkte);
   return (<>
+    <div className="card"><div className="row between"><div><div className="eyebrow">Das Rennen</div><h2>Wer holt den Titel?</h2></div><Link className="btn sec sm" href="/prognose">Saisonprognose →</Link></div>
+      <Rennen history={sd.history.map(h => ({ label: h.round.label.replace('Spieltag ', 'ST '), table: h.table }))} names={sd.base.managerName} me={u.manager_id} /></div>
+    <div className="card"><div className="eyebrow">{cur.label}</div><h2>Auszeichnungen des Spieltags</h2><Auszeichnungen awards={awards} me={u.manager_id} /><p className="mini" style={{ marginTop: 8 }}>Drei Titel pro Runde, nur für Leistungen, die klar aus dem Feld herausragen. Saisonzähler in der <Link href="/hall-of-fame">Hall of Fame</Link>.</p></div>
     <div className="card">
       <div className="row between"><div><div className="eyebrow">Rangliste</div><h2>Stand nach {cur.label} {cur.status === 'final' ? <span className="pill ok">final</span> : <span className="pill open">vorläufig</span>}</h2></div>
         <form className="row"><label className="small">Stand nach <select name="r" defaultValue={sel}>{played.map(r => <option key={r.id} value={r.number}>{r.label}{r.status !== 'final' ? ' (vorläufig)' : ''}</option>)}</select></label><button className="sec sm">Anzeigen</button></form></div>
@@ -36,7 +42,6 @@ export default async function Tabelle({ searchParams }) {
           {curData.corrections.length > 0 && <><b>Korrekturen</b><span>{curData.corrections.map(k => <div key={k.id}>{name(k.manager_id)}: {k.text}</div>)}</span></>}</div>
         <p className="mini"><Link href={`/runde/${cur.id}`}>Details: Spiele, Aufstellungen, Gebote →</Link></p>
       </div>
-      <div className="card"><div className="eyebrow">Verlauf</div><h2>Total Rangpunkte pro Runde</h2><Chart history={sd.history.map(h => ({ label: h.round.label.replace('Spieltag ', 'ST '), table: h.table }))} names={sd.base.managerName} me={u.manager_id} /></div>
     </div>
   </>);
 }

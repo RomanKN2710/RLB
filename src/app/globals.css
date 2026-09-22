@@ -51,3 +51,6 @@ details summary{cursor:pointer;font-weight:600}
 .dd-item{padding:6px 10px;cursor:pointer;font-size:13px}.dd-item:hover{background:var(--line)}
 
 .bericht h2{margin-top:18px}.bericht h3{margin:16px 0 4px;color:var(--komm)}.bericht p{margin:6px 0;line-height:1.5}.bericht ul{margin:4px 0 8px 18px}
+.awards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.award{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--surface2)}.award.me{border-color:var(--accent)}.award-icon{font-size:26px;line-height:1}.award-title{font:600 15px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--komm)}.award-name{font-weight:600;font-size:15px}
+.prog-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;border:1px solid var(--line);min-width:160px}.prog-bar span{display:block;height:100%}
+.hof-champ{display:flex;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}.hof-season{font:700 22px "Barlow Condensed",sans-serif;min-width:90px}.hof-name{font-weight:600;font-size:16px}

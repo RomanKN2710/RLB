@@ -12,6 +12,7 @@ import * as Blog from '@/lib/blog-archiv';
 import { waitUntil } from '@vercel/functions';
 import { createReport as berichtCreate } from '@/lib/bericht';
 import * as Inbox from '@/lib/kicker-inbox';
+import * as HOF from '@/lib/halloffame';
 
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
 const fail = msg => ({ ok: false, msg });
@@ -376,3 +377,8 @@ export const clearKickerInboxAction = wrap(async (roundId) => { await requireAdm
 export const setKickerSlugAction = wrap(async (pid, slug) => { await requireAdmin(); await ensureKickerColumns(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const v = String(slug || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').split('/')[0] || null;
   await q('update players set kicker_slug=$1 where id=$2', [v, pid]); rev(); return ok(v ? `${p.name}: kicker-Kennung ${v}` : `${p.name}: kicker-Kennung entfernt`); });
 export const removePositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); if (pos === p.base_pos) return fail('Grundposition kann nicht entfernt werden'); await q('update players set extra_pos=array_remove(extra_pos,$1) where id=$2', [pos, pid]); rev(); return ok(`${p.name}: Zusatzposition ${pos} entfernt`); });
+
+/* Hall of Fame: Endstand einer vergangenen Saison eintragen (Zeilen «1 Dani 55.5»), ersetzt die Saison komplett. */
+export const hofImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const season = String(fd.get('season') || '').trim(); const n = await HOF.importSeason(season, String(fd.get('text') || ''), String(fd.get('note') || '').trim());
+  await audit(a.id, 'hof_import', { season, n }); revalidatePath('/hall-of-fame'); revalidatePath('/admin'); return ok(`Saison ${season}: ${n} Plätze gespeichert`); });
+export const hofDeleteAction = wrap(async (season) => { const a = await requireAdmin(); await HOF.deleteSeason(season); await audit(a.id, 'hof_delete', { season }); revalidatePath('/hall-of-fame'); revalidatePath('/admin'); return ok('Saison gelöscht'); });

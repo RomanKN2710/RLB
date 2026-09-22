@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { importKickerInboxMatchdayAction, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction } from '@/actions';
+import { importKickerInboxMatchdayAction, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction, hofImportAction, hofDeleteAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -26,3 +26,11 @@ export function PoolPaste() { const [s, a] = useFormState(poolPasteAction, null)
 /* Import-Knopf je Spieltag in der Übersicht (Eingang vom Handy); Sperren werden dabei aufgehoben, kicker ist die Quelle */
 export function MatchdayImport({ matchday }) { const { msg, pending, run } = useRun();
   return <span className="row" style={{ gap: 4 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importKickerInboxMatchdayAction(matchday, true))}>{pending ? 'importiert…' : 'Importieren'}</button>{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
+
+export function HallOfFameAdmin({ seasons }) { const [s, a] = useFormState(hofImportAction, null); const { msg, pending, run } = useRun(); const [arm, setArm] = useState(null);
+  return <div className="stack">
+    <form action={a} className="stack"><div className="row"><label className="small">Saison <input name="season" placeholder="2025/26" required style={{ width: 90 }} /></label><label className="small">Notiz <input name="note" placeholder="z. B. Quelle: Excel Runde 34" style={{ width: 260 }} /></label></div>
+      <textarea name="text" rows={6} placeholder={'Endstand, eine Zeile pro Platz:\n1 Dani 55.5\n2 Mark 55\n3 Roman 45\n… (Rangpunkte optional; ohne Rang gilt die Reihenfolge)'} style={{ width: '100%', maxWidth: 520 }} required />
+      <div className="row"><button className="komm sm">Saison speichern</button><Msg state={s} /></div></form>
+    {seasons.length > 0 && <div className="mini">Erfasst: {seasons.map(x => <span key={x.season} style={{ marginRight: 10 }}>{x.season} ({x.rows.length} Plätze, Meister {x.rows.find(r => r.rank === 1)?.manager}) {arm === x.season ? <><button className="danger sm" disabled={pending} onClick={() => { run(() => hofDeleteAction(x.season)); setArm(null); }}>wirklich löschen</button> <button className="sec sm" onClick={() => setArm(null)}>abbrechen</button></> : <button className="sec sm" onClick={() => setArm(x.season)}>löschen</button>}</span>)}{msg && <span className="mini">{msg.msg}</span>}</div>}
+  </div>; }
