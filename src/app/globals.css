@@ -61,14 +61,21 @@ details summary{cursor:pointer;font-weight:600}
 .intro-scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:opacity .45s ease}
 .intro.emblem .intro-scene,.intro.leave .intro-scene{opacity:0;pointer-events:none}
 .scene-svg{width:min(96vw,1200px);height:auto;display:block;overflow:visible}
-.sc-player{animation:sc-run .7s cubic-bezier(.3,.8,.4,1) forwards}
-.sc-leg{transform-origin:365px 480px;transform:rotate(42deg);animation:sc-kick .3s cubic-bezier(.3,1.5,.5,1) .85s forwards}
-.sc-ball{transform-origin:center;animation:sc-shot .55s cubic-bezier(.2,.6,.4,1) 1.0s forwards}
-.sc-net{transform-origin:1250px 560px;animation:sc-net .5s ease-out 1.55s}
-.sc-tor{opacity:0;transform-origin:870px 130px;transform:scale(.4);animation:sc-tor .45s cubic-bezier(.2,1.5,.4,1) 1.6s forwards}
-@keyframes sc-run{from{transform:translate(-500px,60px) scale(.82)}to{transform:translate(120px,60px) scale(.82)}}
+.sc-stride-a{animation:sc-stepa .32s steps(1) 4 forwards}.sc-stride-b{opacity:0;animation:sc-stepb .32s steps(1) 4 forwards}
+.sc-runner{animation:sc-dribble 1.4s cubic-bezier(.3,.7,.5,1) forwards,sc-hide .01s linear 2.5s forwards}
+.sc-volley{opacity:0;animation:sc-show .01s linear 2.5s forwards}
+.sc-leg{transform-origin:365px 480px;transform:rotate(42deg);animation:sc-kick .28s cubic-bezier(.3,1.5,.5,1) 2.55s forwards}
+.sc-mate-leg{transform-origin:530px 500px;animation:sc-pass .4s ease-in-out 1.85s}
+.sc-ball{animation:sc-ball 3.3s linear forwards}
+.sc-net{transform-origin:1250px 560px;animation:sc-net .5s ease-out 3.05s}
+.sc-tor{opacity:0;transform-origin:870px 130px;transform:scale(.4);animation:sc-tor .45s cubic-bezier(.2,1.5,.4,1) 3.1s forwards}
+@keyframes sc-dribble{from{transform:translate(-520px,190px)}to{transform:translate(120px,190px)}}
+@keyframes sc-stepa{0%{opacity:1}50%{opacity:0}100%{opacity:1}}
+@keyframes sc-stepb{0%{opacity:0}50%{opacity:1}100%{opacity:0}}
+@keyframes sc-hide{to{opacity:0}}
+@keyframes sc-show{to{opacity:1}}
 @keyframes sc-kick{to{transform:rotate(0)}}
-@keyframes sc-shot{to{transform:translate(400px,-40px) rotate(720deg)}}
+@keyframes sc-pass{50%{transform:rotate(-38deg)}}
 @keyframes sc-net{30%{transform:scale(1.07) translateX(18px)}100%{transform:none}}
 @keyframes sc-tor{to{opacity:1;transform:scale(1)}}
 .intro-box{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:scale(.6)}
