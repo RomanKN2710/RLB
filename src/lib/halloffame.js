@@ -46,9 +46,9 @@ export async function all() {
   seasons.forEach(s => { s.n = s.rows.length; s.last = Math.max(...s.rows.map(r => r.rank)); s.champions = s.rows.filter(r => r.rank === 1).map(r => r.manager); });
   const chrono = [...seasons].sort((a, b) => seasonKey(a.season) - seasonKey(b.season));
   const M = {};
-  const get = m => M[m] ||= { manager: m, seasons: 0, titles: 0, second: 0, third: 0, podium: 0, last: 0, rankSum: 0, points: 0, first: null, latest: null, titleSeasons: [], ranks: [] };
+  const get = m => M[m] ||= { manager: m, seasons: 0, titles: 0, second: 0, third: 0, podium: 0, last: 0, bottom3: 0, rankSum: 0, points: 0, first: null, latest: null, titleSeasons: [], ranks: [] };
   for (const s of chrono) for (const r of s.rows) { const x = get(r.manager); x.seasons++; x.rankSum += r.rank; x.ranks.push([s.season, r.rank]);
-    if (r.rank === 1) { x.titles++; x.titleSeasons.push(s.season); } if (r.rank === 2) x.second++; if (r.rank === 3) x.third++; if (r.rank <= 3) x.podium++; if (r.rank === s.last && s.n >= 6) x.last++;
+    if (r.rank === 1) { x.titles++; x.titleSeasons.push(s.season); } if (r.rank === 2) x.second++; if (r.rank === 3) x.third++; if (r.rank <= 3) x.podium++; if (r.rank === s.last && s.n >= 6) x.last++; if (s.n >= 6 && r.rank >= s.last - 2) x.bottom3++;
     x.points += F1[r.rank - 1] || 0; x.first = x.first || s.season; x.latest = s.season; }
   const list = Object.values(M).map(x => ({ ...x, avgRank: x.rankSum / x.seasons }));
   // Dynastie: längste Serie aufeinanderfolgender Titel; Durststrecke: längste Lücke zwischen zwei Titeln
@@ -65,6 +65,7 @@ export async function all() {
   const db = top('seasons'); if (db) add('🏃', 'Dauerbrenner', db, `${db.seasons} von ${chrono.length} Saisons dabei, seit ${db.first}`);
   // Stehaufmännchen: grösster Sprung nach oben zwischen zwei aufeinanderfolgenden Saisons
   for (const x of list) { x.climb = 0; for (let i = 1; i < x.ranks.length; i++) { const [sa, ra] = x.ranks[i - 1], [sb, rb] = x.ranks[i]; if (seasonKey(sb) - seasonKey(sa) === 1 && ra - rb > x.climb) { x.climb = ra - rb; x.climbText = `${sa}: ${ra}. → ${sb}: ${rb}.`; } } }
+  const ab = [...list].filter(x => x.bottom3 > 0).sort((a, b) => b.bottom3 - a.bottom3 || b.seasons - a.seasons)[0]; if (ab) add('🪂', 'Abstiegskandidat', ab, `${ab.bottom3}× in den unteren drei Rängen`);
   const st = [...list].filter(x => x.climb >= 3).sort((a, b) => b.climb - a.climb || b.titles - a.titles)[0]; if (st) add('🧗', 'Stehaufmännchen', st, `${st.climb} Plätze rauf in einem Jahr (${st.climbText})`);
   const ko = [...regulars].sort((a, b) => a.avgRank - b.avgRank)[0]; if (ko) add('🎯', 'Konstanz', ko, `Ø Platz ${ko.avgRank.toFixed(1)} über ${ko.seasons} Saisons`);
   const cb = [...list].filter(x => x.gap >= 5).sort((a, b) => b.gap - a.gap)[0]; if (cb) add('🔄', 'Comeback', cb, `${cb.gap} Jahre zwischen zwei Titeln`);
