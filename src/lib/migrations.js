@@ -9,6 +9,8 @@ import { applyGeboteST4 } from './korrektur-st4-gebote';
 import { applyKariusRevert } from './korrektur-karius';
 import { applyArbiST4 } from './korrektur-arbi-st4';
 import statsSeed from '../../db/seed/kicker-stats-st1-3.json';
+import ewigeSeed from '../../db/seed/ewige-rangliste.json';
+import * as HOF from './halloffame';
 
 export const STEPS = [
   { key: 'korrektur_20260915', title: 'Datenkorrektur 15.09.2026 (Excel/kicker-Abgleich Spieltag 1–3)', run: applyKorrektur20260915 },
@@ -17,6 +19,7 @@ export const STEPS = [
   { key: 'gebote_st4', title: 'Gebote Spieltag 4 laut Blog (Karius → Pädi, Fellhauer → René, Konstantelias → Mike) und Mikes Aufstellung Spieltag 4', run: applyGeboteST4 },
   { key: 'karius_rene_revert', title: 'Karius Spieltag 4: Zuschlag an Pädi, Renés Kauf zurückgenommen, kicker-Werte neu eingelesen', run: applyKariusRevert },
   { key: 'arbi_st4_scally', title: 'Arbi Spieltag 4: Wechsel Scally → Hlozek ungültig, Scally spielt, Lemperle im Sturm (Entscheid Admins 21.09.2026)', run: applyArbiST4 },
+  { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'bankwerte_st1_3', title: 'kicker-Werte aller Kaderspieler Spieltag 1–3 (Grundlage der Potential-Tabelle)', run: async userId => { const log = await applyStatsSeed(statsSeed, await base()); await setSetting('bankwerte_st1_3', { at: new Date().toISOString(), log }); return { log }; } },
 ];
 

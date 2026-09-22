@@ -1,0 +1,1281 @@
+[
+{
+"season": "1999/00",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Jürg"
+},
+{
+"rank": 3,
+"manager": "Lori"
+},
+{
+"rank": 4,
+"manager": "Pädi"
+},
+{
+"rank": 5,
+"manager": "Pat"
+},
+{
+"rank": 6,
+"manager": "Dean"
+},
+{
+"rank": 7,
+"manager": "Mäsi"
+},
+{
+"rank": 8,
+"manager": "Marco"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Klaus"
+}
+]
+},
+{
+"season": "2000/01",
+"rows": [
+{
+"rank": 1,
+"manager": "Pat"
+},
+{
+"rank": 2,
+"manager": "Mark"
+},
+{
+"rank": 3,
+"manager": "Mäsi"
+},
+{
+"rank": 4,
+"manager": "Pädi"
+},
+{
+"rank": 5,
+"manager": "Beat"
+},
+{
+"rank": 6,
+"manager": "Dani"
+},
+{
+"rank": 7,
+"manager": "Lori"
+},
+{
+"rank": 8,
+"manager": "Dean"
+},
+{
+"rank": 9,
+"manager": "Marco"
+},
+{
+"rank": 10,
+"manager": "Jürg"
+}
+]
+},
+{
+"season": "2001/02",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Pat"
+},
+{
+"rank": 3,
+"manager": "Mäsi"
+},
+{
+"rank": 4,
+"manager": "Beat"
+},
+{
+"rank": 5,
+"manager": "Dean"
+},
+{
+"rank": 6,
+"manager": "Pädi"
+},
+{
+"rank": 7,
+"manager": "Dani"
+},
+{
+"rank": 8,
+"manager": "Jürg"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Marco"
+}
+]
+},
+{
+"season": "2002/03",
+"rows": [
+{
+"rank": 1,
+"manager": "Andy"
+},
+{
+"rank": 2,
+"manager": "Mäsi"
+},
+{
+"rank": 3,
+"manager": "Lori"
+},
+{
+"rank": 4,
+"manager": "Dean"
+},
+{
+"rank": 5,
+"manager": "Jürg"
+},
+{
+"rank": 6,
+"manager": "Pat"
+},
+{
+"rank": 7,
+"manager": "Mark"
+},
+{
+"rank": 8,
+"manager": "Pädi"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Dani"
+}
+]
+},
+{
+"season": "2003/04",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Dani"
+},
+{
+"rank": 3,
+"manager": "Mäsi"
+},
+{
+"rank": 4,
+"manager": "Dean"
+},
+{
+"rank": 5,
+"manager": "Andy"
+},
+{
+"rank": 6,
+"manager": "Beat"
+},
+{
+"rank": 7,
+"manager": "Lori"
+},
+{
+"rank": 8,
+"manager": "Pädi"
+},
+{
+"rank": 9,
+"manager": "Jürg"
+},
+{
+"rank": 10,
+"manager": "Pat"
+}
+]
+},
+{
+"season": "2004/05",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 1,
+"manager": "Mäsi"
+},
+{
+"rank": 3,
+"manager": "Dani"
+},
+{
+"rank": 4,
+"manager": "Jürg"
+},
+{
+"rank": 5,
+"manager": "Pat"
+},
+{
+"rank": 6,
+"manager": "Beat"
+},
+{
+"rank": 7,
+"manager": "Lori"
+},
+{
+"rank": 8,
+"manager": "Pädi"
+},
+{
+"rank": 9,
+"manager": "Dean"
+},
+{
+"rank": 10,
+"manager": "Andy"
+}
+]
+},
+{
+"season": "2005/06",
+"rows": [
+{
+"rank": 1,
+"manager": "Dean"
+},
+{
+"rank": 2,
+"manager": "Mäsi"
+},
+{
+"rank": 3,
+"manager": "Mark"
+},
+{
+"rank": 4,
+"manager": "Dani"
+},
+{
+"rank": 5,
+"manager": "Pädi"
+},
+{
+"rank": 6,
+"manager": "Pat"
+},
+{
+"rank": 7,
+"manager": "Lori"
+},
+{
+"rank": 8,
+"manager": "Jürg"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Andy"
+}
+]
+},
+{
+"season": "2006/07",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Mäsi"
+},
+{
+"rank": 2,
+"manager": "Dani"
+},
+{
+"rank": 4,
+"manager": "Dean"
+},
+{
+"rank": 5,
+"manager": "Beat"
+},
+{
+"rank": 6,
+"manager": "Pat"
+},
+{
+"rank": 7,
+"manager": "Jürg"
+},
+{
+"rank": 8,
+"manager": "Pädi"
+},
+{
+"rank": 9,
+"manager": "Lori"
+}
+]
+},
+{
+"season": "2007/08",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Dani"
+},
+{
+"rank": 3,
+"manager": "Mäsi"
+},
+{
+"rank": 4,
+"manager": "Röfe"
+},
+{
+"rank": 5,
+"manager": "Dean"
+},
+{
+"rank": 6,
+"manager": "Pat"
+},
+{
+"rank": 7,
+"manager": "Ralph"
+},
+{
+"rank": 8,
+"manager": "Lori"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Pädi"
+}
+]
+},
+{
+"season": "2008/09",
+"rows": [
+{
+"rank": 1,
+"manager": "Pat"
+},
+{
+"rank": 2,
+"manager": "Lori"
+},
+{
+"rank": 3,
+"manager": "Dean"
+},
+{
+"rank": 4,
+"manager": "Mark"
+},
+{
+"rank": 5,
+"manager": "Mäsi"
+},
+{
+"rank": 6,
+"manager": "Pädi"
+},
+{
+"rank": 7,
+"manager": "Ralph"
+},
+{
+"rank": 8,
+"manager": "Röfe"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Dani"
+}
+]
+},
+{
+"season": "2009/10",
+"rows": [
+{
+"rank": 1,
+"manager": "Pat"
+},
+{
+"rank": 2,
+"manager": "Röfe"
+},
+{
+"rank": 3,
+"manager": "Mark"
+},
+{
+"rank": 4,
+"manager": "Mäsi"
+},
+{
+"rank": 5,
+"manager": "Spanillos"
+},
+{
+"rank": 6,
+"manager": "Pädi"
+},
+{
+"rank": 7,
+"manager": "Dani"
+},
+{
+"rank": 8,
+"manager": "Beat"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Dean"
+}
+]
+},
+{
+"season": "2010/11",
+"rows": [
+{
+"rank": 1,
+"manager": "Pädi"
+},
+{
+"rank": 2,
+"manager": "Mäsi"
+},
+{
+"rank": 3,
+"manager": "Nils"
+},
+{
+"rank": 4,
+"manager": "Röfe"
+},
+{
+"rank": 5,
+"manager": "Lori"
+},
+{
+"rank": 6,
+"manager": "Mark"
+},
+{
+"rank": 7,
+"manager": "J&P"
+},
+{
+"rank": 8,
+"manager": "Beat"
+},
+{
+"rank": 9,
+"manager": "Dani"
+},
+{
+"rank": 10,
+"manager": "Dean"
+},
+{
+"rank": 11,
+"manager": "Spanillos"
+},
+{
+"rank": 12,
+"manager": "Benji"
+}
+]
+},
+{
+"season": "2011/12",
+"rows": [
+{
+"rank": 1,
+"manager": "Pädi"
+},
+{
+"rank": 2,
+"manager": "Mark"
+},
+{
+"rank": 3,
+"manager": "Dean"
+},
+{
+"rank": 4,
+"manager": "Lori"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "Beat"
+},
+{
+"rank": 7,
+"manager": "Spanillos"
+},
+{
+"rank": 8,
+"manager": "Mäsi"
+},
+{
+"rank": 9,
+"manager": "Röfe"
+},
+{
+"rank": 10,
+"manager": "Nils"
+},
+{
+"rank": 11,
+"manager": "J&P"
+},
+{
+"rank": 12,
+"manager": "Benji"
+}
+]
+},
+{
+"season": "2012/13",
+"rows": [
+{
+"rank": 1,
+"manager": "Dean"
+},
+{
+"rank": 2,
+"manager": "Mark"
+},
+{
+"rank": 3,
+"manager": "Nils"
+},
+{
+"rank": 4,
+"manager": "Mäsi"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "Pädi"
+},
+{
+"rank": 7,
+"manager": "Röfe"
+},
+{
+"rank": 8,
+"manager": "Benji"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Spanillos"
+},
+{
+"rank": 11,
+"manager": "Pat"
+},
+{
+"rank": 12,
+"manager": "Beat"
+}
+]
+},
+{
+"season": "2013/14",
+"rows": [
+{
+"rank": 1,
+"manager": "Pädi"
+},
+{
+"rank": 2,
+"manager": "Dani"
+},
+{
+"rank": 3,
+"manager": "Mark"
+},
+{
+"rank": 4,
+"manager": "Nils"
+},
+{
+"rank": 5,
+"manager": "Röfe"
+},
+{
+"rank": 6,
+"manager": "Dean"
+},
+{
+"rank": 7,
+"manager": "Lori"
+},
+{
+"rank": 8,
+"manager": "Roman"
+},
+{
+"rank": 9,
+"manager": "Beat"
+},
+{
+"rank": 10,
+"manager": "Mäsi"
+},
+{
+"rank": 11,
+"manager": "Pat"
+},
+{
+"rank": 12,
+"manager": "Spanillos"
+}
+]
+},
+{
+"season": "2014/15",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Dean"
+},
+{
+"rank": 3,
+"manager": "Röfe"
+},
+{
+"rank": 3,
+"manager": "Pädi"
+},
+{
+"rank": 5,
+"manager": "Lori"
+},
+{
+"rank": 5,
+"manager": "Beat"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 8,
+"manager": "Nils"
+},
+{
+"rank": 9,
+"manager": "Arbi"
+},
+{
+"rank": 10,
+"manager": "Mäsi"
+},
+{
+"rank": 11,
+"manager": "Roman"
+}
+]
+},
+{
+"season": "2015/16",
+"rows": [
+{
+"rank": 1,
+"manager": "Arbi"
+},
+{
+"rank": 1,
+"manager": "Mäsi"
+},
+{
+"rank": 3,
+"manager": "Pädi"
+},
+{
+"rank": 4,
+"manager": "Dani"
+},
+{
+"rank": 5,
+"manager": "Lori"
+},
+{
+"rank": 6,
+"manager": "Mark"
+},
+{
+"rank": 7,
+"manager": "Beat"
+},
+{
+"rank": 7,
+"manager": "David"
+},
+{
+"rank": 9,
+"manager": "Röfe"
+},
+{
+"rank": 10,
+"manager": "Roman"
+},
+{
+"rank": 11,
+"manager": "Nils"
+},
+{
+"rank": 12,
+"manager": "Dean"
+}
+]
+},
+{
+"season": "2016/17",
+"rows": [
+{
+"rank": 1,
+"manager": "Röfe"
+},
+{
+"rank": 2,
+"manager": "Dean"
+},
+{
+"rank": 3,
+"manager": "Pädi"
+},
+{
+"rank": 4,
+"manager": "Lori"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "Arbi"
+},
+{
+"rank": 7,
+"manager": "Mäsi"
+},
+{
+"rank": 8,
+"manager": "Mark"
+},
+{
+"rank": 8,
+"manager": "David"
+},
+{
+"rank": 10,
+"manager": "Roman"
+},
+{
+"rank": 11,
+"manager": "Beat+Colin"
+},
+{
+"rank": 12,
+"manager": "Nils"
+}
+]
+},
+{
+"season": "2017/18",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "Röfe"
+},
+{
+"rank": 3,
+"manager": "Lori"
+},
+{
+"rank": 4,
+"manager": "Hugo"
+},
+{
+"rank": 5,
+"manager": "René"
+},
+{
+"rank": 6,
+"manager": "David"
+},
+{
+"rank": 7,
+"manager": "Pädi"
+},
+{
+"rank": 8,
+"manager": "Dani"
+},
+{
+"rank": 9,
+"manager": "Dean"
+},
+{
+"rank": 10,
+"manager": "Arbi"
+},
+{
+"rank": 11,
+"manager": "Markus"
+}
+]
+},
+{
+"season": "2018/19",
+"rows": [
+{
+"rank": 1,
+"manager": "Hugo"
+},
+{
+"rank": 2,
+"manager": "Dean"
+},
+{
+"rank": 2,
+"manager": "Röfe"
+},
+{
+"rank": 4,
+"manager": "René"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "David"
+},
+{
+"rank": 7,
+"manager": "Mark"
+},
+{
+"rank": 8,
+"manager": "Lori"
+},
+{
+"rank": 9,
+"manager": "Arbi"
+},
+{
+"rank": 10,
+"manager": "Pädi"
+}
+]
+},
+{
+"season": "2019/20",
+"rows": [
+{
+"rank": 1,
+"manager": "David"
+},
+{
+"rank": 2,
+"manager": "Pädi"
+},
+{
+"rank": 3,
+"manager": "Mark"
+},
+{
+"rank": 4,
+"manager": "Dani"
+},
+{
+"rank": 5,
+"manager": "René"
+},
+{
+"rank": 6,
+"manager": "Röfe"
+},
+{
+"rank": 7,
+"manager": "Dean"
+},
+{
+"rank": 8,
+"manager": "Hugo"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Arbi"
+}
+]
+},
+{
+"season": "2020/21",
+"rows": [
+{
+"rank": 1,
+"manager": "Dean"
+},
+{
+"rank": 2,
+"manager": "Arbi"
+},
+{
+"rank": 3,
+"manager": "René"
+},
+{
+"rank": 4,
+"manager": "David"
+},
+{
+"rank": 5,
+"manager": "Mark"
+},
+{
+"rank": 6,
+"manager": "Pädi"
+},
+{
+"rank": 7,
+"manager": "Roman"
+},
+{
+"rank": 8,
+"manager": "Röfe"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Dani"
+},
+{
+"rank": 11,
+"manager": "Hugo"
+}
+]
+},
+{
+"season": "2021/22",
+"rows": [
+{
+"rank": 1,
+"manager": "Pädi"
+},
+{
+"rank": 2,
+"manager": "Arbi"
+},
+{
+"rank": 3,
+"manager": "Röfe"
+},
+{
+"rank": 4,
+"manager": "Mark"
+},
+{
+"rank": 5,
+"manager": "Dean"
+},
+{
+"rank": 6,
+"manager": "Dani"
+},
+{
+"rank": 7,
+"manager": "René"
+},
+{
+"rank": 8,
+"manager": "Lori"
+},
+{
+"rank": 9,
+"manager": "David"
+},
+{
+"rank": 10,
+"manager": "Roman"
+}
+]
+},
+{
+"season": "2022/23",
+"rows": [
+{
+"rank": 1,
+"manager": "Arbi"
+},
+{
+"rank": 2,
+"manager": "Pädi"
+},
+{
+"rank": 3,
+"manager": "Dani"
+},
+{
+"rank": 4,
+"manager": "René"
+},
+{
+"rank": 5,
+"manager": "Lori"
+},
+{
+"rank": 6,
+"manager": "Dean"
+},
+{
+"rank": 7,
+"manager": "David"
+},
+{
+"rank": 7,
+"manager": "Röfe"
+},
+{
+"rank": 9,
+"manager": "Mark"
+},
+{
+"rank": 10,
+"manager": "Roman"
+}
+]
+},
+{
+"season": "2023/24",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "David"
+},
+{
+"rank": 3,
+"manager": "Pädi"
+},
+{
+"rank": 4,
+"manager": "Roman"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "Arbi"
+},
+{
+"rank": 7,
+"manager": "Röfe"
+},
+{
+"rank": 8,
+"manager": "René"
+},
+{
+"rank": 9,
+"manager": "Lori"
+},
+{
+"rank": 10,
+"manager": "Dean"
+}
+]
+},
+{
+"season": "2024/25",
+"rows": [
+{
+"rank": 1,
+"manager": "Mark"
+},
+{
+"rank": 2,
+"manager": "David"
+},
+{
+"rank": 3,
+"manager": "Roman"
+},
+{
+"rank": 4,
+"manager": "Röfe"
+},
+{
+"rank": 4,
+"manager": "Pädi"
+},
+{
+"rank": 6,
+"manager": "Dani"
+},
+{
+"rank": 7,
+"manager": "Mike"
+},
+{
+"rank": 8,
+"manager": "Lazar"
+},
+{
+"rank": 9,
+"manager": "René"
+},
+{
+"rank": 10,
+"manager": "Dean"
+},
+{
+"rank": 11,
+"manager": "Arbi"
+}
+]
+},
+{
+"season": "2025/26",
+"rows": [
+{
+"rank": 1,
+"manager": "Arbi"
+},
+{
+"rank": 2,
+"manager": "Mark"
+},
+{
+"rank": 3,
+"manager": "David"
+},
+{
+"rank": 4,
+"manager": "René"
+},
+{
+"rank": 5,
+"manager": "Dani"
+},
+{
+"rank": 6,
+"manager": "Röfe"
+},
+{
+"rank": 7,
+"manager": "Roman"
+},
+{
+"rank": 8,
+"manager": "Lazar"
+},
+{
+"rank": 10,
+"manager": "Giannicolas"
+},
+{
+"rank": 10,
+"manager": "Mike"
+},
+{
+"rank": 11,
+"manager": "Pädi"
+}
+]
+}
+]

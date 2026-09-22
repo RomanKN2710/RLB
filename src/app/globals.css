@@ -76,3 +76,10 @@ details summary{cursor:pointer;font-weight:600}
 @keyframes intro-drop{to{opacity:1;transform:translateY(0)}}
 @media (prefers-reduced-motion:reduce){.intro-scene{display:none}.intro *{animation-duration:.01s !important;animation-delay:0s !important}}
 .brand{display:flex;align-items:center;gap:10px}.brand .rlb-logo{flex:none}.logo-btn{background:none;border:0;padding:0;cursor:pointer;line-height:0;border-radius:4px}.logo-btn:hover{box-shadow:0 0 0 3px var(--accent-soft)}
+/* Hall of Fame */
+.hof-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:8px}
+.hof-tile{border:1px solid var(--line);border-radius:8px;padding:14px 16px;background:linear-gradient(160deg,var(--surface2),var(--surface));position:relative;overflow:hidden}
+.hof-tile.me{border-color:var(--accent)}.hof-tile-icon{font-size:34px;line-height:1}.hof-tile-title{font:700 13px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.12em;color:var(--komm);margin-top:6px}.hof-tile-name{font:700 30px "Barlow Condensed",sans-serif;line-height:1.1}
+.hof-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.hof-badge{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 8px;font-size:13px;background:var(--surface)}.hof-badge.me{border-color:var(--accent)}
+.hof-chrono{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px}.hof-chip{flex:none;min-width:96px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;text-align:center;background:var(--surface)}.hof-chip.rep{border-color:var(--komm);background:var(--komm-soft)}.hof-chip.live{border-color:var(--accent);background:var(--accent-soft)}.hof-chip.me{box-shadow:inset 0 -3px var(--accent)}
+.hof-chip-season{font-size:11px;color:var(--muted);letter-spacing:.06em}.hof-chip-name{font:700 16px "Barlow Condensed",sans-serif;text-transform:uppercase}
