@@ -5,6 +5,8 @@ import { logoutAction } from '@/actions';
 import { maybeSync } from '@/lib/oldb';
 import { openRound } from '@/lib/data';
 import { fmtDt } from '@/components/ui';
+import Intro from '@/components/Intro';
+import RlbLogo from '@/components/RlbLogo';
 
 export const metadata = { title: 'RLB Managerspiel 26/27', description: 'Rotissery League Bundesliga' };
 export const dynamic = 'force-dynamic';
@@ -16,9 +18,10 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="de"><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" /></head>
       <body>
+        {user && <Intro line={open ? `${open.label} offen · Deadline ${fmtDt(open.deadline)}` : null} />}
         <header>
           <div className="bar">
-            <div className="brand"><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div>
+            <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
             <div className="grow" />
             {open && <span className="mini">Offen: <b>{open.label}</b> · Deadline {fmtDt(open.deadline)}</span>}
             {user && <span className="small">{user.name}{user.manager_name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}
