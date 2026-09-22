@@ -1,5 +1,5 @@
 /* Hall of Fame: Endstände aller Saisons seit 1999/2000 (ewige Rangliste aus dem Excel plus spätere Saisons), Meister,
-   ewige Tabelle und Ehrungen (Rekordmeister, Podestkönig, Dynastie, Dauerbrenner, Rote Laterne …). */
+   ewige Tabelle und Ehrungen (Rekordmeister, Podestkönig, Dynastie, Dauerbrenner, Stehaufmännchen …). */
 import { q } from './db';
 
 let ready = false;
@@ -63,7 +63,9 @@ export async function all() {
   const cur = chrono[chrono.length - 1]; if (cur) honours.push({ icon: '🛡️', title: 'Titelverteidiger', manager: cur.champions.join(' & '), text: `Meister ${cur.season}` });
   const dy = [...list].filter(x => x.streak >= 2).sort((a, b) => b.streak - a.streak)[0]; if (dy) add('🔥', 'Dynastie', dy, `${dy.streak} Titel in Folge`);
   const db = top('seasons'); if (db) add('🏃', 'Dauerbrenner', db, `${db.seasons} von ${chrono.length} Saisons dabei, seit ${db.first}`);
-  const rl = [...list].filter(x => x.last > 0).sort((a, b) => b.last - a.last || a.titles - b.titles)[0]; if (rl) add('🏮', 'Rote Laterne', rl, `${rl.last}× Letzter – Liebling der Statistik`);
+  // Stehaufmännchen: grösster Sprung nach oben zwischen zwei aufeinanderfolgenden Saisons
+  for (const x of list) { x.climb = 0; for (let i = 1; i < x.ranks.length; i++) { const [sa, ra] = x.ranks[i - 1], [sb, rb] = x.ranks[i]; if (seasonKey(sb) - seasonKey(sa) === 1 && ra - rb > x.climb) { x.climb = ra - rb; x.climbText = `${sa}: ${ra}. → ${sb}: ${rb}.`; } } }
+  const st = [...list].filter(x => x.climb >= 3).sort((a, b) => b.climb - a.climb || b.titles - a.titles)[0]; if (st) add('🧗', 'Stehaufmännchen', st, `${st.climb} Plätze rauf in einem Jahr (${st.climbText})`);
   const ko = [...regulars].sort((a, b) => a.avgRank - b.avgRank)[0]; if (ko) add('🎯', 'Konstanz', ko, `Ø Platz ${ko.avgRank.toFixed(1)} über ${ko.seasons} Saisons`);
   const cb = [...list].filter(x => x.gap >= 5).sort((a, b) => b.gap - a.gap)[0]; if (cb) add('🔄', 'Comeback', cb, `${cb.gap} Jahre zwischen zwei Titeln`);
   const bs = list.find(x => x.titleSeasons[0] && x.titleSeasons[0] === x.first && x.first !== chrono[0]?.season) || list.find(x => x.titleSeasons[0] && x.titleSeasons[0] === x.first); if (bs) add('⚡', 'Blitzstart', bs, `Meister in der ersten Saison (${bs.first})`);
