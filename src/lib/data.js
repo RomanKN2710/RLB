@@ -1,5 +1,4 @@
 import { q, one, getSetting } from './db';
-import { unstable_cache } from 'next/cache';
 import * as R from './rules';
 
 /** Stammdaten: Manager, Vereine, Spieler. */
@@ -158,10 +157,3 @@ export async function freeAgents(b) {
   const isTaken = p => active.some(o => (!p.club || !o.club || R.norm(o.club) === R.norm(p.club)) && (playerMatches(p.slug, p.name, o.name) || R.norm(o.name) === R.norm(p.name)));
   return pool.map(p => { const base = p.squad_pos || p.pos; const all = [...new Set([base, ...(p.played_pos || [])].filter(Boolean))]; return { slug: p.slug, name: p.name, first: p.first_name, club: p.club, pos: base, positions: all.join('/'), games: p.games, last: p.last_matchday, taken: isTaken(p) }; });
 }
-
-/** Name des aktuellen Tabellenführers (inkl. vorläufiger Runden), fünf Minuten gecacht – fürs Intro und den Seitenkopf. */
-export const currentLeader = unstable_cache(async () => {
-  try { const all = await rounds(); const played = all.filter(r => r.deadline && new Date(r.deadline) < new Date()); if (!played.length) return null;
-    const sd = await season(played[played.length - 1].number); return sd.table.length ? sd.base.managerName[sd.table[0].manager_id] : null; }
-  catch (e) { return null; }
-}, ['rlb-leader'], { revalidate: 300 });
