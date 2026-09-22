@@ -23,7 +23,7 @@ export default async function Tabelle({ searchParams }) {
   return (<>
     <div className="card"><div className="row between"><div><div className="eyebrow">Das Rennen</div><h2>Wer holt den Titel?</h2></div><Link className="btn sec sm" href="/prognose">Saisonprognose →</Link></div>
       <Rennen history={sd.history.map(h => ({ label: h.round.label.replace('Spieltag ', 'ST '), table: h.table }))} names={sd.base.managerName} me={u.manager_id} /></div>
-    <div className="card"><div className="eyebrow">{cur.label}</div><h2>Auszeichnungen des Spieltags</h2><Auszeichnungen awards={awards} me={u.manager_id} /><p className="mini" style={{ marginTop: 8 }}>Drei Titel pro Runde, nur für Leistungen, die klar aus dem Feld herausragen. Saisonzähler in der <Link href="/hall-of-fame">Hall of Fame</Link>.</p></div>
+    <div className="card"><div className="eyebrow">{cur.label}</div><h2>Auszeichnungen des Spieltags</h2><Auszeichnungen awards={awards} me={u.manager_id} /><p className="mini" style={{ marginTop: 8 }}>Mindestens fünf Titel pro Runde: zuerst die Leistungen, die klar aus dem Feld herausragen, dann die besten der übrigen. Saisonzähler in der <Link href="/hall-of-fame">Hall of Fame</Link>.</p></div>
     <div className="card">
       <div className="row between"><div><div className="eyebrow">Rangliste</div><h2>Stand nach {cur.label} {cur.status === 'final' ? <span className="pill ok">final</span> : <span className="pill open">vorläufig</span>}</h2></div>
         <form className="row"><label className="small">Stand nach <select name="r" defaultValue={sel}>{played.map(r => <option key={r.id} value={r.number}>{r.label}{r.status !== 'final' ? ' (vorläufig)' : ''}</option>)}</select></label><button className="sec sm">Anzeigen</button></form></div>
