@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getUser } from '@/lib/auth';
 import { logoutAction } from '@/actions';
 import { maybeSync } from '@/lib/oldb';
-import { openRound } from '@/lib/data';
+import { openRound, currentLeader } from '@/lib/data';
 import { fmtDt } from '@/components/ui';
 import Intro from '@/components/Intro';
 import RlbLogo from '@/components/RlbLogo';
@@ -14,11 +14,12 @@ export const dynamic = 'force-dynamic';
 export default async function RootLayout({ children }) {
   const user = await getUser();
   let open = null;
-  if (user) { await maybeSync(60); open = await openRound(); }
+  let leader = null;
+  if (user) { await maybeSync(60); open = await openRound(); leader = await currentLeader(); }
   return (
     <html lang="de"><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" /></head>
       <body>
-        {user && <Intro line={open ? `${open.label} offen · Deadline ${fmtDt(open.deadline)}` : null} />}
+        {user && <Intro leader={leader} line={open ? `${open.label} offen · Deadline ${fmtDt(open.deadline)}` : null} />}
         <header>
           <div className="bar">
             <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
