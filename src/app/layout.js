@@ -6,7 +6,7 @@ import { maybeSync } from '@/lib/oldb';
 import { openRound, currentLeader } from '@/lib/data';
 import { fmtDt } from '@/components/ui';
 import Intro from '@/components/Intro';
-import RlbLogo from '@/components/RlbLogo';
+import IntroButton from '@/components/IntroButton';
 
 export const metadata = { title: 'RLB Managerspiel 26/27', description: 'Rotissery League Bundesliga' };
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function RootLayout({ children }) {
         {user && <Intro leader={leader} line={open ? `${open.label} offen · Deadline ${fmtDt(open.deadline)}` : null} />}
         <header>
           <div className="bar">
-            <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
+            <div className="brand"><IntroButton height={38} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
             <div className="grow" />
             {open && <span className="mini">Offen: <b>{open.label}</b> · Deadline {fmtDt(open.deadline)}</span>}
             {user && <span className="small">{user.name}{user.manager_name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}

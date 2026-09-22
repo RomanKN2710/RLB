@@ -10,19 +10,30 @@ const BALL = [[0, -260, 860], [6, -100, 826], [12, 60, 860], [18, 220, 826], [24
 const BALL_KF = '@keyframes sc-ball{' + BALL.map(([p, x, y]) => `${p}%{transform:translate(${x}px,${y}px) rotate(${Math.round(p * 14)}deg)}`).join('') + '}';
 
 export default function Intro({ leader, line }) {
-  const [show, setShow] = useState(false); const [phase, setPhase] = useState('scene'); const decided = useRef(null);
+  const [show, setShow] = useState(false); const [phase, setPhase] = useState('scene'); const [run, setRun] = useState(0); const decided = useRef(null); const timers = useRef([]);
+  const reduced = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const start = () => {
+    timers.current.forEach(clearTimeout);
+    const rm = reduced(); setPhase(rm ? 'emblem' : 'scene'); setShow(true); setRun(r => r + 1);
+    const tEmblem = rm ? 0 : 3900;
+    timers.current = [setTimeout(() => setPhase('emblem'), tEmblem), setTimeout(() => setPhase('leave'), tEmblem + 2300), setTimeout(() => setShow(false), tEmblem + 2900)];
+  };
   useEffect(() => {
-    if (decided.current == null) { let seen = false; try { seen = sessionStorage.getItem('rlb_intro') === '1'; sessionStorage.setItem('rlb_intro', '1'); } catch (e) { seen = true; }
-      decided.current = !(seen || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)); }
-    if (!decided.current) return;
-    setShow(true);
-    const t = [setTimeout(() => setPhase('emblem'), 3900), setTimeout(() => setPhase('leave'), 6200), setTimeout(() => setShow(false), 6800)];
-    return () => t.forEach(clearTimeout);
+    // Automatisch höchstens alle vier Stunden (Wert im localStorage), erzwingbar über ?intro=1; Entscheidung nur einmal je Einbau
+    if (decided.current == null) {
+      let play = false; const KEY = 'rlb_intro_at';
+      try { const force = new URLSearchParams(window.location.search).get('intro') === '1'; const last = Number(localStorage.getItem(KEY) || 0);
+        play = force || Date.now() - last > 4 * 3600 * 1000; if (play) localStorage.setItem(KEY, String(Date.now())); } catch (e) { play = false; }
+      decided.current = play;
+    }
+    if (decided.current) start();
+    const onReplay = () => start(); window.addEventListener('rlb-intro', onReplay);
+    return () => { window.removeEventListener('rlb-intro', onReplay); timers.current.forEach(clearTimeout); };
   }, []);
   if (!show) return null;
-  const skip = () => { setPhase('leave'); setTimeout(() => setShow(false), 500); };
+  const skip = () => { timers.current.forEach(clearTimeout); setPhase('leave'); setTimeout(() => setShow(false), 500); };
   return (
-    <div className={`intro ${phase}`} onClick={skip} role="presentation">
+    <div key={run} className={`intro ${phase}`} onClick={skip} role="presentation">
       <style>{BALL_KF}</style>
       <div className="intro-scene">
         <svg viewBox="0 0 1400 1000" className="scene-svg" aria-hidden="true">
