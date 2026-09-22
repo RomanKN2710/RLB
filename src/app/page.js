@@ -7,6 +7,7 @@ import Rennen from '@/components/Rennen';
 import Auszeichnungen from '@/components/Auszeichnungen';
 import { roundAwards } from '@/lib/auszeichnungen';
 
+export const maxDuration = 60;
 export default async function Tabelle({ searchParams }) {
   const u = await requireUser();
   const all = await D.rounds();

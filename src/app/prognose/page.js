@@ -3,6 +3,7 @@ import * as D from '@/lib/data';
 import { prognose } from '@/lib/prognose';
 import { fmtRp } from '@/components/ui';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const pct = p => p < 0.005 ? '<1 %' : `${Math.round(p * 100)} %`;
 export default async function Prognose() {

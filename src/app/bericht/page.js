@@ -5,6 +5,7 @@ import { fmtDt } from '@/components/ui';
 import { BerichtTools } from './BerichtTools';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /* Spieltagsberichte: automatisch nach Abschluss jeder Runde erstellt und an alle Manager gemailt. */
 export default async function Bericht() {

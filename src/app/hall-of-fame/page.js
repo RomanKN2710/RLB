@@ -4,6 +4,7 @@ import * as HOF from '@/lib/halloffame';
 import { seasonAwards } from '@/lib/auszeichnungen';
 import { fmtRp } from '@/components/ui';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const medal = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
 const strip = (n, ch, max = 8) => n ? ch.repeat(Math.min(n, max)) + (n > max ? ` ×${n}` : '') : '';

@@ -6,6 +6,7 @@ import { chf, fmtDt } from '@/components/ui';
 import { Propose as TradePropose, Actions as TradeActions } from './TradePanel';
 import AdminPlayerTools from './AdminPlayerTools';
 
+export const maxDuration = 60;
 export default async function Kader() {
   const u = await requireUser(); const admin = u.role === 'admin';
   const b = await D.base(); const open = await D.openRound();

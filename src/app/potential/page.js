@@ -5,6 +5,7 @@ import { potential } from '@/lib/potential';
 import { fmtRp } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /* Potential-Tabelle: beste Elf im Nachhinein je Runde, laufend aus den gespeicherten kicker-Werten. */
 export default async function Potential() {

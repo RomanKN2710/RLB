@@ -14,6 +14,7 @@ import { rlbLeavers } from '@/lib/squads';
 import clubSlugs from '../../../db/seed/kicker-clubs.json';
 
 /* Admin-Übersicht: 1) Spieltage auswerten (Aufstellungen → kicker-Seiten → Import → abschliessen), 2) Kader & Pool, 3) Konten & Einstellungen, 4) Werkzeuge. */
+export const maxDuration = 60;
 export default async function Admin() {
   const __u = await getUser(); if (!__u || __u.role !== 'admin') return null;
   const justRun = await runPending(__u.id); const migrations = await migrationStatus(); const hof = await HOF.all();

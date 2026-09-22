@@ -3,6 +3,7 @@ import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { BumpChart, Lines, StackedBars, Heatmap, Legend } from '@/components/Charts';
 
+export const maxDuration = 60;
 export default async function Statistik() {
   const u = await requireUser(); const sd = await D.season(null); const b = sd.base; const ids = b.managerIds; const me = u.manager_id;
   const rounds = sd.history.filter(h => h.round.status === 'final' || sd.datas[sd.history.indexOf(h)].matches.some(m => m.finished));

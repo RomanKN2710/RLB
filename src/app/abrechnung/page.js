@@ -4,6 +4,7 @@ import * as R from '@/lib/rules';
 import { chf } from '@/components/ui';
 import PaidForm from './PaidForm';
 
+export const maxDuration = 60;
 export default async function Abrechnung() {
   const u = await requireUser(); const admin = u.role === 'admin';
   const sd = await D.season(null); const b = sd.base; const aus = await D.auslagen(sd);

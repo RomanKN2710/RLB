@@ -51,12 +51,38 @@ export async function roundData(round, b) {
   return { round, matches, clubRes, lineups, results, corrections, totals: R.roundTotals(b.managerIds, { players: b.players, lineups, results, clubRes, corrections }) };
 }
 
-/** Rangliste nach Runde (inklusive) und alle Rundendaten bis dahin. */
+/** Rangliste nach Runde (inklusive) und alle Rundendaten bis dahin. Lädt alle Runden mit fünf Sammelabfragen statt
+    Dutzenden Einzelabfragen je Runde (wichtig gegen die Neon-Latenz auf Vercel). Ohne uptoNumber: alle Runden, deren
+    Deadline vorbei ist. Fehlende Aufstellungen werden wie in ensureLineups aus der Vorrunde übernommen. */
 export async function season(uptoNumber, b) {
   b = b || await base();
-  const all = await rounds();
-  const upto = all.filter(r => uptoNumber == null || r.number <= uptoNumber);
-  const datas = []; for (const r of upto) datas.push(await roundData(r, b));
+  const all = await rounds(); const now = Date.now();
+  const upto = all.filter(r => uptoNumber == null ? (r.deadline && new Date(r.deadline).getTime() < now) : r.number <= uptoNumber);
+  const ids = upto.map(r => r.id);
+  const [matches, lus, rs, cors, seeds] = ids.length ? await Promise.all([
+    q('select * from matches where round_id = any($1)', [ids]), q('select * from lineups where round_id = any($1)', [ids]),
+    q('select * from results where round_id = any($1)', [ids]), q('select * from corrections where round_id = any($1)', [ids]),
+    q("select key, value from settings where key like 'club_results_%'")]) : [[], [], [], [], []];
+  const byRound = arr => { const m = {}; arr.forEach(x => (m[x.round_id] ||= []).push(x)); return m; };
+  const M = byRound(matches), LU = byRound(lus), RS = byRound(rs), CO = byRound(cors);
+  const seedMap = {}; seeds.forEach(x => seedMap[x.key] = typeof x.value === 'string' ? JSON.parse(x.value) : x.value);
+  const lastLineup = {}; const datas = [];
+  for (const r of upto) {
+    const lineups = {}; (LU[r.id] || []).forEach(l => lineups[l.manager_id] = l);
+    const passed = r.deadline && new Date(r.deadline).getTime() < now;
+    for (const m of b.managerIds) {
+      if (!lineups[m] && passed && lastLineup[m]) {
+        const entries = {}; for (const [pid, e] of Object.entries(lastLineup[m].entries || {})) { const p = b.players[pid]; if (p && p.manager_id === m && p.status === 'active' && R.playerValid(p, r.number)) entries[pid] = e; }
+        await q('insert into lineups(round_id,manager_id,entries,free_in,updated_at) values($1,$2,$3,$4,now()) on conflict do nothing', [r.id, m, JSON.stringify(entries), []]);
+        lineups[m] = { round_id: r.id, manager_id: m, entries, free_in: [] };
+      }
+      if (lineups[m]) lastLineup[m] = lineups[m];
+    }
+    const results = {}; (RS[r.id] || []).forEach(x => results[x.player_id] = x);
+    const clubRes = { ...(seedMap['club_results_' + r.number] || {}), ...R.clubResults(M[r.id] || [], b.teamToClub) };
+    const corrections = CO[r.id] || [];
+    datas.push({ round: r, matches: M[r.id] || [], clubRes, lineups, results, corrections, totals: R.roundTotals(b.managerIds, { players: b.players, lineups, results, clubRes, corrections }) });
+  }
   const table = R.standings(b.managerIds, datas.map(d => d.totals));
   const history = upto.map((r, i) => ({ round: r, table: R.standings(b.managerIds, datas.slice(0, i + 1).map(d => d.totals)) }));
   return { base: b, rounds: all, upto, datas, table, history };
