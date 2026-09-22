@@ -1,26 +1,19 @@
-/* RLB-Emblem als Inline-SVG (Spielerfigur auf Rot, Wortmarke darunter). Klassen dienen der Intro-Animation.
-   PlayerFigure ist die Spielerfigur allein (1000er-Raster, konische Glieder), optional mit Name und Nummer auf dem Rücken. */
+/* RLB-Emblem als Inline-SVG (Piktogramm-Spieler auf Rot, Wortmarke darunter). Klassen dienen der Intro-Animation.
+   PlayerFigure: minimalistische Figur (1000er-Raster) – Kopf, Rumpf-Kapsel, Glieder als Linien mit runden Enden;
+   optional Name und Nummer auf dem Rücken. */
 export function PlayerFigure({ name, number, legClass = 'lg-leg', className = 'lg-player' }) {
   return (
-    <g className={className} fill="#fff">
-      <ellipse cx="398" cy="118" rx="50" ry="57" transform="rotate(-14 398 118)"/>
-      <path d="M371.82921207787103 162.75542013336357 L357.9267664399735 199.1384107372887 L394.0732335600265 210.8615892627113 L404.17078792212897 173.24457986663643 Z"/><circle cx="388" cy="168" r="17"/><circle cx="376" cy="205" r="19"/>
-      <path d="M312 202 C352 186 420 190 462 214 C452 300 442 385 396 442 C352 452 302 446 262 428 C274 352 290 270 312 202 Z"/>
-      <path d="M262 428 C302 446 352 452 396 442 L416 548 C362 566 300 560 248 542 Z"/>
-      <path d="M342.4395751529858 189.39735436053692 L208.37407711626923 171.30198931400807 L201.62592288373077 208.69801068599193 L333.5604248470142 238.60264563946308 Z"/><circle cx="338" cy="214" r="25"/><circle cx="205" cy="190" r="19"/>
-      <path d="M199.41236887208706 171.84019883428294 L84.1768839651122 213.57487288661466 L91.8231160348878 238.42512711338534 L210.58763112791294 208.15980116571706 Z"/><circle cx="205" cy="190" r="19"/><circle cx="88" cy="226" r="13"/>
-      <circle cx="80" cy="229" r="17"/>
-      <path d="M429.42817460700195 236.28591269649903 L487.7947377530014 339.6026311234993 L518.2052622469986 324.3973688765007 L470.57182539299805 215.71408730350097 Z"/><circle cx="450" cy="226" r="23"/><circle cx="503" cy="332" r="17"/>
-      <path d="M488.8551449962567 322.5700966641711 L445.0153964679459 397.3435976452972 L464.9846035320541 410.6564023547028 L517.1448550037434 341.4299033358289 Z"/><circle cx="503" cy="332" r="17"/><circle cx="455" cy="404" r="12"/>
-      <circle cx="452" cy="410" r="15"/>
-      <g className={legClass}><path d="M369.8192610978437 527.3848069337498 L607.7862532124044 476.5447571309749 L596.2137467875956 403.4552428690251 L354.1807389021563 428.61519306625013 Z"/><circle cx="362" cy="478" r="50"/><circle cx="602" cy="440" r="37"/><path d="M591.3681282340452 475.4395725531826 L794.8163028608413 523.9456571305287 L809.1836971391587 476.0543428694712 L612.6318717659548 404.5604274468174 Z"/><circle cx="602" cy="440" r="37"/><circle cx="802" cy="500" r="25"/><path d="M795.3390483323014 523.0571403881875 L886.7267465964053 544.2535694739817 L897.2732534035947 507.7464305260183 L808.6609516676986 476.9428596118126 Z"/><circle cx="802" cy="500" r="24"/><circle cx="892" cy="526" r="19"/><circle cx="790" cy="518" r="24"/></g>
-      <path d="M242.1875810291711 510.49867934748164 L297.8843688515104 699.8181654715289 L366.1156311484896 684.1818345284711 L333.8124189708289 489.50132065251836 Z"/><circle cx="288" cy="500" r="47"/><circle cx="332" cy="692" r="35"/>
-      <path d="M311.3321501965524 663.7539386019549 L153.23725014039456 791.8242418585393 L182.76274985960544 832.1757581414607 L352.6678498034476 720.2460613980451 Z"/><circle cx="332" cy="692" r="35"/><circle cx="168" cy="812" r="25"/>
-      <path d="M157.08494335614967 792.8986508732619 L89.069499109577 836.3716234417598 L106.930500890423 867.6283765582402 L178.91505664385033 831.1013491267381 Z"/><circle cx="168" cy="812" r="22"/><circle cx="98" cy="852" r="18"/>
-      <circle cx="176" cy="826" r="22"/>
+    <g className={className}>
+      <circle cx="408" cy="116" r="50" fill="#fff"/>
+      <polyline points="392,212 362,330 338,440" fill="none" stroke="#fff" strokeWidth="112" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="352,222 208,204 90,244" fill="none" stroke="#fff" strokeWidth="36" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="446,232 506,334 456,406" fill="none" stroke="#fff" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round"/>
+      <g className={legClass}><polyline points="352,470 606,440 818,508" fill="none" stroke="#fff" strokeWidth="58" strokeLinecap="round" strokeLinejoin="round"/><polyline points="818,508 890,530" fill="none" stroke="#fff" strokeWidth="46" strokeLinecap="round" strokeLinejoin="round"/></g>
+      <polyline points="324,482 336,700 168,814" fill="none" stroke="#fff" strokeWidth="56" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="168,814 104,852" fill="none" stroke="#fff" strokeWidth="44" strokeLinecap="round" strokeLinejoin="round"/>
       {name && <g className="lg-name" fill="#D20515" fontFamily="'Barlow Condensed','Arial Narrow',sans-serif" fontWeight="700" textAnchor="middle">
-        <text transform="translate(362 318) rotate(14)" fontSize="44" letterSpacing="2">{String(name).toUpperCase()}</text>
-        {number != null && <text transform="translate(350 392) rotate(14)" fontSize="72">{number}</text>}
+        <text transform="translate(370 302) rotate(13)" fontSize="36" letterSpacing="0">{String(name).toUpperCase()}</text>
+        {number != null && <text transform="translate(354 372) rotate(13)" fontSize="62">{number}</text>}
       </g>}
     </g>
   );
