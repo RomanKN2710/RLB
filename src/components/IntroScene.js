@@ -2,9 +2,9 @@
 import { useEffect, useRef } from 'react';
 
 /* Intro-Szene auf Canvas: minimalistische Strichfigur mit Skelett (Becken, Rumpf, Kopf, Arme, Beine per inverser Kinematik),
-   Ball mit Schwerkraft und Kontakten, Tor mit Netz, das beim Einschlag schwingt. Choreografie: Anlauf, zwei Übersteiger,
-   Elastico, Jonglieren, Lupfer, Volley in den Winkel, Jubel. Alles als Funktion der Zeit, damit es auf jedem Gerät gleich läuft. */
-export const SCENE_MS = 6700;
+   Ball mit Schwerkraft und Kontakten, Tor mit Netz, das beim Einschlag schwingt. Choreografie: Jonglieren (rechts, links, rechts),
+   Lupfer, Volley in den Winkel, Jubel. Alles als Funktion der Zeit, damit es auf jedem Gerät gleich läuft. */
+export const SCENE_MS = 4400;
 const W = 1400, H = 1000, GROUND = 860, R = 30;                      // Ballradius
 const THIGH = 112, SHIN = 108, TORSO = 132, UARM = 78, FARM = 72, HEAD = 27;
 const G = 2200;                                                      // px/s²
@@ -21,20 +21,15 @@ function track(pts, t) {
 }
 
 /* ---------- Ball: vorab simuliert (Kontakte zu festen Zeiten), damit Fuss und Ball exakt zusammenpassen ---------- */
-const PX0 = 520;                                                     // Standposition Becken x nach dem Anlauf
-const B_REST = 630, B_REST2 = 550;
-const TOUCHES = [[2750, 0, -1200], [3800, 40, -1000], [4700, 100, -1000]];   // [t, vx, vy] Jonglier-Kontakte
-const VOLLEY_T = 5450, HIT_T = 5830, TARGET = [1250, 330];
-function pelvisX(t) { if (t < 1100) return -220 + (380 + 220) * t / 1100; if (t < 1500) return 380 + 140 * easeOut((t - 1100) / 400); return PX0; }
+const PX0 = 520;                                                     // Standposition Becken x
+const B0 = 610;                                                      // Ball vor dem Fuss
+const TOUCHES = [[400, 0, -1200], [1450, -30, -1000], [2350, 100, -1000]];   // [t, vx, vy] Kontakte: rechts, links, rechts (Lupfer)
+const VOLLEY_T = 3100, HIT_T = 3480, TARGET = [1250, 330];
+function pelvisX() { return PX0; }
 function simulateBall() {
-  const dt = 1 / 1000; const out = new Float32Array(SCENE_MS * 3); let x = 0, y = GROUND - R, vx = 0, vy = 0, spin = 0; let ti = 0;
+  const dt = 1 / 1000; const out = new Float32Array(SCENE_MS * 3); let x = B0, y = GROUND - R, vx = 0, vy = 0, spin = 0; let ti = 0;
   for (let ms = 0; ms < SCENE_MS; ms++) {
-    if (ms < 1500) { x = pelvisX(ms) + 95 + 18 * Math.sin(ms / 1000 * 2 * Math.PI * 2.4); y = GROUND - R; spin += (x - (out[(ms - 1) * 3] || x)) / R; }
-    else if (ms < 2280) { x = B_REST; y = GROUND - R; }
-    else if (ms < 2400) { x = B_REST + 70 * easeOut((ms - 2280) / 120); y = GROUND - R; spin += 0.02; }
-    else if (ms < 2440) { x = B_REST + 70; y = GROUND - R; }
-    else if (ms < 2560) { x = B_REST + 70 - 150 * easeOut((ms - 2440) / 120); y = GROUND - R; spin -= 0.035; }
-    else if (ms < TOUCHES[0][0]) { x = B_REST2; y = GROUND - R; }
+    if (ms < TOUCHES[0][0]) { x = B0; y = GROUND - R; }
     else if (ms < VOLLEY_T) {
       if (ti < TOUCHES.length && ms === TOUCHES[ti][0]) { vx = TOUCHES[ti][1]; vy = TOUCHES[ti][2]; ti++; }
       vy += G * dt; x += vx * dt; y += vy * dt; if (y > GROUND - R) { y = GROUND - R; vy = -vy * .3; } spin += vx * dt / R;
@@ -55,42 +50,24 @@ function knee(hx, hy, fx, fy, l1, l2, dirSign = 1) {
   const ang = base - dirSign * a; return [hx, hy, hx + Math.cos(ang) * l1, hy + Math.sin(ang) * l1, hx + dx, hy + dy];
 }
 function pose(t, B) {
-  const [bx, by] = B; const run = t < 1500; const blend = clamp((t - 1250) / 250, 0, 1);       // Übergang Laufen → Stehen
-  const px = pelvisX(t);
-  // Lauf: Füsse auf Ellipsen, Becken wippt, Arme gegenläufig
-  const w = 2 * Math.PI * 2.4; const ph = t / 1000 * w; const S = 62 * (1 - blend), L = 48 * (1 - blend);
-  const footRun = p => [px - S * Math.cos(p), GROUND - L * Math.max(0, Math.sin(p))];
-  let lf = footRun(ph + Math.PI), rf = footRun(ph); let py = GROUND - 212 + 8 * Math.abs(Math.sin(ph)) * (1 - blend);
-  let torso = 14 * (1 - blend) + 6, head = 0;
-  let la = [-40 * Math.sin(ph) * (1 - blend), 70], ra = [40 * Math.sin(ph) * (1 - blend), 70];     // [Oberarm-Winkel von vertikal, Ellbogenbeuge]
-  if (!run || blend > 0) {
-    // Stehen: linker Fuss Standbein, rechter Fuss spielt (Spuren); Becken/Rumpf reagieren
-    const L0 = [px - 48, GROUND], R0 = [px + 44, GROUND];
-    const rTrack = [[1500, ...R0], [1560, bx - 70, GROUND - 24], [1680, bx, GROUND - 95], [1790, bx + 66, GROUND - 26], [1870, ...R0],
-      [1920, bx - 70, GROUND - 24], [2040, bx, GROUND - 95], [2150, bx + 66, GROUND - 26], [2230, ...R0],
-      [2280, bx - R - 8, GROUND - 6], [2400, bx - R - 8, GROUND - 6], [2440, bx + R + 8, GROUND - 22], [2560, bx + R + 8, GROUND - 6], [2640, px + 40, GROUND],
-      [2700, bx - 10, GROUND - 4], [2750, bx, by + R - 4], [2830, bx + 20, GROUND - 60], [2950, px + 44, GROUND],
-      [3700, px + 44, GROUND], [3800, bx, by + R - 6], [3880, bx + 10, by - 40], [4000, px + 44, GROUND],
-      [4600, px + 44, GROUND], [4700, bx, by + R - 6], [4790, bx + 15, by - 60], [4950, px + 44, GROUND],
-      [5250, px + 44, GROUND], [5330, px - 95, GROUND - 70], [VOLLEY_T, bx - 4, by + 6], [5540, px + 190, by - 90], [5700, px + 120, GROUND - 40], [5850, px + 44, GROUND], [6700, px + 44, GROUND]];
-    const lTrack = [[1500, ...L0], [5250, ...L0], [5330, px - 40, GROUND], [VOLLEY_T, px - 30, GROUND - 20], [5540, px - 20, GROUND - 60], [5700, px - 40, GROUND], [6000, px - 40, GROUND], [6100, px - 40, GROUND - 40], [6300, px - 40, GROUND], [6700, px - 40, GROUND]];
-    const pyTrack = [[1500, GROUND - 205], [1680, GROUND - 212], [1870, GROUND - 205], [2040, GROUND - 212], [2230, GROUND - 205], [2750, GROUND - 200], [3800, GROUND - 202], [4700, GROUND - 200],
-      [5330, GROUND - 205], [VOLLEY_T, GROUND - 225], [5540, GROUND - 240], [5700, GROUND - 205], [6000, GROUND - 205], [6100, GROUND - 250], [6300, GROUND - 205], [6700, GROUND - 205]];
-    const pxTrack = [[1500, 0], [1680, 10], [1870, 0], [2040, 10], [2230, 0], [2280, -8], [2560, 6], [2640, 0], [5330, -20], [VOLLEY_T, 10], [5540, 30], [5700, 10], [5850, 0]];
-    const torsoTrack = [[1500, 6], [1680, 14], [2230, 8], [2280, 12], [2560, 10], [2750, 4], [2830, -6], [3800, 2], [3880, -6], [4700, 2], [4790, -8], [5250, 0], [5330, -12], [VOLLEY_T, -22], [5540, -30], [5700, -6], [5850, 0], [6000, -4], [6100, -10], [6300, 0]];
-    const headTrack = [[1500, 0], [2750, 8], [2900, -12], [3800, 8], [3900, -12], [4700, 8], [4800, -14], [5330, -6], [VOLLEY_T, -10], [5700, 0], [6000, -8]];
-    const laTrack = [[1500, -25, 60], [1680, -55, 40], [1870, -25, 60], [2040, -55, 40], [2230, -30, 55], [2560, -45, 50], [2750, -35, 70], [2830, -60, 60], [3800, -35, 70], [3880, -60, 60], [4700, -35, 70], [4790, -65, 60],
-      [5330, -70, 50], [VOLLEY_T, -95, 30], [5540, -110, 20], [5700, -50, 50], [5850, -30, 60], [6000, -150, 20], [6100, -165, 10], [6300, -150, 25], [6700, -150, 25]];
-    const raTrack = [[1500, 30, 60], [1680, 60, 40], [1870, 30, 60], [2040, 60, 40], [2230, 35, 55], [2560, 50, 50], [2750, 40, 70], [2830, 70, 60], [3800, 40, 70], [3880, 70, 60], [4700, 40, 70], [4790, 75, 60],
-      [5330, 60, 50], [VOLLEY_T, 40, 60], [5540, 20, 70], [5700, 40, 50], [5850, 30, 60], [6000, 150, 20], [6100, 165, 10], [6300, 150, 25], [6700, 150, 25]];
-    const m = blend;
-    const rfS = track(rTrack, t), lfS = track(lTrack, t), pyS = track(pyTrack, t)[0], pxS = track(pxTrack, t)[0], toS = track(torsoTrack, t)[0], laS = track(laTrack, t), raS = track(raTrack, t);
-    rf = [rf[0] + (rfS[0] - rf[0]) * m, rf[1] + (rfS[1] - rf[1]) * m]; lf = [lf[0] + (lfS[0] - lf[0]) * m, lf[1] + (lfS[1] - lf[1]) * m];
-    py = py + (pyS - py) * m; torso = torso + (toS - torso) * m; la = [la[0] + (laS[0] - la[0]) * m, la[1] + (laS[1] - la[1]) * m]; ra = [ra[0] + (raS[0] - ra[0]) * m, ra[1] + (raS[1] - ra[1]) * m];
-    head = track(headTrack, t)[0] * m;
-    return build(px + pxS * m, py, torso, head, lf, rf, la, ra);
-  }
-  return build(px, py, torso, head, lf, rf, la, ra);
+  const [bx, by] = B; const px = PX0; const G0 = GROUND;
+  const L0 = [px - 48, G0], R0 = [px + 44, G0];
+  // Spielfuss rechts: Kontakt 1, Kontakt 3 (Lupfer), Volley; links: Kontakt 2
+  const rTrack = [[0, ...R0], [300, bx - 10, G0 - 4], [400, bx, by + R - 4], [480, bx + 20, G0 - 60], [620, ...R0],
+    [2250, ...R0], [2350, bx, by + R - 6], [2440, bx + 15, by - 60], [2600, ...R0],
+    [2900, ...R0], [2980, px - 95, G0 - 70], [VOLLEY_T, bx - 4, by + 6], [3190, px + 190, by - 90], [3350, px + 120, G0 - 40], [3500, ...R0], [SCENE_MS, ...R0]];
+  const lTrack = [[0, ...L0], [1350, ...L0], [1450, bx, by + R - 6], [1530, bx - 10, by - 40], [1660, ...L0],
+    [2900, ...L0], [2980, px - 40, G0], [VOLLEY_T, px - 30, G0 - 20], [3190, px - 20, G0 - 60], [3350, px - 40, G0], [3650, px - 40, G0], [3750, px - 40, G0 - 40], [3950, px - 40, G0], [SCENE_MS, px - 40, G0]];
+  const pyTrack = [[0, G0 - 205], [400, G0 - 200], [480, G0 - 208], [1450, G0 - 202], [1530, G0 - 210], [2350, G0 - 200], [2440, G0 - 208],
+    [2980, G0 - 205], [VOLLEY_T, G0 - 225], [3190, G0 - 240], [3350, G0 - 205], [3650, G0 - 205], [3750, G0 - 250], [3950, G0 - 205], [SCENE_MS, G0 - 205]];
+  const pxTrack = [[0, 0], [1400, -14], [1660, 0], [2980, -20], [VOLLEY_T, 10], [3190, 30], [3350, 10], [3500, 0]];
+  const torsoTrack = [[0, 6], [400, 4], [480, -6], [1450, 2], [1530, -6], [2350, 2], [2440, -8], [2900, 0], [2980, -12], [VOLLEY_T, -22], [3190, -30], [3350, -6], [3500, 0], [3650, -4], [3750, -10], [3950, 0]];
+  const headTrack = [[0, 4], [400, 8], [560, -12], [1450, 8], [1600, -12], [2350, 8], [2460, -14], [2980, -6], [VOLLEY_T, -10], [3350, 0], [3650, -8]];
+  const laTrack = [[0, -30, 60], [400, -35, 70], [480, -60, 60], [1450, -35, 70], [1530, -60, 60], [2350, -35, 70], [2440, -65, 60],
+    [2980, -70, 50], [VOLLEY_T, -95, 30], [3190, -110, 20], [3350, -50, 50], [3500, -30, 60], [3650, -150, 20], [3750, -165, 10], [3950, -150, 25], [SCENE_MS, -150, 25]];
+  const raTrack = [[0, 35, 60], [400, 40, 70], [480, 70, 60], [1450, 40, 70], [1530, 70, 60], [2350, 40, 70], [2440, 75, 60],
+    [2980, 60, 50], [VOLLEY_T, 40, 60], [3190, 20, 70], [3350, 40, 50], [3500, 30, 60], [3650, 150, 20], [3750, 165, 10], [3950, 150, 25], [SCENE_MS, 150, 25]];
+  return build(px + track(pxTrack, t)[0], track(pyTrack, t)[0], track(torsoTrack, t)[0], track(headTrack, t)[0], track(lTrack, t), track(rTrack, t), track(laTrack, t), track(raTrack, t));
 }
 /** Gelenkpunkte aus Becken, Rumpfneigung (° nach hinten), Fusszielen und Armwinkeln. */
 function build(px, py, torso, head, lf, rf, la, ra) {
@@ -108,7 +85,7 @@ function drawScene(ctx, t, B, dim) {
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = '#D20515'; ctx.fillRect(0, 0, bw, bh);
   // Kamera: füllt den Bildschirm (cover) und folgt der Mitte zwischen Spieler und Ball; Boden bei ~86 % der Höhe
   const visW = bw / scale, visH = bh / scale; const P0 = pose(t, [bx, by]);
-  const cx = clamp((P0.px + bx) / 2 + 80, visW / 2, W - visW / 2), cy = GROUND - visH * 0.36;
+  const cx = clamp((P0.px + bx) / 2 + 160, visW / 2, W - visW / 2), cy = GROUND - visH * 0.36;
   ctx.translate(bw / 2 - cx * scale, bh / 2 - cy * scale); ctx.scale(scale, scale);
   // Boden
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-50, GROUND + 2); ctx.lineTo(W + 50, GROUND + 2); ctx.stroke();

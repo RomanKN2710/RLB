@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import RlbLogo from './RlbLogo';
 import IntroScene, { SCENE_MS } from './IntroScene';
 
-/* Intro beim Betreten der App, einmal pro Browser-Sitzung: Canvas-Szene (IntroScene: Anlauf, Übersteiger, Elastico, Jonglieren,
+/* Intro beim Betreten der App, einmal pro Browser-Sitzung: Canvas-Szene (IntroScene: Jonglieren, Lupfer,
    Volley in den Winkel, Jubel), danach wird die Szene zum Emblem.
    Tippen überspringt, reduzierte Bewegung schaltet das Intro ab. */
 
