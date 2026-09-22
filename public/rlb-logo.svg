@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250" width="1000" height="1250">
   <rect x="0" y="0" width="1000" height="1000" fill="#D20515"/>
   <g>
-    <circle cx="408" cy="116" r="50" fill="#fff"/>
-    <polyline points="392,212 362,330 338,440" fill="none" stroke="#fff" stroke-width="112" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="352,222 208,204 90,244" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="446,232 506,334 456,406" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
-    <g><polyline points="352,470 606,440 818,508" fill="none" stroke="#fff" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/><polyline points="818,508 890,530" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <polyline points="324,482 336,700 168,814" fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="168,814 104,852" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="408" cy="116" r="46" fill="#fff"/>
+    <polyline points="392,212 362,330 338,440" fill="none" stroke="#fff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="352,222 208,204 90,244" fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="446,232 506,334 456,406" fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <g><polyline points="352,470 606,440 818,508" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/><polyline points="818,508 890,530" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <polyline points="324,482 336,700 168,814" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="168,814 104,852" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <circle cx="905" cy="400" r="56" fill="#fff"/>
   <text x="500" y="1228" text-anchor="middle" font-family="'Barlow Condensed','Arial Black',sans-serif" font-weight="800" font-size="270" letter-spacing="30" fill="#1A1A1A">RLB</text>
