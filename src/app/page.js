@@ -6,6 +6,7 @@ import { fmtDt, fmtRp } from '@/components/ui';
 import Rennen from '@/components/Rennen';
 import Auszeichnungen from '@/components/Auszeichnungen';
 import { roundAwards } from '@/lib/auszeichnungen';
+import * as HOF from '@/lib/halloffame';
 
 export const maxDuration = 60;
 export default async function Tabelle({ searchParams }) {
@@ -20,6 +21,9 @@ export default async function Tabelle({ searchParams }) {
   const prevRank = {}; if (prev) prev.forEach(r => prevRank[r.manager_id] = r.rank);
   const name = id => sd.base.managerName[id];
   const awards = roundAwards(sd, sd.upto.length - 1);
+  // Amtierender Meister (letzte Saison der Hall of Fame) bekommt eine Krone
+  let champs = new Set(), champSeason = ''; try { const H = await HOF.all(); const last = H.chrono[H.chrono.length - 1]; if (last) { champs = new Set(last.champions); champSeason = last.season; } } catch (e) { /* ohne Hall of Fame keine Krone */ }
+  const crown = id => champs.has(name(id)) ? <span className="crown" title={`Amtierender Meister ${champSeason}`}>👑</span> : null;
   const rt = curData.totals; const rr = sd.base.managerIds.map(m => ({ m, t: rt[m] })).sort((a, b) => b.t.punkte - a.t.punkte);
   return (<>
     <div className="card"><div className="row between"><div><div className="eyebrow">Das Rennen</div><h2>Wer holt den Titel?</h2></div><Link className="btn sec sm" href="/prognose">Saisonprognose →</Link></div>
@@ -31,14 +35,14 @@ export default async function Tabelle({ searchParams }) {
       <div className="tbl"><table>
         <thead><tr><th>#</th><th className="l">Manager</th>{CATS.map(([c, l]) => <th key={c}>{l}</th>)}<th>Total</th></tr></thead>
         <tbody>{sd.table.map(r => { const d = prev ? prevRank[r.manager_id] - r.rank : 0; return (
-          <tr key={r.manager_id} className={r.manager_id === u.manager_id ? 'me' : ''}><td>{r.rank} {d > 0 && <span className="delta up">▲{d}</span>}{d < 0 && <span className="delta down">▼{-d}</span>}</td><td className="l"><b>{name(r.manager_id)}</b></td>
+          <tr key={r.manager_id} className={r.manager_id === u.manager_id ? 'me' : ''}><td>{r.rank} {d > 0 && <span className="delta up">▲{d}</span>}{d < 0 && <span className="delta down">▼{-d}</span>}</td><td className="l"><b>{name(r.manager_id)}</b>{crown(r.manager_id)}</td>
             {CATS.map(([c]) => <td key={c}>{r.tot[c]}<div className="rp">{fmtRp(r.rp[c])} RP</div></td>)}<td><b className="disp" style={{ fontSize: 18 }}>{fmtRp(r.total)}</b></td></tr>); })}</tbody>
       </table></div>
       <p className="mini">Werte = Saisonsumme · RP = Rangpunkte pro Kategorie (Teilrangpunkte bei Gleichstand, Karten: weniger ist besser, Ziff. 8).</p>
     </div>
     <div className="grid2">
       <div className="card"><div className="eyebrow">{cur.label}</div><h2>Tageswerte</h2>
-        <div className="tbl"><table><thead><tr><th className="l">Manager</th>{CATS.map(([c, l]) => <th key={c}>{l}</th>)}</tr></thead><tbody>{rr.map(r => <tr key={r.m} className={r.m === u.manager_id ? 'me' : ''}><td className="l">{name(r.m)}</td>{CATS.map(([c]) => <td key={c}>{r.t[c]}</td>)}</tr>)}</tbody></table></div>
+        <div className="tbl"><table><thead><tr><th className="l">Manager</th>{CATS.map(([c, l]) => <th key={c}>{l}</th>)}</tr></thead><tbody>{rr.map(r => <tr key={r.m} className={r.m === u.manager_id ? 'me' : ''}><td className="l">{name(r.m)}{crown(r.m)}</td>{CATS.map(([c]) => <td key={c}>{r.t[c]}</td>)}</tr>)}</tbody></table></div>
         <div className="kv" style={{ marginTop: 10 }}><b>Deadline</b><span>{fmtDt(cur.deadline)}</span><b>Spiele</b><span>{curData.matches.filter(m => m.finished).length}/{curData.matches.length} beendet</span><b>Team der Runde</b><span>{(cur.tdr || []).join(', ') || '–'}</span><b>Spieler des Tages</b><span>{cur.sdt || '–'}</span>
           {curData.corrections.length > 0 && <><b>Korrekturen</b><span>{curData.corrections.map(k => <div key={k.id}>{name(k.manager_id)}: {k.text}</div>)}</span></>}</div>
         <p className="mini"><Link href={`/runde/${cur.id}`}>Details: Spiele, Aufstellungen, Gebote →</Link></p>

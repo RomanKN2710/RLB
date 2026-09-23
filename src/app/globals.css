@@ -68,3 +68,4 @@ main>*,.grid2>*,.grid3>*,.card{min-width:0;max-width:100%}
 .card>table{display:block;max-width:100%;overflow-x:auto}
 .row{flex-wrap:wrap}
 @media (max-width:640px){.hof-tile-name{font-size:24px}.awards{grid-template-columns:1fr}}
+.crown{margin-left:5px;font-size:13px;vertical-align:-1px;cursor:help}
