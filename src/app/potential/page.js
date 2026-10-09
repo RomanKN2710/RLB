@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { potential } from '@/lib/potential';
-import { fmtRp } from '@/components/ui';
+import { fmtRp, Info } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -15,14 +15,21 @@ export default async function Potential() {
   const catSum = t => R.CATS.map(([c]) => t[c]);
   return (<>
     <div className="card"><div className="eyebrow">Spielerei</div><h2>Manager-Potential</h2>
-      <p className="mini">Was wäre gewesen, hätte jeder Manager jede Runde im Nachhinein die beste zulässige Elf aus seinem damaligen Kader gestellt? «Beste» heisst grösste Kategoriensumme (Punkte + Zu-null + Assists + Tore − Karten + Team der Runde + Starts), Positionen wie damals gültig, Wechselkosten ausser Acht. Rangpunkte hängen von den anderen ab, darum zwei Sichten. Stand nach {P.rounds[P.rounds.length - 1].label}, rechnet sich mit jedem kicker-Import neu.</p></div>
+      <p className="mini">Was wäre gewesen, hätte jeder Manager jede Runde im Nachhinein die beste Elf aus seinem damaligen Kader gestellt? Stand nach {P.rounds[P.rounds.length - 1].label}.</p>
+      <Info label="Wie wird gerechnet?">Was wäre gewesen, hätte jeder Manager jede Runde im Nachhinein die beste zulässige Elf aus seinem damaligen Kader gestellt? «Beste» heisst grösste Kategoriensumme (Punkte + Zu-null + Assists + Tore − Karten + Team der Runde + Starts), Positionen wie damals gültig, Wechselkosten ausser Acht. Rangpunkte hängen von den anderen ab, darum zwei Sichten. Stand nach {P.rounds[P.rounds.length - 1].label}, rechnet sich mit jedem kicker-Import neu.</Info></div>
     <div className="grid2">
       <div className="card"><div className="eyebrow">Sicht 1</div><h2>Potential-Tabelle</h2><p className="mini">Alle zehn gleichzeitig mit ihrer besten Elf: die Rangfolge der Kaderstärke.</p>
-        <div className="tbl"><table><thead><tr><th>#</th><th className="l">Manager</th><th>Rangpunkte</th><th>echt</th><th>Δ Rang</th>{R.CATS.map(([c, l]) => <th key={c} title={l}>{l.slice(0, 3)}</th>)}</tr></thead><tbody>
+        <div className="mcards mob-only">{P.potentialTable.map(r => { const a = P.actual.find(x => x.manager_id === r.manager_id); const d = a.rank - r.rank; return <div key={r.manager_id} className={'mcard' + (r.manager_id === me ? ' me' : '')}>
+          <div className="top"><span className="nm">{r.rank}. {b.managerName[r.manager_id]}</span><b className="disp" style={{ fontSize: 18 }}>{fmtRp(r.total)} <small className="muted">RP</small></b></div>
+          <div className="kvs"><span>echt <b>{fmtRp(a.total)} ({a.rank}.)</b></span><span>Δ Rang <b className={d > 0 ? 'delta up' : d < 0 ? 'delta down' : ''}>{d > 0 ? '+' + d : d}</b></span></div></div>; })}</div>
+        <div className="tbl desk-only"><table><thead><tr><th>#</th><th className="l">Manager</th><th>Rangpunkte</th><th>echt</th><th>Δ Rang</th>{R.CATS.map(([c, l]) => <th key={c} title={l}>{l.slice(0, 3)}</th>)}</tr></thead><tbody>
           {P.potentialTable.map(r => { const a = P.actual.find(x => x.manager_id === r.manager_id); const d = a.rank - r.rank; return <tr key={r.manager_id} className={r.manager_id === me ? 'me' : ''}><td>{r.rank}</td><td className="l"><b>{b.managerName[r.manager_id]}</b></td><td><b>{fmtRp(r.total)}</b></td><td className="muted">{fmtRp(a.total)} ({a.rank}.)</td><td className={d > 0 ? 'delta up' : d < 0 ? 'delta down' : 'muted'}>{d > 0 ? '+' + d : d}</td>{catSum(r.tot).map((v, i) => <td key={i}>{v}</td>)}</tr>; })}
         </tbody></table></div></div>
       <div className="card"><div className="eyebrow">Sicht 2</div><h2>Verpasste Rangpunkte</h2><p className="mini">Jeder allein mit bester Elf, die anderen wie gespielt: was die eigene Aufstellungswahl gekostet hat.</p>
-        <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>echt</th><th>allein optimal</th><th>verpasst</th><th>Rang</th></tr></thead><tbody>
+        <div className="mcards mob-only">{b.managerIds.map(m => ({ ...P.alone[m], m })).sort((a, c) => c.gain - a.gain).map(x => <div key={x.m} className={'mcard' + (x.m === me ? ' me' : '')}>
+          <div className="top"><span className="nm">{b.managerName[x.m]}</span><b className={x.gain > 0 ? 'delta down' : 'muted'}>{x.gain > 0 ? '−' + fmtRp(x.gain) + ' RP' : '0'}</b></div>
+          <div className="kvs"><span>echt <b>{fmtRp(x.actualRp)}</b></span><span>optimal <b>{fmtRp(x.rp)}</b></span><span>Rang <b>{x.actualRank}. → {x.rank}.</b></span></div></div>)}</div>
+        <div className="tbl desk-only"><table><thead><tr><th className="l">Manager</th><th>echt</th><th>allein optimal</th><th>verpasst</th><th>Rang</th></tr></thead><tbody>
           {b.managerIds.map(m => P.alone[m]).map((x, i) => ({ ...x, m: b.managerIds[i] })).sort((a, c) => c.gain - a.gain).map(x => <tr key={x.m} className={x.m === me ? 'me' : ''}><td className="l"><b>{b.managerName[x.m]}</b></td><td>{fmtRp(x.actualRp)}</td><td>{fmtRp(x.rp)}</td><td className={x.gain > 0 ? 'delta down' : 'muted'}>{x.gain > 0 ? '−' + fmtRp(x.gain) : '0'}</td><td>{x.actualRank}. → {x.rank}.</td></tr>)}
         </tbody></table></div></div>
     </div>

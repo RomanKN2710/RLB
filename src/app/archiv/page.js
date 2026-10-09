@@ -3,7 +3,7 @@ import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { q } from '@/lib/db';
 import { allPosts, KINDS } from '@/lib/blog-archiv';
-import { fmtDt } from '@/components/ui';
+import { fmtDt, Info } from '@/components/ui';
 import { BlogImport, PostMeta } from './ArchivTools';
 
 export const dynamic = 'force-dynamic';
@@ -23,19 +23,24 @@ export default async function Archiv({ searchParams }) {
   const other = posts.filter(p => (p.kind !== 'aufstellung' && p.kind !== 'gebot') || !p.round_number);
   return (<>
     <div className="card"><div className="eyebrow">Archiv</div><h2>Blog, Kader und Aufstellungen</h2>
-      <p className="mini">{posts.length} Blog-Einträge gespeichert. Aufstellungs- und Gebotsposts sind der Runde zugeordnet, deren Deadline als nächste folgte (bei weitergeleiteten Gebots-Mails zählt das Mail-Datum). Die Kader zeigen, wer in der gewählten Runde spielberechtigt war (inkl. Käufe ab dieser Runde, ohne bereits Entlassene).</p>
+      <p className="mini">{posts.length} Blog-Einträge gespeichert.</p>
+      <Info label="Was zeigt das Archiv?">Aufstellungs- und Gebotsposts sind der Runde zugeordnet, deren Deadline als nächste folgte (bei weitergeleiteten Gebots-Mails zählt das Mail-Datum). Die Kader zeigen, wer in der gewählten Runde spielberechtigt war (inkl. Käufe ab dieser Runde, ohne bereits Entlassene).</Info>
       <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>{rounds.filter(r => r.number <= (played[played.length - 1]?.number || 0) + 10).map(r => <a key={r.id} className={`btn sm ${r.number === sel ? '' : 'sec'}`} href={`/archiv?runde=${r.number}`}>{r.label}</a>)}</div>
       {admin && <BlogImport />}</div>
     {round && <div className="card"><h2>{round.label} · Deadline {fmtDt(round.deadline)}</h2>
-      <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Blog-Einträge zur Runde</th><th className="l">Aufstellung in der App</th><th className="l">Kader ({'Stamm + Bank'})</th></tr></thead><tbody>
-        {b.managers.map(m => { const ps = posts.filter(p => p.manager_id === m.id && p.round_number === sel); const lu = lus.find(l => l.manager_id === m.id && l.number === sel); const kader = kaderOf(m.id);
+      {(() => { const cells = b.managers.map(m => { const ps = posts.filter(p => p.manager_id === m.id && p.round_number === sel); const lu = lus.find(l => l.manager_id === m.id && l.number === sel); const kader = kaderOf(m.id);
           const elf = lu ? Object.entries(lu.entries).map(([pid, e]) => ({ pid, pos: e.pos, name: b.players[pid]?.name || pid })).sort((a, c) => 'TVMS'.indexOf(a.pos) - 'TVMS'.indexOf(c.pos) || a.name.localeCompare(c.name)) : [];
           const probs = lu ? R.posProblems(lu.entries, b.players) : [];
-          return (<tr key={m.id} style={{ verticalAlign: 'top' }}><td className="l"><b>{m.name}</b></td>
-            <td className="l">{ps.length ? ps.map(p => <div key={p.id}><span className="badge">{KINDS[p.kind]}</span> <PostBox p={p} /></div>) : <span className="mini" style={{ whiteSpace: 'normal' }}>kein Eintrag (bisherige Aufstellung gilt)</span>}</td>
-            <td className="l small">{lu ? <>{['T', 'V', 'M', 'S'].map(pos => <div key={pos}><span className="muted">{pos}</span> {elf.filter(e => e.pos === pos).map(e => e.name).join(', ')}</div>)}{lu.free_in?.length > 0 && <div className="mini">gratis eingewechselt: {lu.free_in.map(pid => b.players[pid]?.name || pid).join(', ')}</div>}{probs.length > 0 && <div className="mini delta down">{probs.join('; ')}</div>}<div className="mini">gespeichert {fmtDt(lu.updated_at)}</div></> : <span className="mini">keine</span>}</td>
-            <td className="l small"><details><summary>{kader.length} Spieler</summary>{kader.map(p => <div key={p.id}>{R.positionsOf(p).join('/')} {p.name} <span className="muted">{p.club} · {Number(p.price)}</span>{p.slot === 'bank' && <span className="badge j">Bank</span>}{p.contract && <span className="badge v">{p.contract}</span>}{p.source !== 'draft' && <span className="badge">{p.source}</span>}</div>)}</details></td></tr>); })}
-      </tbody></table></div>
+          return { m, n: ps.length, lu,
+            blog: ps.length ? ps.map(p => <div key={p.id}><span className="badge">{KINDS[p.kind]}</span> <PostBox p={p} /></div>) : <span className="mini" style={{ whiteSpace: 'normal' }}>kein Eintrag (bisherige Aufstellung gilt)</span>,
+            elf: lu ? <>{['T', 'V', 'M', 'S'].map(pos => <div key={pos}><span className="muted">{pos}</span> {elf.filter(e => e.pos === pos).map(e => e.name).join(', ')}</div>)}{lu.free_in?.length > 0 && <div className="mini">gratis eingewechselt: {lu.free_in.map(pid => b.players[pid]?.name || pid).join(', ')}</div>}{probs.length > 0 && <div className="mini delta down">{probs.join('; ')}</div>}<div className="mini">gespeichert {fmtDt(lu.updated_at)}</div></> : <span className="mini">keine</span>,
+            kader: <details><summary>{kader.length} Spieler</summary>{kader.map(p => <div key={p.id}>{R.positionsOf(p).join('/')} {p.name} <span className="muted">{p.club} · {Number(p.price)}</span>{p.slot === 'bank' && <span className="badge j">Bank</span>}{p.contract && <span className="badge v">{p.contract}</span>}{p.source !== 'draft' && <span className="badge">{p.source}</span>}</div>)}</details> }; });
+        return <>
+          <div className="mob-only"><div className="stack">{cells.map(c => <details key={c.m.id} className="squad"><summary><b>{c.m.name}</b><span className="mini">{c.n} Eintr. · {c.lu ? 'Aufstellung ✓' : 'keine Aufstellung'}</span></summary>
+            <div className="inner small"><div className="eyebrow">Blog</div>{c.blog}<div className="eyebrow" style={{ marginTop: 8 }}>Aufstellung in der App</div>{c.elf}<div className="eyebrow" style={{ marginTop: 8 }}>Kader</div>{c.kader}</div></details>)}</div></div>
+          <div className="tbl desk-only"><table><thead><tr><th className="l">Manager</th><th className="l">Blog-Einträge zur Runde</th><th className="l">Aufstellung in der App</th><th className="l">Kader ({'Stamm + Bank'})</th></tr></thead><tbody>
+            {cells.map(c => <tr key={c.m.id} style={{ verticalAlign: 'top' }}><td className="l"><b>{c.m.name}</b></td><td className="l">{c.blog}</td><td className="l small">{c.elf}</td><td className="l small">{c.kader}</td></tr>)}
+          </tbody></table></div></>; })()}
       {posts.some(p => p.round_number === sel && !p.manager_id) && <><h3>Nicht zugeordnete Einträge dieser Runde</h3>{posts.filter(p => p.round_number === sel && !p.manager_id).map(p => <PostBox key={p.id} p={p} />)}</>}
     </div>}
     <div className="card"><h2>Weitere Einträge</h2><p className="mini">Verträge/Keeper, Teams und Sonstiges – unabhängig von der Runde.</p>

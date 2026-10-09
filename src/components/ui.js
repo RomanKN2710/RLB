@@ -2,3 +2,6 @@ export const fmtDt = iso => iso ? new Date(iso).toLocaleString('de-CH', { timeZo
 export const fmtRp = n => Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
 export const chf = n => (Math.round(Number(n) * 100) / 100).toLocaleString('de-CH', { maximumFractionDigits: 2 });
 export function Msg({ state }) { if (!state || !state.msg) return null; return <div className={state.ok ? 'okmsg' : 'err'}>{state.msg}</div>; }
+
+/** Erklärtext hinter einem Aufklapper, damit die Daten oben stehen. */
+export function Info({ children, label = 'So funktioniert’s' }) { return <details className="info"><summary>ⓘ {label}</summary><div className="info-body">{children}</div></details>; }

@@ -9,9 +9,9 @@ h1{font-size:28px;font-weight:700;line-height:1}h2{font-size:22px;font-weight:60
 header{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 .bar{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}.bar .grow{flex:1}
 .brand small{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
-nav{max-width:1180px;margin:0 auto;padding:0 16px;display:flex;gap:2px;overflow-x:auto}
-nav a{text-decoration:none;border-bottom:3px solid transparent;padding:8px 12px;font:600 15px "Barlow Condensed",sans-serif;color:var(--muted);white-space:nowrap;letter-spacing:.02em;text-transform:uppercase}
-nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
+.topnav{max-width:1180px;margin:0 auto;padding:0 16px;display:flex;gap:2px;overflow-x:auto}
+.topnav a{text-decoration:none;border-bottom:3px solid transparent;padding:8px 12px;font:600 15px "Barlow Condensed",sans-serif;color:var(--muted);white-space:nowrap;letter-spacing:.02em;text-transform:uppercase}
+.topnav a.on{color:var(--ink);border-bottom-color:var(--accent)}
 main{max-width:1180px;margin:0 auto;padding:18px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.between{justify-content:space-between}
@@ -72,7 +72,7 @@ main>*,.grid2>*,.grid3>*,.card{min-width:0}
 
 .err .mini{color:inherit;opacity:.85}
 /* Navigation: aktive Seite */
-nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
+.topnav a.on{color:var(--ink);border-bottom-color:var(--accent)}
 /* Handy: kompakterer Kopf, grössere Tippflächen, kein iOS-Zoom bei Eingaben */
 @media (max-width:640px){
   .brand small,.bar .user-line,.bar .grow{display:none}
@@ -87,3 +87,73 @@ nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
 .lineup-row{cursor:pointer}.lineup-row input[type=checkbox]{width:20px;height:20px;cursor:pointer}
 
 .card,.eyebrow,h2,h3,li,p{overflow-wrap:anywhere}
+
+/* ---------- Design-Überarbeitung 10/2026 ---------- */
+.mob-only{display:none}
+@media (max-width:640px){.desk-only{display:none !important}.mob-only{display:block}}
+/* Navigation: Desktop oben, Handy unten als Tab-Leiste */
+.tabbar{display:none}
+@media (max-width:640px){
+  .topnav{display:none}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+  .tabbar a,.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;min-height:48px;color:var(--muted);text-decoration:none;background:none;border:0;border-radius:8px;font:600 11px "IBM Plex Sans",sans-serif;cursor:pointer}
+  .tabbar .on{color:var(--accent)}.tabbar .on svg{stroke-width:2.3}
+  main{padding-bottom:96px}
+  header{position:static}
+}
+.sheet-backdrop{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;animation:sheet-fade .15s ease-out}
+.sheet{width:100%;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 14px calc(78px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.2);animation:sheet-up .2s ease-out}
+.sheet-grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sheet-grid a{display:block;padding:14px 12px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink);font-weight:600;background:var(--surface2)}
+.sheet-grid a.on{border-color:var(--accent);color:var(--accent)}
+@keyframes sheet-up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}@keyframes sheet-fade{from{opacity:0}to{opacity:1}}
+/* Erklärtexte */
+details.info{margin:2px 0 10px}details.info>summary{font-size:12px;color:var(--muted);cursor:pointer;list-style:none;display:inline-block}details.info>summary::-webkit-details-marker{display:none}
+details.info[open]>summary{color:var(--accent)}.info-body{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding:4px 0 4px 10px;margin-top:6px;line-height:1.5}
+/* Mein Stand */
+.mystand{display:grid;grid-template-columns:auto 1fr auto;gap:6px 18px;align-items:center;background:linear-gradient(135deg,var(--accent-soft),var(--surface));border-color:var(--accent)}
+.mystand .big{font:700 44px/1 "Barlow Condensed",sans-serif}.mystand .big small{font-size:18px;color:var(--muted);margin-left:2px}
+.mystand .facts{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px}.mystand .facts b{font-weight:600}
+.mystand .cta{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:150px}
+.countdown{font:600 15px "Barlow Condensed",sans-serif;letter-spacing:.02em}.countdown.soon{color:var(--bad)}
+@media (max-width:640px){.mystand{grid-template-columns:auto 1fr}.mystand .cta{grid-column:1/-1;flex-direction:row}.mystand .cta>*{flex:1;text-align:center}.mystand .big{font-size:38px}}
+/* Ranglisten-Karten (Handy) */
+.rlist{display:grid;gap:6px}
+.rlist details{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.rlist details.me{border-color:var(--accent);background:var(--me)}
+.rlist summary{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none}
+.rlist summary::-webkit-details-marker{display:none}
+.rlist .rk{font:700 22px "Barlow Condensed",sans-serif}.rlist .rk .delta{font-size:12px;margin-left:2px}
+.rlist .nm{font-weight:600;font-size:16px}.rlist .sub{font-size:12px;color:var(--muted)}
+.rlist .tt{font:700 24px "Barlow Condensed",sans-serif;text-align:right}.rlist .tt small{display:block;font:500 11px "IBM Plex Sans",sans-serif;color:var(--muted)}
+.rlist .cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;padding:0 12px 12px}
+.rlist .cats div{background:var(--surface2);border-radius:8px;padding:6px 8px;font-size:12px;color:var(--muted)}.rlist .cats b{display:block;font-size:16px;color:var(--ink)}
+/* Tabellen: Hinweis, dass seitlich mehr kommt */
+.tbl{background:linear-gradient(to right,var(--surface) 30%,transparent),linear-gradient(to left,var(--surface) 30%,transparent) right,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.14),transparent),radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.14),transparent) right;background-repeat:no-repeat;background-size:40px 100%,40px 100%,12px 100%,12px 100%;background-attachment:local,local,scroll,scroll}
+/* Auszeichnungen auf dem Handy als Wischleiste */
+@media (max-width:640px){.awards{display:flex !important;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding-bottom:6px}.award{flex:0 0 78%;scroll-snap-align:start}}
+/* Kader */
+details.squad{border:1px solid var(--line);border-radius:10px;background:var(--surface)}details.squad>summary{padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center}
+details.squad[open]>summary{border-bottom:1px solid var(--line)}details.squad>.inner{padding:8px 14px 12px}
+/* Prognose-Karten */
+.pcards{display:grid;gap:8px}.pcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}.pcard.me{border-color:var(--accent);background:var(--me)}
+.pcard .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.pcard .nm{font-weight:600;font-size:16px}
+.pcard .nums{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:4px 0 6px}.pcard .nums b{color:var(--ink);font-size:14px}
+.pcard .prog-bar{min-width:0;height:12px}
+/* Karten-Liste generisch (Potential, Abrechnung auf dem Handy) */
+.mcards{display:grid;gap:8px}.mcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}.mcard.me{border-color:var(--accent);background:var(--me)}
+.mcard .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mcard .nm{font-weight:600}.mcard .kvs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:4px 10px;font-size:12px;color:var(--muted);margin-top:6px}.mcard .kvs b{color:var(--ink)}
+details.squad>summary{flex-wrap:wrap;list-style:none}details.squad>summary::-webkit-details-marker{display:none}
+details.squad>summary>b::before{content:'▸ ';color:var(--muted)}details.squad[open]>summary>b::before{content:'▾ '}
+.grid2>details.squad{align-self:start}
+details.bidform>summary{display:inline-flex;gap:10px;align-items:center;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;color:var(--accent);font-weight:600;cursor:pointer;min-height:44px}
+details.bidform[open]>summary{background:var(--accent-soft)}
+.mcard.off{opacity:.6}
+@media (max-width:640px){
+  .hof-big{grid-template-columns:1fr;gap:8px}
+  .hof-tile{display:grid;grid-template-columns:40px 1fr;column-gap:10px;padding:10px 12px}
+  .hof-tile-icon{grid-row:1/span 3;font-size:28px;align-self:center}.hof-tile-title{margin-top:0}.hof-tile-name{font-size:22px}
+  .hof-badges{display:grid;gap:6px}.hof-badge{border-radius:8px;display:flex;flex-wrap:wrap}
+}
+.rlist .rk .delta{display:block;margin-left:0;line-height:1}.rlist .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rlist summary>span:nth-child(2){min-width:0}

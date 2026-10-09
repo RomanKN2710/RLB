@@ -2,7 +2,7 @@ import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { q } from '@/lib/db';
-import { fmtDt } from '@/components/ui';
+import { fmtDt, Info } from '@/components/ui';
 import BidForm from './BidForm';
 import FreeList from './FreeList';
 
@@ -22,22 +22,22 @@ export default async function Markt() {
   const prevRound = open ? (await q('select * from rounds where number < $1 order by number desc limit 1', [open.number]))[0] : null;
   const tag = s => s === 'won' ? <span className="tag-won">Zuschlag</span> : s === 'invalid' ? <span className="tag-inv">ungültig</span> : <span className="tag-lost">kein Zuschlag</span>;
   return (<>
-    <div className="card"><div className="row between"><div><div className="eyebrow">Transfermarkt</div><h2>{open ? `Gebote für ${open.label}` : 'Keine offene Runde'}</h2></div>
-      {open && <div className="small">Gebots-Deadline <b>{fmtDt(open.deadline)}</b></div>}</div>
-      {open && <div className="row" style={{ marginTop: 6 }}>{b.managers.map(m => <span key={m.id} className={`pill ${submitted.find(s => s.manager_id === m.id) ? 'ok' : 'grey'}`}>{m.name} {submitted.find(s => s.manager_id === m.id) ? 'Gebot ✓' : '–'}</span>)}</div>}
-      <p className="mini">Gebote sind verdeckt: nur der Admin sieht sie, und erst nach der Auflösung werden alle veröffentlicht (Ziff. 7.1). Höchstgebot gewinnt, bei Gleichstand der schlechtere Tabellenplatz. Budget CHF 50 pro Saison (7.4), ab CHF 20 Vertragspflicht.</p>
-    </div>
-    {open && managerId && <div className="card"><div className="eyebrow">Mein Gebot</div><h2>{mine ? <>Gebot abgegeben <span className="pill ok">verdeckt</span></> : 'Neues Gebot'}</h2>
+    {open && managerId && <div className="card"><div className="eyebrow">Mein Gebot · {open.label} · Deadline {fmtDt(open.deadline)}</div><h2>{mine ? <>Gebot abgegeben <span className="pill ok">verdeckt</span></> : 'Neues Gebot'}</h2>
       {mine && <div className="kv" style={{ marginBottom: 10 }}><b>Spieler</b><span>{mine.pos} {mine.player_name} ({mine.club})</span><b>Gebot</b><span>CHF {Number(mine.price)}</span><b>Entlassung</b><span>{(kader.find(p => p.id === mine.release_player_id) || {}).name || mine.release_player_id}</span><b>Eventualauftrag</b><span>{mine.swap_out_player_id ? `ja, ersetzt ${(b.players[mine.swap_out_player_id] || {}).name}` : 'nein'}</span></div>}
       <BidForm pool={free} clubs={b.clubs.map(c => c.id)} kader={kader.map(p => ({ id: p.id, label: `${p.base_pos} ${p.name} (${p.club}, ${Number(p.price)})` }))} lineup={lineup ? Object.keys(lineup.entries).map(pid => ({ id: pid, label: (b.players[pid] || {}).name })) : []} budget={budget} hasBid={!!mine} mine={mine} minBid={R.MIN_BID} />
     </div>}
+    <div className="card"><div className="row between"><div><div className="eyebrow">Transfermarkt</div><h2>{open ? `Gebote für ${open.label}` : 'Keine offene Runde'}</h2></div>
+      {open && <div className="small">Gebots-Deadline <b>{fmtDt(open.deadline)}</b></div>}</div>
+      {open && <div className="row" style={{ marginTop: 6, gap: 4 }}><span className="mini">Abgegeben ({submitted.length}/{b.managers.length}):</span>{b.managers.map(m => <span key={m.id} className={`pill ${submitted.find(s => s.manager_id === m.id) ? 'ok' : 'grey'}`}>{m.name}{submitted.find(s => s.manager_id === m.id) ? ' ✓' : ''}</span>)}</div>}
+      <Info label="Wie läuft der Markt?">Gebote sind verdeckt: nur der Admin sieht sie, und erst nach der Auflösung werden alle veröffentlicht (Ziff. 7.1). Höchstgebot gewinnt, bei Gleichstand der schlechtere Tabellenplatz. Budget CHF 50 pro Saison (7.4), ab CHF 20 Vertragspflicht.</Info>
+    </div>
     <div className="card"><div className="eyebrow">Ziff. 7.1</div><h2>Freie Spieler <span className="mini">{free.length} im Pool · {pool.length - free.length} in RLB-Kadern</span></h2>
-      <p className="mini">Der Pool entsteht aus den kicker-Aufstellungen jeder Runde (Startelf und Einwechslungen, Position laut kicker-Spielbericht) und wächst mit jedem Spieltag. Neue Bundesliga-Spieler erscheinen, sobald sie erstmals gespielt haben; ein Gebot ist auch auf Spieler möglich, die noch nicht im Pool stehen (Name frei eintippen).</p>
-      <FreeList pool={free} /></div>
+      <details className="squad"><summary><b>Liste durchsuchen</b><span className="mini">nach Name, Verein, Position filtern</span></summary><div className="inner"><FreeList pool={free} /></div></details>
+      <Info label="Woher kommt der Pool?">Der Pool entsteht aus den kicker-Aufstellungen jeder Runde (Startelf und Einwechslungen, Position laut kicker-Spielbericht) und wächst mit jedem Spieltag. Neue Bundesliga-Spieler erscheinen, sobald sie erstmals gespielt haben; ein Gebot ist auch auf Spieler möglich, die noch nicht im Pool stehen (Name frei eintippen).</Info></div>
     <div className="grid2">
       <div className="card"><div className="eyebrow">Veröffentlicht</div><h2>Gebote &amp; Zuteilungen</h2>
         {published.length ? <div className="tbl"><table><thead><tr><th className="l">Runde</th><th className="l">Manager</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Ergebnis</th></tr></thead><tbody>{published.map(x => <tr key={x.id}><td className="l">{x.round_label}</td><td className="l">{x.manager_name}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{Number(x.price)}</td><td className="l">{x.release_name || ''}</td><td className="l">{tag(x.status)} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : <div className="mini">noch keine</div>}</div>
-      <div className="card"><div className="eyebrow">Ziff. 7.3</div><h2>Entlassene Spieler</h2>{releases.length ? <ul className="clean small">{releases.map(t => <li key={t.id}>{t.round_label || '–'}: {t.manager_name} entlässt {t.player_name} (Wert {Number(t.price)}){prevRound && t.round_id === prevRound.id && <span className="badge v">Mindestgebot {Number(t.price)} in dieser Runde</span>}</li>)}</ul> : <div className="mini">keine</div>}<p className="mini">Der entlassende Manager darf erst eine Runde später bieten; in der Folgerunde gilt der alte Wert als Mindestgebot.</p></div>
+      <div className="card"><div className="eyebrow">Ziff. 7.3</div><h2>Entlassene Spieler</h2>{releases.length ? <ul className="clean small">{releases.map(t => <li key={t.id}>{t.round_label || '–'}: {t.manager_name} entlässt {t.player_name} (Wert {Number(t.price)}){prevRound && t.round_id === prevRound.id && <span className="badge v">Mindestgebot {Number(t.price)} in dieser Runde</span>}</li>)}</ul> : <div className="mini">keine</div>}<Info label="Regel">Der entlassende Manager darf erst eine Runde später bieten; in der Folgerunde gilt der alte Wert als Mindestgebot.</Info></div>
     </div>
   </>);
 }

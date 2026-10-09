@@ -16,7 +16,7 @@ export default function BidForm({ pool = [], clubs, kader, lineup, budget, hasBi
   useEffect(() => { if (state) setLast(state); }, [state]); useEffect(() => { if (wstate) setLast(wstate); }, [wstate]);
   return (<>
     <Msg state={last} />
-    <details open={!hasBid}><summary>{hasBid ? 'Gebot ersetzen' : 'Gebot abgeben'} <span className="mini">Kaufbudget CHF {budget}</span></summary>
+    <details className="bidform" open={!hasBid}><summary>{hasBid ? 'Gebot ersetzen' : 'Gebot abgeben'} <span className="mini">Kaufbudget CHF {budget}</span></summary>
       <form action={action} className="stack" style={{ marginTop: 8 }}>
         <div className="row">
           <span style={{ position: 'relative' }}><input name="player_name" placeholder="Spielername (wie bei kicker)" required value={name} onChange={e => setName(e.target.value)} autoComplete="off" />

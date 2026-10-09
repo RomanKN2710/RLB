@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
-import { chf } from '@/components/ui';
+import { chf, Info } from '@/components/ui';
 import PaidForm from './PaidForm';
 
 export const maxDuration = 60;
@@ -15,10 +15,15 @@ export default async function Abrechnung() {
   const ledger = await D.ledgerAll();
   return (<>
     <div className="card"><div className="eyebrow">Abrechnung</div><h2>Auslagen pro Manager (in den Pott)</h2>
-      <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Draft</th><th>Vertrags-auflösung</th><th>Käufe</th><th>Wechsel</th><th>Trades</th><th>Sonstiges</th><th>Gutschrift</th><th>Auslagen</th><th>Bezahlt</th><th>Offen</th></tr></thead>
+      <div className="mcards mob-only">{b.managers.map(m => { const a = aus[m.id]; return <div key={m.id} className={'mcard' + (m.id === u.manager_id ? ' me' : '')}>
+        <div className="top"><span className="nm">{m.name}</span><span>offen <b className={a.open > 0 ? 'delta down' : ''}>{chf(a.open)}</b></span></div>
+        <div className="kvs"><span>Auslagen <b>{chf(a.total)}</b></span><span>bezahlt <b>{chf(a.paid)}</b></span><span>Draft <b>{chf(a.draft)}</b></span><span>Käufe <b>{chf(a.kaeufe)}</b></span><span>Wechsel <b>{chf(a.wechsel)}</b></span>{a.trade ? <span>Trades <b>{chf(a.trade)}</b></span> : null}{a.vertrag ? <span>Vertrag <b>{chf(a.vertrag)}</b></span> : null}{a.sonst ? <span>Sonstiges <b>{chf(a.sonst)}</b></span> : null}{a.gutschrift ? <span>Gutschrift <b>−{chf(a.gutschrift)}</b></span> : null}</div>
+        {admin && <div style={{ marginTop: 8 }}><PaidForm managerId={m.id} paid={a.paid} /></div>}</div>; })}
+        <div className="mcard"><div className="top"><span className="nm">Total</span><b>{chf(pott)}</b></div></div></div>
+      <div className="tbl desk-only"><table><thead><tr><th className="l">Manager</th><th>Draft</th><th>Vertrags-auflösung</th><th>Käufe</th><th>Wechsel</th><th>Trades</th><th>Sonstiges</th><th>Gutschrift</th><th>Auslagen</th><th>Bezahlt</th><th>Offen</th></tr></thead>
         <tbody>{b.managers.map(m => { const a = aus[m.id]; return <tr key={m.id} className={m.id === u.manager_id ? 'me' : ''}><td className="l">{m.name}</td><td>{chf(a.draft)}</td><td>{chf(a.vertrag)}</td><td>{chf(a.kaeufe)}</td><td>{chf(a.wechsel)}</td><td>{chf(a.trade)}</td><td>{chf(a.sonst)}</td><td>{a.gutschrift ? '−' + chf(a.gutschrift) : '–'}</td><td><b>{chf(a.total)}</b></td><td>{admin ? <PaidForm managerId={m.id} paid={a.paid} /> : chf(a.paid)}</td><td className={a.open > 0 ? 'delta down' : ''}>{chf(a.open)}</td></tr>; })}
           <tr><td className="l"><b>Total</b></td><td colSpan={7}></td><td><b>{chf(pott)}</b></td><td></td><td></td></tr></tbody></table></div>
-      <p className="mini">Draft = Phase-1-Preise (4.3.1), Ersatzbank belastet den Pott nicht (4.3.2). Wechsel = 50 % des Werts jedes Einwechselspielers (5.1). Käufe (7.4). Trades je 5 (6). Vertragsauflösung 20 (4.3.3). Gutschrift = Wert eines Spielers, der die Bundesliga verlassen hat (7.4); wird dem Kaufbudget gutgeschrieben und von den Auslagen abgezogen. Draft-Kosten sind fest gebucht (Buchung «draft»).</p></div>
+      <Info label="Was zählt wozu?">Draft = Phase-1-Preise (4.3.1), Ersatzbank belastet den Pott nicht (4.3.2). Wechsel = 50 % des Werts jedes Einwechselspielers (5.1). Käufe (7.4). Trades je 5 (6). Vertragsauflösung 20 (4.3.3). Gutschrift = Wert eines Spielers, der die Bundesliga verlassen hat (7.4); wird dem Kaufbudget gutgeschrieben und von den Auslagen abgezogen. Draft-Kosten sind fest gebucht (Buchung «draft»).</Info></div>
     <div className="grid2">
       <div className="card"><div className="eyebrow">Ziff. 9</div><h2>Pott (provisorisch)</h2><div className="kv"><b>Einzahlungen</b><span>{chf(pott)}</span><b>BBQ (20 × {b.managerIds.length})</b><span>−{bbq}</span><b>Verteilbar</b><span><b>{chf(net)}</b></span>
         {R.PAYOUT.map(([r, pc]) => <span key={r} style={{ display: 'contents' }}><b>Rang {r} ({pc} %)</b><span>{b.managerName[(sd.table.find(x => x.rank === r) || {}).manager_id] || '–'} · {(net * pc / 100).toFixed(0)}</span></span>)}

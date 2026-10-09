@@ -2,12 +2,12 @@ import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as HOF from '@/lib/halloffame';
 import { seasonAwards } from '@/lib/auszeichnungen';
-import { fmtRp } from '@/components/ui';
+import { fmtRp, Info } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const medal = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
-const strip = (n, ch, max = 8) => n ? ch.repeat(Math.min(n, max)) + (n > max ? ` ×${n}` : '') : '';
+const cups = n => n > 3 ? <>🏆 <b>{n}</b></> : '🏆'.repeat(n);
 export default async function HallOfFame() {
   const u = await requireUser(); const H = await HOF.all();
   const sd = await D.season(null); const played = sd.upto.filter((r, i) => r.status === 'final' || sd.datas[i].matches.some(m => m.finished));
@@ -22,14 +22,17 @@ export default async function HallOfFame() {
       {rest.length > 0 && <div className="hof-badges">{rest.map(h => <span key={h.title} className={`hof-badge ${h.manager === me ? 'me' : ''}`} title={h.text}><span>{h.icon}</span><b>{h.title}</b> {h.manager}<span className="mini"> · {h.text}</span></span>)}</div>}
     </div>
     {H.count > 0 && <div className="card"><div className="eyebrow">Meister-Chronik</div><h3>Alle Meister seit {H.firstSeason}</h3>
-      <div className="hof-chrono">{H.chrono.map((s, i) => { const prev = H.chrono[i - 1]; const rep = prev && prev.champions.some(c => s.champions.includes(c)); return <div key={s.season} className={`hof-chip ${rep ? 'rep' : ''} ${s.champions.includes(me) ? 'me' : ''}`}><div className="hof-chip-season">{s.season}</div><div className="hof-chip-name">{s.champions.join(' & ')}</div>{s.champions.length > 1 && <div className="mini">geteilt</div>}</div>; })}
-        {cur && <div className="hof-chip live"><div className="hof-chip-season">2026/27</div><div className="hof-chip-name">{name(cur[0].manager_id)}</div><div className="mini">führt · {fmtRp(cur[0].total)} RP</div></div>}</div>
-      <p className="mini">Gelb markiert: Titelverteidigung. Grün: laufende Saison.</p></div>}
+      <div className="hof-chrono">{cur && <div className="hof-chip live"><div className="hof-chip-season">2026/27</div><div className="hof-chip-name">{name(cur[0].manager_id)}</div><div className="mini">führt · {fmtRp(cur[0].total)} RP</div></div>}
+        {H.chrono.map((s, i) => { const prev = H.chrono[i - 1]; const rep = prev && prev.champions.some(c => s.champions.includes(c)); return <div key={s.season} className={`hof-chip ${rep ? 'rep' : ''} ${s.champions.includes(me) ? 'me' : ''}`}><div className="hof-chip-season">{s.season}</div><div className="hof-chip-name">{s.champions.join(' & ')}</div>{s.champions.length > 1 && <div className="mini">geteilt</div>}</div>; }).reverse()}</div>
+      <p className="mini">Neueste zuerst · gelb: Titelverteidigung · grün: laufende Saison.</p></div>}
     {H.count > 0 && <div className="card"><div className="eyebrow">Ewige Tabelle</div><h3>Alle Manager, sortiert nach Titeln, Podestplätzen und ewigen Punkten</h3>
-      <div className="tbl"><table><thead><tr><th>#</th><th className="l">Manager</th><th className="l">Titel</th><th>🥈</th><th>🥉</th><th>Podest</th><th>Saisons</th><th>Ø Platz</th><th>Bester</th><th>Bottom 3</th><th>Punkte</th><th className="l">Dabei</th></tr></thead>
+      <div className="mcards mob-only">{H.table.map((x, i) => <div key={x.manager} className={`mcard ${x.manager === me ? 'me' : ''} ${active.has(x.manager) ? '' : 'off'}`}>
+        <div className="top"><span className="nm">{i + 1}. {x.manager}{active.has(x.manager) && <span className="badge j">aktiv</span>}</span><span title={x.titleSeasons.join(', ')}>{x.titles ? cups(x.titles) : <span className="muted">–</span>}</span></div>
+        <div className="kvs"><span>Podest <b>{x.podium}</b> <span className="muted">({x.second || 0}× 🥈 {x.third || 0}× 🥉)</span></span><span>Punkte <b>{x.points}</b></span><span>Saisons <b>{x.seasons}</b></span><span>Ø Platz <b>{x.avgRank.toFixed(1)}</b></span><span>Bottom 3 <b>{x.bottom3 || 0}</b></span><span>Dabei <b>{x.first}{x.latest !== x.first ? `–${x.latest}` : ''}</b></span></div></div>)}</div>
+      <div className="tbl desk-only"><table><thead><tr><th>#</th><th className="l">Manager</th><th className="l">Titel</th><th>🥈</th><th>🥉</th><th>Podest</th><th>Saisons</th><th>Ø Platz</th><th>Bester</th><th>Bottom 3</th><th>Punkte</th><th className="l">Dabei</th></tr></thead>
         <tbody>{H.table.map((x, i) => <tr key={x.manager} className={`${x.manager === me ? 'me' : ''} ${active.has(x.manager) ? '' : 'off'}`}><td>{i + 1}</td><td className="l"><b>{x.manager}</b>{active.has(x.manager) && <span className="badge j">aktiv</span>}</td>
-          <td className="l">{x.titles ? <span title={x.titleSeasons.join(', ')}>{strip(x.titles, '🏆')}</span> : <span className="muted">–</span>}</td><td>{x.second || ''}</td><td>{x.third || ''}</td><td><b>{x.podium}</b></td><td>{x.seasons}</td><td>{x.avgRank.toFixed(1)}</td><td>{Math.min(...x.ranks.map(r => r[1]))}.</td><td>{x.bottom3 || ''}</td><td>{x.points}</td><td className="l mini">{x.first}{x.latest !== x.first ? ` – ${x.latest}` : ''}</td></tr>)}</tbody></table></div>
-      <p className="mini">Punkte nach Formel-1-Wertung je Endrang (25-18-15-12-10-8-6-4-2-1). Bester = bester Endrang, Bottom 3 = Saisons in den unteren drei Rängen. Grau: nicht mehr dabei.</p></div>}
+          <td className="l">{x.titles ? <span title={x.titleSeasons.join(', ')}>{cups(x.titles)}</span> : <span className="muted">–</span>}</td><td>{x.second || ''}</td><td>{x.third || ''}</td><td><b>{x.podium}</b></td><td>{x.seasons}</td><td>{x.avgRank.toFixed(1)}</td><td>{Math.min(...x.ranks.map(r => r[1]))}.</td><td>{x.bottom3 || ''}</td><td>{x.points}</td><td className="l mini">{x.first}{x.latest !== x.first ? ` – ${x.latest}` : ''}</td></tr>)}</tbody></table></div>
+      <Info label="Wie wird gezählt?">Punkte nach Formel-1-Wertung je Endrang (25-18-15-12-10-8-6-4-2-1). Bester = bester Endrang, Bottom 3 = Saisons in den unteren drei Rängen. Grau: nicht mehr dabei.</Info></div>}
     <div className="grid2">
       <div className="card"><h3>Auszeichnungen dieser Saison</h3>{aw.rounds.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Anzahl</th><th className="l">Auszeichnungen</th></tr></thead><tbody>{sd.base.managerIds.map(m => ({ m, list: aw.tally[m] })).sort((a, b) => b.list.length - a.list.length).map(x => <tr key={x.m} className={x.m === u.manager_id ? 'me' : ''}><td className="l"><b>{name(x.m)}</b></td><td>{x.list.length}</td><td className="l" style={{ whiteSpace: 'normal' }}>{x.list.map((a, i) => <span key={i} title={a.detail}>{a.icon} {a.title} <span className="mini">({a.round.label.replace('Spieltag ', 'ST ')})</span>{i < x.list.length - 1 ? ' · ' : ''}</span>)}</td></tr>)}</tbody></table></div> : <p className="mini">Noch keine gewertete Runde.</p>}</div>
       <div className="card"><h3>Endstände</h3><div className="stack" style={{ gap: 4 }}>{H.seasons.map(s => <details key={s.season}><summary><b>{s.season}</b> <span className="mini">Meister {s.champions.join(' & ')} · Letzter {s.rows.filter(r => r.rank === s.last).map(r => r.manager).join(' & ')} · {s.n} Manager</span></summary>
