@@ -28,7 +28,7 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
     <div className="tbl"><table>
       <thead><tr><th className="l">Auf.</th><th className="l">Pos</th><th className="l">Spieler</th><th className="l">Verein</th><th>Wert</th></tr></thead>
       <tbody>{sorted.map(p => { const e = entries[p.id]; const on = !!e; const wasIn = prevEntries && p.id in prevEntries; return (
-        <tr key={p.id} className={on ? '' : 'off'}>
+        <tr key={p.id} className={`lineup-row ${on ? '' : 'off'}`} onClick={ev => { if (ev.target.closest('select,input,a')) return; toggle(p); }}>
           <td className="l"><input type="checkbox" checked={on} onChange={() => toggle(p)} /></td>
           <td className="l">{on ? (p.positions.length > 1 ? <select value={e.pos} onChange={ev => setPos(p.id, ev.target.value)}>{p.positions.map(x => <option key={x}>{x}</option>)}</select> : e.pos) : <span className="muted">{p.positions.join('/')}</span>}</td>
           <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j" title="Eventualauftrag oder Trade: ohne Wechselkosten">gratis</span>}</td>

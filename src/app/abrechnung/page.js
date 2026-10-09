@@ -5,6 +5,7 @@ import { chf } from '@/components/ui';
 import PaidForm from './PaidForm';
 
 export const maxDuration = 60;
+const ART = { kauf: 'Kauf', entlassung: 'Entlassung', position: 'Positionserwerb', trade: 'Trade', abgang: 'Abgang (BL)', gutschrift: 'Gutschrift', draft: 'Draft', vertragsaufloesung: 'Vertragsauflösung' };
 export default async function Abrechnung() {
   const u = await requireUser(); const admin = u.role === 'admin';
   const sd = await D.season(null); const b = sd.base; const aus = await D.auslagen(sd);
@@ -25,6 +26,6 @@ export default async function Abrechnung() {
       <div className="card"><div className="eyebrow">Sonderpreise</div><h2>Torschützen</h2><ul className="clean">{top.length ? top.map(([pid, g]) => <li key={pid}>{b.players[pid]?.name} <span className="muted">({b.managerName[b.players[pid]?.manager_id]})</span> · {g}</li>) : <li className="muted">noch keine Tore</li>}</ul>
         <h3 style={{ marginTop: 12 }}>Spieler des Tages</h3><div className="small">{sd.rounds.filter(r => r.sdt).map(r => `${r.label}: ${r.sdt}`).join(' · ') || '–'}</div></div>
     </div>
-    <div className="card"><div className="eyebrow">Buchungen</div><h2>Gebühren &amp; Gutschriften</h2><div className="tbl"><table><thead><tr><th className="l">Runde</th><th className="l">Manager</th><th className="l">Art</th><th>CHF</th><th className="l">Text</th></tr></thead><tbody>{ledger.length ? ledger.map(l => <tr key={l.id}><td className="l">{l.round_label || '–'}</td><td className="l">{l.manager_name}</td><td className="l">{l.type}</td><td>{chf(l.amount)}</td><td className="l mini">{l.text}</td></tr>) : <tr><td colSpan={5} className="l muted">keine</td></tr>}</tbody></table></div></div>
+    <div className="card"><div className="eyebrow">Buchungen</div><h2>Gebühren &amp; Gutschriften</h2><div className="tbl"><table><thead><tr><th className="l">Runde</th><th className="l">Manager</th><th className="l">Art</th><th>CHF</th><th className="l">Text</th></tr></thead><tbody>{ledger.length ? ledger.map(l => <tr key={l.id}><td className="l">{l.round_label || '–'}</td><td className="l">{l.manager_name}</td><td className="l">{ART[l.type] || l.type}</td><td>{chf(l.amount)}</td><td className="l mini">{l.text}</td></tr>) : <tr><td colSpan={5} className="l muted">keine</td></tr>}</tbody></table></div></div>
   </>);
 }

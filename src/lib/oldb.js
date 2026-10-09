@@ -89,11 +89,12 @@ export async function importGoalsPending() {
 /** Sync auslösen, wenn der letzte länger als maxAgeMin zurückliegt (wird beim Seitenaufruf verwendet). */
 export async function maybeSync(maxAgeMin = 60) {
   try {
+    const fail = await getSetting('last_sync_fail'); if (fail && Date.now() - new Date(fail.at).getTime() < 15 * 60e3) return 'backoff';
     const last = await getSetting('last_sync');
     if (!last || Date.now() - new Date(last.at).getTime() > 24 * 3600e3) { await syncTeams(); await syncSchedule(); return 'full'; }
     const lc = await getSetting('last_sync_current');
     if (!lc || Date.now() - new Date(lc.at).getTime() > maxAgeMin * 60e3) { await syncCurrent(); return 'current'; }
-  } catch (e) { console.error('Sync fehlgeschlagen', e.message); try { await importGoalsPending(); } catch {} return 'error: ' + e.message; }
+  } catch (e) { console.error('Sync fehlgeschlagen', e.message); try { await setSetting('last_sync_fail', { at: new Date().toISOString(), error: e.message }); } catch {} try { await importGoalsPending(); } catch {} return 'error: ' + e.message; }
   return 'skip';
 }
 

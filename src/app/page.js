@@ -33,10 +33,10 @@ export default async function Tabelle({ searchParams }) {
       <div className="row between"><div><div className="eyebrow">Rangliste</div><h2>Stand nach {cur.label} {cur.status === 'final' ? <span className="pill ok">final</span> : <span className="pill open">vorläufig</span>}</h2></div>
         <form className="row"><label className="small">Stand nach <select name="r" defaultValue={sel}>{played.map(r => <option key={r.id} value={r.number}>{r.label}{r.status !== 'final' ? ' (vorläufig)' : ''}</option>)}</select></label><button className="sec sm">Anzeigen</button></form></div>
       <div className="tbl"><table>
-        <thead><tr><th>#</th><th className="l">Manager</th>{CATS.map(([c, l]) => <th key={c}>{l}</th>)}<th>Total</th></tr></thead>
+        <thead><tr><th>#</th><th className="l">Manager</th><th>Total</th>{CATS.map(([c, l]) => <th key={c}>{l}</th>)}</tr></thead>
         <tbody>{sd.table.map(r => { const d = prev ? prevRank[r.manager_id] - r.rank : 0; return (
           <tr key={r.manager_id} className={r.manager_id === u.manager_id ? 'me' : ''}><td>{r.rank} {d > 0 && <span className="delta up">▲{d}</span>}{d < 0 && <span className="delta down">▼{-d}</span>}</td><td className="l"><b>{name(r.manager_id)}</b>{crown(r.manager_id)}</td>
-            {CATS.map(([c]) => <td key={c}>{r.tot[c]}<div className="rp">{fmtRp(r.rp[c])} RP</div></td>)}<td><b className="disp" style={{ fontSize: 18 }}>{fmtRp(r.total)}</b></td></tr>); })}</tbody>
+            <td><b className="disp" style={{ fontSize: 18 }}>{fmtRp(r.total)}</b></td>{CATS.map(([c]) => <td key={c}>{r.tot[c]}<div className="rp">{fmtRp(r.rp[c])} RP</div></td>)}</tr>); })}</tbody>
       </table></div>
       <p className="mini">Werte = Saisonsumme · RP = Rangpunkte pro Kategorie (Teilrangpunkte bei Gleichstand, Karten: weniger ist besser, Ziff. 8).</p>
     </div>

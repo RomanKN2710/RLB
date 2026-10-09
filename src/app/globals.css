@@ -1,5 +1,5 @@
-:root{--bg:#F2F4F0;--surface:#FFFFFF;--surface2:#E9EDE7;--line:#D3DAD2;--ink:#182019;--muted:#5E6B60;--accent:#1E6B3B;--accent-ink:#FFFFFF;--accent-soft:#DCEBDF;--komm:#B7791A;--komm-soft:#F6EBD3;--good:#1E6B3B;--warn:#B7791A;--bad:#B23A3A;--me:#EEF5EF;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#121815;--surface:#1A211D;--surface2:#222B26;--line:#33403A;--ink:#E7EDE8;--muted:#9AA79E;--accent:#4FA86F;--accent-ink:#0D1A11;--accent-soft:#1F3A29;--komm:#D9A343;--komm-soft:#3A2E14;--good:#4FA86F;--warn:#D9A343;--bad:#E06A6A;--me:#1C2A21;color-scheme:dark}}
+:root{--bg:#F2F4F0;--surface:#FFFFFF;--surface2:#E9EDE7;--line:#D3DAD2;--ink:#182019;--muted:#5E6B60;--accent:#1E6B3B;--accent-ink:#FFFFFF;--accent-soft:#DCEBDF;--komm:#B7791A;--komm-soft:#F6EBD3;--good:#1E6B3B;--warn:#B7791A;--bad:#B23A3A;--me:#EEF5EF;--bad-soft:#F3D9D9;--bad-ink:#5a1f1f;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#121815;--surface:#1A211D;--surface2:#222B26;--line:#33403A;--ink:#E7EDE8;--muted:#9AA79E;--accent:#4FA86F;--accent-ink:#0D1A11;--accent-soft:#1F3A29;--komm:#D9A343;--komm-soft:#3A2E14;--good:#4FA86F;--warn:#D9A343;--bad:#E06A6A;--me:#1C2A21;--bad-soft:#3A1E1E;--bad-ink:#F2C4C4;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:14px;line-height:1.45}
 a{color:var(--accent)}
@@ -30,12 +30,12 @@ tr.me td{background:var(--me)}tr.me td:first-child{box-shadow:inset 3px 0 var(--
 tr.off td{color:var(--muted)}
 .tbl{overflow-x:auto}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.03em}
-.pill.ok{background:var(--accent-soft);color:var(--good)}.pill.open{background:var(--komm-soft);color:var(--warn)}.pill.grey{background:var(--surface2);color:var(--muted)}.pill.bad{background:#F3D9D9;color:var(--bad)}
+.pill.ok{background:var(--accent-soft);color:var(--good)}.pill.open{background:var(--komm-soft);color:var(--warn)}.pill.grey{background:var(--surface2);color:var(--muted)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
 .badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--muted);margin-left:4px;vertical-align:middle}.badge.j{background:var(--accent-soft);color:var(--good)}.badge.v{background:var(--komm-soft);color:var(--komm)}
 .muted{color:var(--muted)}.small{font-size:12px}.mini{font-size:12px;color:var(--muted)}
 .delta.up{color:var(--good)}.delta.down{color:var(--bad)}.rp{color:var(--muted);font-size:11px}
 .note{border-left:3px solid var(--komm);background:var(--komm-soft);padding:8px 12px;border-radius:0 4px 4px 0;font-size:13px}
-.err{border-left:3px solid var(--bad);background:#F3D9D9;color:#5a1f1f;padding:8px 12px;border-radius:0 4px 4px 0;font-size:13px}
+.err{border-left:3px solid var(--bad);background:var(--bad-soft);color:var(--bad-ink);padding:8px 12px;border-radius:0 4px 4px 0;font-size:13px}
 .okmsg{border-left:3px solid var(--good);background:var(--accent-soft);padding:8px 12px;border-radius:0 4px 4px 0;font-size:13px}
 .adminbox{border:1px dashed var(--komm);border-radius:6px;padding:12px 14px;background:var(--surface)}.adminbox h3{color:var(--komm)}
 .posgrid{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}.posgrid span{padding:2px 8px;border:1px solid var(--line);border-radius:4px}.posgrid span.bad{border-color:var(--bad);color:var(--bad)}.posgrid span.ok{border-color:var(--good)}
@@ -52,7 +52,7 @@ details summary{cursor:pointer;font-weight:600}
 
 .bericht h2{margin-top:18px}.bericht h3{margin:16px 0 4px;color:var(--komm)}.bericht p{margin:6px 0;line-height:1.5}.bericht ul{margin:4px 0 8px 18px}
 .awards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.award{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--surface2)}.award.me{border-color:var(--accent)}.award-icon{font-size:26px;line-height:1}.award-title{font:600 15px "Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--komm)}.award-name{font-weight:600;font-size:15px}
-.prog-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;border:1px solid var(--line);min-width:160px}.prog-bar span{display:block;height:100%}
+.prog-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;border:1px solid var(--line);min-width:120px}.prog-bar span{display:block;height:100%}
 .hof-champ{display:flex;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}.hof-season{font:700 22px "Barlow Condensed",sans-serif;min-width:90px}.hof-name{font-weight:600;font-size:16px}
 .brand{display:flex;align-items:center;gap:10px}.brand .rlb-logo{flex:none}
 /* Hall of Fame */
@@ -65,7 +65,21 @@ details summary{cursor:pointer;font-weight:600}
 /* Mobile: Rasterkinder dürfen schmaler als ihr Inhalt werden, Tabellen scrollen innerhalb der Karte */
 main>*,.grid2>*,.grid3>*,.card{min-width:0;max-width:100%}
 .tbl{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.card>table{display:block;max-width:100%;overflow-x:auto}
+.card>table{display:block;max-width:100%;overflow-x:auto}.card>table:not(:has(thead))>tbody{display:table;width:100%}
 .row{flex-wrap:wrap}
 @media (max-width:640px){.hof-tile-name{font-size:24px}.awards{grid-template-columns:1fr}}
 .crown{margin-left:5px;font-size:13px;vertical-align:-1px;cursor:help}
+
+.err .mini{color:inherit;opacity:.85}
+/* Navigation: aktive Seite */
+nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
+/* Handy: kompakterer Kopf, grössere Tippflächen, kein iOS-Zoom bei Eingaben */
+@media (max-width:640px){
+  .brand small,.bar .user-line{display:none}
+  .bar{padding:8px 12px;gap:6px 12px}.brand h1{font-size:20px}
+  input,select,textarea{font-size:16px}
+  button.sm,.btn.sm{padding:6px 10px;min-height:32px}
+  summary{padding:6px 0}
+  .lineup-row td{padding-top:9px;padding-bottom:9px}
+}
+.lineup-row{cursor:pointer}.lineup-row input[type=checkbox]{width:20px;height:20px;cursor:pointer}

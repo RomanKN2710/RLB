@@ -6,6 +6,7 @@ import { maybeSync } from '@/lib/oldb';
 import { openRound } from '@/lib/data';
 import { fmtDt } from '@/components/ui';
 import RlbLogo from '@/components/RlbLogo';
+import Nav from '@/components/Nav';
 
 export const metadata = { title: 'RLB Managerspiel 26/27', description: 'Rotissery League Bundesliga' };
 export const dynamic = 'force-dynamic';
@@ -22,25 +23,10 @@ export default async function RootLayout({ children }) {
             <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
             <div className="grow" />
             {open && <span className="mini">Offen: <b>{open.label}</b> · Deadline {fmtDt(open.deadline)}</span>}
-            {user && <span className="small">{user.name}{user.manager_name && user.manager_name !== user.name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}
+            {user && <span className="small user-line">{user.name}{user.manager_name && user.manager_name !== user.name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}
             {user && <form action={logoutAction}><button className="sec sm">Abmelden</button></form>}
           </div>
-          {user && <nav>
-            <Link href="/">Tabelle</Link>
-            <Link href="/aufstellung">Aufstellung</Link>
-            <Link href="/markt">Transfermarkt</Link>
-            <Link href="/kader">Kader &amp; Trades</Link>
-            <Link href="/statistik">Statistik</Link>
-            <Link href="/potential">Potential</Link>
-            <Link href="/prognose">Prognose</Link>
-            <Link href="/bericht">Bericht</Link>
-            <Link href="/abrechnung">Abrechnung</Link>
-            <Link href="/archiv">Archiv</Link>
-            <Link href="/hall-of-fame">Hall of Fame</Link>
-            <Link href="/regeln">Regeln</Link>
-            <Link href="/konto">Konto</Link>
-            {user.role === 'admin' && <Link href="/admin">Admin</Link>}
-          </nav>}
+          {user && <Nav admin={user.role === 'admin'} />}
         </header>
         <main>{children}</main>
       </body></html>

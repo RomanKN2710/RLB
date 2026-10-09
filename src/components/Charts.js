@@ -1,6 +1,6 @@
 /* Diagramme als reines SVG (ohne Bibliothek), serverseitig gerendert. */
 export const HUES = [150, 20, 210, 45, 280, 0, 180, 320, 100, 240];
-export const color = (k, me) => `hsl(${HUES[k % 10]} 50% ${me ? 32 : 46}%)`;
+export const color = (k, me) => `hsl(${HUES[k % 10]} 55% 48%)`;
 const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
 
 /** Tabellenplatz-Verlauf (Bump-Chart): ranks: {managerId: [rank pro Runde]} */
@@ -35,7 +35,7 @@ export function Lines({ labels, series, names, ids, me, title, small }) {
   let yy = T; const lab = last.map(o => { const ty = Math.max(yy, y(o.v) - 4); yy = ty + 12; return { ...o, ty }; });
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
-      {title && <text x={L} y={10} fontSize="11" fontWeight="600" fill="var(--text)">{title}</text>}
+      {title && <text x={L} y={10} fontSize="11" fontWeight="600" fill="var(--ink)">{title}</text>}
       {grid.map(v => <g key={v}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--line)" /><text x={L - 5} y={y(v) + 3} fontSize="9" textAnchor="end" fill="var(--muted)">{v}</text></g>)}
       {labels.map((l, i) => <text key={i} x={x(i)} y={H - 7} fontSize="9" textAnchor="middle" fill="var(--muted)">{l}</text>)}
       {ids.map((m, k) => { const col = color(k, m === me); return <g key={m}><polyline points={series[m].map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke={col} strokeWidth={m === me ? 3 : 1.5} />{series[m].map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={small ? 2 : 3} fill={col} />)}</g>; })}
@@ -53,9 +53,9 @@ export function StackedBars({ rows, cats, names, me }) {
     <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rangpunkte nach Kategorie">
       {cats.map(([c, label], i) => <g key={c}><rect x={L + i * 82} y={4} width="10" height="10" fill={catCol(i)} rx="2" /><text x={L + i * 82 + 14} y={13} fontSize="9" fill="var(--muted)">{label}</text></g>)}
       {rows.map((r, ri) => { let acc = 0; const y = T + ri * rowH; return <g key={r.manager_id}>
-        <text x={L - 8} y={y + 16} fontSize="11" textAnchor="end" fill="var(--text)" fontWeight={r.manager_id === me ? 700 : 500}>{names[r.manager_id]}</text>
+        <text x={L - 8} y={y + 16} fontSize="11" textAnchor="end" fill="var(--ink)" fontWeight={r.manager_id === me ? 700 : 500}>{names[r.manager_id]}</text>
         {cats.map(([c], i) => { const v = r.rp[c] || 0; const x0 = x(acc); acc += v; return <g key={c}><rect x={x0} y={y + 4} width={Math.max(0, x(acc) - x0)} height={rowH - 8} fill={catCol(i)} stroke="var(--surface)" strokeWidth="1" />{v >= 4 && <text x={(x0 + x(acc)) / 2} y={y + 16} fontSize="9" textAnchor="middle" fill="#fff">{fmt(v)}</text>}</g>; })}
-        <text x={x(r.total) + 6} y={y + 16} fontSize="11" fontWeight="700" fill="var(--text)">{fmt(r.total)}</text>
+        <text x={x(r.total) + 6} y={y + 16} fontSize="11" fontWeight="700" fill="var(--ink)">{fmt(r.total)}</text>
       </g>; })}
     </svg>
   );
@@ -72,9 +72,9 @@ export function Heatmap({ labels, cells, names, ids, me, max }) {
       {labels.map((l, i) => <text key={i} x={L + i * cw + cw / 2} y={14} fontSize="10" textAnchor="middle" fill="var(--muted)">{l}</text>)}
       <text x={L + labels.length * cw + 30} y={14} fontSize="10" textAnchor="middle" fill="var(--muted)">Ø</text>
       {order.map((m, ri) => { const y = T + ri * ch; return <g key={m}>
-        <text x={L - 8} y={y + 16} fontSize="11" textAnchor="end" fill="var(--text)" fontWeight={m === me ? 700 : 500}>{names[m]}</text>
-        {cells[m].map((v, i) => <g key={i}><rect x={L + i * cw + 1} y={y + 1} width={cw - 2} height={ch - 2} rx="3" fill={shade(v)} /><text x={L + i * cw + cw / 2} y={y + 16} fontSize="10" textAnchor="middle" fill={v / max > 0.55 ? '#fff' : 'var(--text)'}>{fmt(v)}</text></g>)}
-        <text x={L + labels.length * cw + 30} y={y + 16} fontSize="11" textAnchor="middle" fontWeight="600" fill="var(--text)">{fmt(avg(m))}</text>
+        <text x={L - 8} y={y + 16} fontSize="11" textAnchor="end" fill="var(--ink)" fontWeight={m === me ? 700 : 500}>{names[m]}</text>
+        {cells[m].map((v, i) => <g key={i}><rect x={L + i * cw + 1} y={y + 1} width={cw - 2} height={ch - 2} rx="3" fill={shade(v)} /><text x={L + i * cw + cw / 2} y={y + 16} fontSize="10" textAnchor="middle" fill={v / max > 0.55 ? '#fff' : 'var(--ink)'}>{fmt(v)}</text></g>)}
+        <text x={L + labels.length * cw + 30} y={y + 16} fontSize="11" textAnchor="middle" fontWeight="600" fill="var(--ink)">{fmt(avg(m))}</text>
       </g>; })}
     </svg>
   );

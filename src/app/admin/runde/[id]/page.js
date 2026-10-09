@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { getUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
@@ -9,7 +10,7 @@ import { status as inboxStatus } from '@/lib/kicker-inbox';
 import { roundCheck } from '@/lib/rundencheck';
 
 export default async function AdminRunde({ params }) {
-  const __u = await getUser(); if (!__u || __u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>; const b = await D.base(); const round = await D.roundById(Number(params.id));
+  const __u = await getUser(); if (!__u || __u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>; const b = await D.base(); const round = await D.roundById((Number.isInteger(Number(params.id)) && Number(params.id) > 0) ? Number(params.id) : notFound());
   if (!round) return <div className="card">Runde nicht gefunden.</div>;
   const passed = round.deadline && new Date(round.deadline) < new Date();
   const d = await D.roundData(round, b);

@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
@@ -7,7 +8,7 @@ import Auszeichnungen from '@/components/Auszeichnungen';
 import { roundAwards } from '@/lib/auszeichnungen';
 
 export default async function Runde({ params }) {
-  const u = await requireUser(); const b = await D.base(); const round = await D.roundById(Number(params.id));
+  const u = await requireUser(); const b = await D.base(); const round = await D.roundById((Number.isInteger(Number(params.id)) && Number(params.id) > 0) ? Number(params.id) : notFound());
   if (!round) return <div className="card">Runde nicht gefunden.</div>;
   const passed = round.deadline && new Date(round.deadline) < new Date();
   const d = await D.roundData(round, b);
@@ -24,7 +25,7 @@ export default async function Runde({ params }) {
     </div>
     {passed && <div className="grid3">{b.managers.map(m => { const lu = d.lineups[m.id]; if (!lu) return <div key={m.id} className="card"><h3>{m.name}</h3><div className="mini">keine Aufstellung</div></div>; const t = d.totals[m.id]; return (
       <div key={m.id} className="card" style={m.id === u.manager_id ? { borderColor: 'var(--accent)' } : {}}><div className="row between"><h3>{m.name}</h3><span className="mini">P {t.punkte} · Sh {t.shutout} · A {t.assist} · T {t.tore} · K {t.karten} · TdR {t.tdr} · St {t.start}</span></div>
-        <table><tbody>{Object.entries(lu.entries).map(([pid, e]) => { const p = b.players[pid]; if (!p) return null; const r = d.results[pid]; const v = R.entryValues(p, e.pos, r, d.clubRes); return <tr key={pid}><td className="l muted">{e.pos}</td><td className="l">{p.name} <span className="mini">{p.club}</span></td><td className="mini">{r ? ['–', 'Start', 'Eingew.'][r.start] : ''}</td><td>{v.punkte}/{v.shutout}/{v.assist}/{v.tore}/{v.karten}/{v.tdr}</td></tr>; })}</tbody></table>
-        <div className="mini">Spalten: P/Sh/A/T/K/TdR</div></div>); })}</div>}
+        <table><tbody>{Object.entries(lu.entries).sort((a, z) => 'TVMS'.indexOf(a[1].pos) - 'TVMS'.indexOf(z[1].pos)).map(([pid, e]) => { const p = b.players[pid]; if (!p) return null; const r = d.results[pid]; const v = R.entryValues(p, e.pos, r, d.clubRes); return <tr key={pid}><td className="l muted">{e.pos}</td><td className="l">{p.name} <span className="mini">{p.club}</span></td><td className="mini">{r ? ['–', 'Start', 'Eingew.'][r.start] : ''}</td><td>{v.punkte}/{v.shutout}/{v.assist}/{v.tore}/{v.karten}/{v.tdr}/{v.start}</td></tr>; })}</tbody></table>
+        <div className="mini">Spalten: Punkte/Shutout/Assists/Tore/Karten/Team d. R./Start</div></div>); })}</div>}
   </>);
 }

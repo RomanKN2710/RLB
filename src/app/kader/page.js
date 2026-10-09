@@ -7,6 +7,7 @@ import { Propose as TradePropose, Actions as TradeActions } from './TradePanel';
 import AdminPlayerTools from './AdminPlayerTools';
 
 export const maxDuration = 60;
+const ART = { kauf: 'Kauf', entlassung: 'Entlassung', position: 'Positionserwerb', trade: 'Trade', abgang: 'Abgang (BL)', gutschrift: 'Gutschrift', draft: 'Draft', vertragsaufloesung: 'Vertragsauflösung' };
 export default async function Kader() {
   const u = await requireUser(); const admin = u.role === 'admin';
   const b = await D.base(); const open = await D.openRound();
@@ -31,7 +32,7 @@ export default async function Kader() {
         </tbody></table></div>
         {u.manager_id && <div style={{ marginTop: 10 }}><TradePropose me={u.manager_id} managers={b.managers.filter(m => m.id !== u.manager_id).map(m => ({ id: m.id, name: m.name }))} players={b.playersArr.filter(p => p.status === 'active').map(p => ({ id: p.id, manager_id: p.manager_id, label: `${p.base_pos} ${p.name} (${Number(p.price)})` }))} fee={R.TRADE_FEE} /></div>}
       </div>
-      <div className="card"><div className="eyebrow">Historie</div><h2>Transfers</h2><div className="tbl"><table><thead><tr><th className="l">Runde</th><th className="l">Manager</th><th className="l">Art</th><th className="l">Spieler</th><th>CHF</th><th className="l">Notiz</th></tr></thead><tbody>{transfers.slice(0, 40).map(t => <tr key={t.id}><td className="l">{t.round_label || '–'}</td><td className="l">{t.manager_name}</td><td className="l">{t.type}</td><td className="l">{t.player_name}</td><td>{Number(t.price)}</td><td className="l mini">{t.note}</td></tr>)}</tbody></table></div></div>
+      <div className="card"><div className="eyebrow">Historie</div><h2>Transfers</h2><div className="tbl"><table><thead><tr><th className="l">Runde</th><th className="l">Manager</th><th className="l">Art</th><th className="l">Spieler</th><th>CHF</th><th className="l">Notiz</th></tr></thead><tbody>{transfers.slice(0, 40).map(t => <tr key={t.id}><td className="l">{t.round_label || '–'}</td><td className="l">{t.manager_name}</td><td className="l">{ART[t.type] || t.type}</td><td className="l">{t.player_name}</td><td>{Number(t.price)}</td><td className="l mini">{t.note}</td></tr>)}</tbody></table></div></div>
     </div>
     <div className="grid3">{b.managers.map(m => { const ps = b.playersArr.filter(p => p.manager_id === m.id && p.status === 'active').sort((a, c) => (a.slot > c.slot ? 1 : a.slot < c.slot ? -1 : 0) || order[a.base_pos] - order[c.base_pos] || a.name.localeCompare(c.name)); return (
       <div key={m.id} className="card" style={m.id === u.manager_id ? { borderColor: 'var(--accent)' } : {}}><div className="row between"><h3>{m.name} <span className="mini">{ps.length}/22</span></h3><span className="mini">Kaufbudget {budgets[m.id]} · Auslagen {chf(aus[m.id].total)}</span></div>
