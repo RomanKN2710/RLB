@@ -10,7 +10,7 @@ export async function GET(req) {
   const u = await getUser(); const key = new URL(req.url).searchParams.get('key');
   if (!(u && u.role === 'admin') && !(process.env.CRON_SECRET && key === process.env.CRON_SECRET)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const out = { exportiert: new Date().toISOString(), von: u ? u.email : 'cron' };
-  const tables = ['managers', 'clubs', 'players', 'rounds', 'matches', 'lineups', 'results', 'corrections', 'bids', 'trades', 'ledger', 'transfers', 'finance', 'settings', 'squad_log', 'blog_posts'];
+  const tables = ['managers', 'clubs', 'players', 'rounds', 'matches', 'lineups', 'results', 'corrections', 'bids', 'trades', 'ledger', 'transfers', 'finance', 'settings', 'squad_log', 'blog_posts', 'hall_of_fame', 'reports'];
   for (const t of tables) { try { out[t] = await q(`select * from ${t}`); } catch (e) { out[t] = { fehler: e.message }; } }
   out.kicker_pages = await q("select matchday, page_id, kind, title, at, length(html) as bytes, case when kind='elf' then html end as html from kicker_pages order by matchday, at").catch(() => []);
   out.users = await q('select id, email, name, role, manager_id, must_change_pw, created_at from users');

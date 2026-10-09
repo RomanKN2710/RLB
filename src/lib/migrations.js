@@ -33,6 +33,11 @@ export const STEPS = [
     }
     await setSetting('qa_20261009', { at: new Date().toISOString(), log }); return { log };
   } },
+  { key: 'jugend_20261009', title: 'Jugendstatus: Spieler in gewerteten Aufstellungen verlieren ihn (Ziff. 4.3.4)', run: async () => {
+    const j = await q("update players set jugend=false where jugend and id in (select jsonb_object_keys(l.entries) from lineups l join rounds r on r.id=l.round_id where r.status='final') returning name");
+    const log = [j.length ? `Jugendstatus entfernt: ${j.map(x => x.name).join(', ')}` : 'nichts zu korrigieren'];
+    await setSetting('jugend_20261009', { at: new Date().toISOString(), log }); return { log };
+  } },
   { key: 'bankwerte_st1_3', title: 'kicker-Werte aller Kaderspieler Spieltag 1–3 (Grundlage der Potential-Tabelle)', run: async userId => { const log = await applyStatsSeed(statsSeed, await base()); await setSetting('bankwerte_st1_3', { at: new Date().toISOString(), log }); return { log }; } },
 ];
 

@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth';
 export default async function Regeln() { await requireUser(); return (
   <div className="grid2"><div className="card"><div className="eyebrow">So rechnet die App (Regelwerk V4 2022 – Volltext im Repo unter docs/regelwerk.md)</div><h2>Regeln</h2>
-    <ul className="small" style={{ paddingLeft: 18, display: 'grid', gap: 4 }}>
+    <ul className="small" style={{ paddingLeft: 18, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 4 }}>
       <li><b>Aufstellung (5.1)</b>: 11 Spieler, 1 T, 3–5 V, 3–6 M, 1–3 S. Offen ist nur die nächste Runde, bis 90 Minuten vor dem ersten Anpfiff (Spielplan OpenLigaDB). Ohne Änderung gilt die Aufstellung der Vorrunde. Grundaufstellung Runde 1 gratis, danach 50 % des Werts jedes neu aufgestellten Spielers.</li>
       <li><b>Positionen (5.2)</b>: Grundposition laut kicker; erworbene Zusatzpositionen trägt der Admin ein.</li>
       <li><b>Jugendspieler (4.3.4)</b>: Bank-Picks (J) verlieren den Status, sobald sie aufgestellt werden.</li>

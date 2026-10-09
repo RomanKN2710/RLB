@@ -21,7 +21,7 @@ export function classify(html, hintUrl = '') {
   const elfMd = (h.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/) || (hintUrl.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/)) || [])[1];
   if (elfMd || /Elf des Tages/i.test(title)) return { kind: 'elf', matchday: elfMd ? Number(elfMd) : null, id: 'elf', title: title || 'Elf des Tages' };
   const hasLineup = /kick__lineup__teamrow/.test(h);
-  const id = (h.match(/rel="canonical" href="[^"]*?-(\d+)\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)?"?/) || h.match(/\/([0-9]{6,})\/aufstellung/) || hintUrl.match(/-(\d+)\/\w*$/) || [])[1];
+  const id = (h.match(/rel="canonical" href="[^"]*?-(\d+)\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)?"?/) || h.match(/\/([0-9]{6,})\/aufstellung/) || h.match(/-(\d{6,})\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)\b/) || hintUrl.match(/-(\d+)\/\w*$/) || [])[1];
   // Spieltag: Tracking-Kennung "…_bundesliga_2026-27_3", sonst JSON "spieltag":3, sonst Brotkrumen/Titel "3. Spieltag"
   const md = (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || h.match(/(\d{1,2})\.\s*Spieltag/) || [])[1];
   const teams = [...h.matchAll(/kick__lineup__teamrow__teamname[^>]*>\s*([^<]+?)\s*</g)].map(m => m[1].replace(/&#x([0-9a-f]+);/gi, (_, x) => String.fromCharCode(parseInt(x, 16))).replace(/&amp;/g, '&')).slice(0, 2);

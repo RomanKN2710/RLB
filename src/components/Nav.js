@@ -7,7 +7,7 @@ const ITEMS = [['/', 'Tabelle'], ['/aufstellung', 'Aufstellung'], ['/markt', 'Tr
 export default function Nav({ admin }) {
   const path = usePathname() || '/'; const ref = useRef(null);
   const items = admin ? [...ITEMS, ['/admin', 'Admin']] : ITEMS;
-  const isOn = h => h === '/' ? path === '/' : path === h || path.startsWith(h + '/') || (h === '/' && path.startsWith('/runde'));
+  const isOn = h => h === '/' ? (path === '/' || path.startsWith('/runde')) : (path === h || path.startsWith(h + '/'));
   useEffect(() => { const el = ref.current?.querySelector('a.on'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' }); }, [path]);
   return <nav ref={ref}>{items.map(([h, l]) => <Link key={h} href={h} className={isOn(h) ? 'on' : ''} aria-current={isOn(h) ? 'page' : undefined}>{l}</Link>)}</nav>;
 }

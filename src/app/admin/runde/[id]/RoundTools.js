@@ -20,9 +20,11 @@ function splitPages(text) {
   // Eine Seite beginnt mit <!doctype html> UND enthaelt gleich darauf <html …>. Wuerde an
   // beidem geschnitten, ergaeben neun Seiten achtzehn Stuecke. Darum die Doctype-Marken
   // bevorzugen und nur auf <html> zurueckfallen, wenn es keine gibt.
-  const finde = re => { const out = []; let m; const r = new RegExp(re, 'gi'); while ((m = r.exec(text)) !== null) out.push(m.index); return out; };
-  const doctype = finde('<!doctype\\s+html');
-  const marks = (doctype.length ? doctype : finde('<html[\\s>]')).filter((x, i, a) => i === 0 || x - a[i - 1] > 200);
+  const finde = re => { const out = []; let m; const r = new RegExp(re, 'gi'); while ((m = r.exec(text)) !== null) { out.push(m.index); if (m[0].length === 0) r.lastIndex++; } return out; };
+  // Jede kicker-Seite hat genau einen <title>. Seitenanfang = letzte <!doctype html>/<html>-Marke vor diesem Titel
+  // (eingebettete Doctypes mitten in einer Seite liegen nach deren Titel und zählen daher nicht).
+  const titles = finde('<title[\\s>]'); const tags = finde('<!doctype\\s+html|<html[\\s>]');
+  const marks = titles.map((t, i) => { const prev = i ? titles[i - 1] : -1; const c = tags.filter(x => x > prev && x < t); return c.length ? c[c.length - 1] : (i ? t : 0); });
   if (marks.length < 2) return [text];
   return marks.map((start, i) => text.slice(start, marks[i + 1] ?? text.length)).filter(x => x.trim());
 }
@@ -31,11 +33,13 @@ function slimHtml(html) {
   if (!html || !html.trim()) return '';
   try {
     const d = new DOMParser().parseFromString(html, 'text/html');
-    d.querySelectorAll('script, style, noscript, svg, link, iframe, picture source, template').forEach(el => el.remove());
     const walker = d.createTreeWalker(d, NodeFilter.SHOW_COMMENT);
     const junk = []; while (walker.nextNode()) junk.push(walker.currentNode);
     junk.forEach(n => n.remove());
-    const out = d.body ? d.body.innerHTML : '';
+    const canon = d.querySelector('link[rel=canonical]'); const keep = canon ? `<link rel="canonical" href="${canon.getAttribute('href')}">` : '';
+    const title = d.querySelector('title') ? `<title>${d.querySelector('title').textContent}</title>` : '';
+    d.querySelectorAll('script, style, noscript, svg, iframe, picture source, template').forEach(el => el.remove());
+    const out = d.body ? keep + title + d.body.innerHTML : '';
     return out.length && out.length < html.length ? out : html;
   } catch { return html; }
 }

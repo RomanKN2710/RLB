@@ -12,10 +12,10 @@ header{background:var(--surface);border-bottom:1px solid var(--line);position:st
 nav{max-width:1180px;margin:0 auto;padding:0 16px;display:flex;gap:2px;overflow-x:auto}
 nav a{text-decoration:none;border-bottom:3px solid transparent;padding:8px 12px;font:600 15px "Barlow Condensed",sans-serif;color:var(--muted);white-space:nowrap;letter-spacing:.02em;text-transform:uppercase}
 nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
-main{max-width:1180px;margin:0 auto;padding:18px 16px 60px;display:grid;gap:18px}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.between{justify-content:space-between}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px}
 .stack{display:grid;gap:10px}
 select,input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
 input[type=number]{width:64px;text-align:right;font-variant-numeric:tabular-nums}
@@ -63,7 +63,7 @@ details summary{cursor:pointer;font-weight:600}
 .hof-chrono{display:flex;gap:6px;overflow-x:auto;padding:6px 0 10px}.hof-chip{flex:none;min-width:96px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;text-align:center;background:var(--surface)}.hof-chip.rep{border-color:var(--komm);background:var(--komm-soft)}.hof-chip.live{border-color:var(--accent);background:var(--accent-soft)}.hof-chip.me{box-shadow:inset 0 -3px var(--accent)}
 .hof-chip-season{font-size:11px;color:var(--muted);letter-spacing:.06em}.hof-chip-name{font:700 16px "Barlow Condensed",sans-serif;text-transform:uppercase}
 /* Mobile: Rasterkinder dürfen schmaler als ihr Inhalt werden, Tabellen scrollen innerhalb der Karte */
-main>*,.grid2>*,.grid3>*,.card{min-width:0;max-width:100%}
+main>*,.grid2>*,.grid3>*,.card{min-width:0}
 .tbl{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .card>table{display:block;max-width:100%;overflow-x:auto}.card>table:not(:has(thead))>tbody{display:table;width:100%}
 .row{flex-wrap:wrap}
@@ -75,11 +75,15 @@ main>*,.grid2>*,.grid3>*,.card{min-width:0;max-width:100%}
 nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
 /* Handy: kompakterer Kopf, grössere Tippflächen, kein iOS-Zoom bei Eingaben */
 @media (max-width:640px){
-  .brand small,.bar .user-line{display:none}
-  .bar{padding:8px 12px;gap:6px 12px}.brand h1{font-size:20px}
+  .brand small,.bar .user-line,.bar .grow{display:none}
+  .bar form{margin-left:auto}.bar>.mini{order:3;flex-basis:100%;font-size:11px}
+  .brand{gap:8px}.brand .rlb-logo{height:30px;width:auto}.brand h1{font-size:18px}
+  .bar{padding:8px 12px;gap:6px 12px}
   input,select,textarea{font-size:16px}
   button.sm,.btn.sm{padding:6px 10px;min-height:32px}
   summary{padding:6px 0}
   .lineup-row td{padding-top:9px;padding-bottom:9px}
 }
 .lineup-row{cursor:pointer}.lineup-row input[type=checkbox]{width:20px;height:20px;cursor:pointer}
+
+.card,.eyebrow,h2,h3,li,p{overflow-wrap:anywhere}

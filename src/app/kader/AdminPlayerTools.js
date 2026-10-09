@@ -6,7 +6,7 @@ export default function AdminPlayerTools({ player: p }) {
   const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); const [arm, setArm] = useState(null);
   const run = fn => start(async () => { const r = await fn(); setMsg(r.msg); setArm(null); });
   const missing = ['T', 'V', 'M', 'S'].filter(x => x !== p.base_pos && !(p.extra_pos || []).includes(x));
-  const nextContract = { null: '1J', '1J': '2J', '2J': null }[String(p.contract)];
+  const nextContract = p.contract_mandatory ? (p.contract === '1J' ? '2J' : '1J') : { null: '1J', '1J': '2J', '2J': null }[String(p.contract)];
   return (<span className="row" style={{ gap: 4 }}>
     {missing.map(x => <button key={x} className="sm sec" title={`Zusatzposition ${x} (Ziff. 5.2)`} disabled={pending} onClick={() => run(() => addPositionAction(p.id, x))}>+{x}</button>)}
     {(p.extra_pos || []).map(x => <button key={'r' + x} className="sm sec" title={`Zusatzposition ${x} entfernen`} disabled={pending} onClick={() => run(() => removePositionAction(p.id, x))}>−{x}</button>)}

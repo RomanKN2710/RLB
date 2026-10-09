@@ -136,7 +136,7 @@ export async function importPages(round, b, pages, opts = {}) {
   const log = []; const errors = [];
   const lus = await q('select l.*, m.name as manager_name from lineups l join managers m on m.id=l.manager_id where round_id=$1', [round.id]);
   const lineupPlayers = []; lus.forEach(l => Object.keys(l.entries || {}).forEach(pid => { const p = b.players[pid]; if (p) lineupPlayers.push({ ...p, manager_id: l.manager_id, manager_name: l.manager_name, lineup_pos: l.entries[pid].pos }); }));
-  const active = (b.playersArr || []).filter(p => p.status === 'active');
+  const active = (b.playersArr || []).filter(p => (p.status === 'active' || p.valid_to != null) && (p.valid_from ?? 0) <= round.number && (p.valid_to == null || p.valid_to >= round.number));
   const perPlayer = {}; const onPage = {}; // pid -> {status, kicker}
   const importedTeams = []; const pageNames = {}; // teamSlug -> [{slug,name}] aller auf der Seite genannten Spieler
   const allStarters = []; const matches = []; const benchStats = {};

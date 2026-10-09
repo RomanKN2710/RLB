@@ -1,6 +1,6 @@
 /* Hall of Fame: Endstände aller Saisons seit 1999/2000 (ewige Rangliste aus dem Excel plus spätere Saisons), Meister,
    ewige Tabelle und Ehrungen (Rekordmeister, Podestkönig, Dynastie, Dauerbrenner, Stehaufmännchen …). */
-import { q } from './db';
+import { q, tx } from './db';
 
 let ready = false;
 export async function ensureTable() {
@@ -29,8 +29,10 @@ export function parseSeasonText(text) {
 export async function importSeason(season, text, note = '') {
   await ensureTable(); const rows = typeof text === 'string' ? parseSeasonText(text) : text; if (!rows.length) throw new Error('Keine Zeilen erkannt');
   season = String(season || '').trim(); if (!season) throw new Error('Saison fehlt (z. B. 2025/26)');
-  await q('delete from hall_of_fame where season=$1', [season]);
-  for (const r of rows) await q('insert into hall_of_fame(season,rank,manager,points,note) values($1,$2,$3,$4,$5) on conflict (season, manager) do nothing', [season, r.rank, r.manager, r.points ?? null, note || null]);
+  const seen = new Set(); const dup = rows.filter(r => { const k = r.manager.toLowerCase(); if (seen.has(k)) return true; seen.add(k); return false; });
+  if (dup.length) throw new Error(`Manager doppelt in der Liste: ${dup.map(r => r.manager).join(', ')}`);
+  await tx(async x => { await x.q('delete from hall_of_fame where season=$1', [season]);
+    for (const r of rows) await x.q('insert into hall_of_fame(season,rank,manager,points,note) values($1,$2,$3,$4,$5)', [season, r.rank, r.manager, r.points ?? null, note || null]); });
   return rows.length;
 }
 export async function deleteSeason(season) { await ensureTable(); await q('delete from hall_of_fame where season=$1', [season]); }

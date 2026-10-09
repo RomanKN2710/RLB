@@ -20,7 +20,7 @@ export default async function Archiv({ searchParams }) {
   const kaderOf = m => b.playersArr.filter(p => p.manager_id === m && (p.valid_from ?? 0) <= sel && (p.valid_to == null || p.valid_to >= sel)).sort((a, c) => (a.slot === c.slot ? 0 : a.slot === 'stamm' ? -1 : 1) || 'TVMS'.indexOf(a.base_pos) - 'TVMS'.indexOf(c.base_pos) || a.name.localeCompare(c.name));
   const pre = { whiteSpace: 'pre-wrap', fontSize: 12, margin: '4px 0 0' };
   const PostBox = ({ p }) => <details><summary><b>{p.title}</b> · {p.posted_at ? fmtDt(p.posted_at) : 'ohne Datum'}{p.author && ` · ${p.author}`}</summary><pre style={pre}>{p.body}</pre>{admin && <PostMeta post={{ id: p.id, kind: p.kind, manager_id: p.manager_id, round_number: p.round_number }} managers={b.managers.map(m => ({ id: m.id, name: m.name }))} rounds={rounds.map(r => ({ number: r.number, label: r.label }))} kinds={KINDS} />}</details>;
-  const other = posts.filter(p => p.kind !== 'aufstellung' && p.kind !== 'gebot');
+  const other = posts.filter(p => (p.kind !== 'aufstellung' && p.kind !== 'gebot') || !p.round_number);
   return (<>
     <div className="card"><div className="eyebrow">Archiv</div><h2>Blog, Kader und Aufstellungen</h2>
       <p className="mini">{posts.length} Blog-Einträge gespeichert. Aufstellungs- und Gebotsposts sind der Runde zugeordnet, deren Deadline als nächste folgte (bei weitergeleiteten Gebots-Mails zählt das Mail-Datum). Die Kader zeigen, wer in der gewählten Runde spielberechtigt war (inkl. Käufe ab dieser Runde, ohne bereits Entlassene).</p>
@@ -39,7 +39,7 @@ export default async function Archiv({ searchParams }) {
       {posts.some(p => p.round_number === sel && !p.manager_id) && <><h3>Nicht zugeordnete Einträge dieser Runde</h3>{posts.filter(p => p.round_number === sel && !p.manager_id).map(p => <PostBox key={p.id} p={p} />)}</>}
     </div>}
     <div className="card"><h2>Weitere Einträge</h2><p className="mini">Verträge/Keeper, Teams und Sonstiges – unabhängig von der Runde.</p>
-      {['keeper', 'team', 'sonstiges'].map(k => other.some(p => p.kind === k) && <div key={k}><h3>{KINDS[k]}</h3>{other.filter(p => p.kind === k).map(p => <div key={p.id}>{p.manager_id && <span className="badge v">{b.managerName[p.manager_id]}</span>} <PostBox p={p} /></div>)}</div>)}
+      {['aufstellung', 'gebot', 'keeper', 'team', 'sonstiges'].map(k => other.some(p => p.kind === k) && <div key={k}><h3>{KINDS[k]}</h3>{other.filter(p => p.kind === k).map(p => <div key={p.id}>{p.manager_id && <span className="badge v">{b.managerName[p.manager_id]}</span>} <PostBox p={p} /></div>)}</div>)}
       {posts.length === 0 && <p className="mini">Noch keine Einträge. Der Admin kann den Blog-Text oben einfügen.</p>}</div>
   </>);
 }
