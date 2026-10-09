@@ -1,6 +1,6 @@
 'use client';
 import { useFormState } from 'react-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { submitBidAction, withdrawBidAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
@@ -12,7 +12,10 @@ export default function BidForm({ pool = [], clubs, kader, lineup, budget, hasBi
   const pick = p => { setName(p.name); if (p.pos) setPos(p.pos); if (p.club) setClub(p.club); };
   const [state, action] = useFormState(submitBidAction, null);
   const [wstate, waction] = useFormState(async () => withdrawBidAction(), null);
-  return (
+  const [last, setLast] = useState(null);
+  useEffect(() => { if (state) setLast(state); }, [state]); useEffect(() => { if (wstate) setLast(wstate); }, [wstate]);
+  return (<>
+    <Msg state={last} />
     <details open={!hasBid}><summary>{hasBid ? 'Gebot ersetzen' : 'Gebot abgeben'} <span className="mini">Kaufbudget CHF {budget}</span></summary>
       <form action={action} className="stack" style={{ marginTop: 8 }}>
         <div className="row">
@@ -27,10 +30,9 @@ export default function BidForm({ pool = [], clubs, kader, lineup, budget, hasBi
           <label className="mini">Entlassen (Pflicht) <select name="release" defaultValue={mine?.release_player_id || ''} required><option value="">– wählen –</option>{kader.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
           <label className="mini">Eventualauftrag: gratis einwechseln für <select name="swap" defaultValue={mine?.swap_out_player_id || ''}><option value="">– nein –</option>{lineup.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
         </div>
-        <Msg state={state || wstate} />
         <div className="row"><button>Verdeckt abgeben</button>{hasBid && <button formAction={waction} className="sec">Gebot zurückziehen</button>}</div>
         <p className="mini">Ganze Franken, min. {minBid}. Der entlassene Spieler zählt ab dieser Runde nicht mehr, falls du den Zuschlag erhältst; sonst bleibt alles unverändert. Ein Eventualauftrag setzt den Neueinkauf gratis an die Stelle des gewählten Spielers.</p>
       </form>
     </details>
-  );
+  </>);
 }

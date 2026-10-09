@@ -22,7 +22,7 @@ export default async function RootLayout({ children }) {
             <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>
             <div className="grow" />
             {open && <span className="mini">Offen: <b>{open.label}</b> · Deadline {fmtDt(open.deadline)}</span>}
-            {user && <span className="small">{user.name}{user.manager_name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}
+            {user && <span className="small">{user.name}{user.manager_name && user.manager_name !== user.name ? ` · ${user.manager_name}` : ''}{user.role === 'admin' ? ' · Admin' : ''}</span>}
             {user && <form action={logoutAction}><button className="sec sm">Abmelden</button></form>}
           </div>
           {user && <nav>

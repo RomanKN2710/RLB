@@ -16,7 +16,7 @@ import clubSlugs from '../../../db/seed/kicker-clubs.json';
 /* Admin-Übersicht: 1) Spieltage auswerten (Aufstellungen → kicker-Seiten → Import → abschliessen), 2) Kader & Pool, 3) Konten & Einstellungen, 4) Werkzeuge. */
 export const maxDuration = 60;
 export default async function Admin() {
-  const __u = await getUser(); if (!__u || __u.role !== 'admin') return null;
+  const __u = await getUser(); if (!__u || __u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>;
   const justRun = await runPending(__u.id); const migrations = await migrationStatus(); const hof = await HOF.all();
   const b = await D.base(); const rounds = await D.rounds(); const open = await D.openRound();
   const users = await q('select u.*, m.name as manager_name from users u left join managers m on m.id=u.manager_id order by u.role, u.name');

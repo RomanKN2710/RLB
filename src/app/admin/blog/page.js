@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /* Rohansicht des Aufstellungs-Blogs: zeigt, was die App von Vercel aus im Blog liest (Posts und Kommentare).
    Grundlage fuer den automatischen Aufstellungs-Import nach der Deadline. */
 export default async function Blog() {
-  const u = await getUser(); if (!u || u.role !== 'admin') return null;
+  const u = await getUser(); if (!u || u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>;
   let data, err = null; try { data = await readBlog(); } catch (e) { err = e.message; }
   const dt = s => { const d = new Date(s); return isNaN(d) ? s : fmtDt(d); };
   const pre = { whiteSpace: 'pre-wrap', fontSize: 12, margin: 0 };

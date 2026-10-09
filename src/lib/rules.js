@@ -55,7 +55,7 @@ export const POSNAME = { T: 'Torwart', V: 'Verteidiger', M: 'Mittelfeld', S: 'St
 /** Verstösse gegen Ziff. 5.1 als lesbare Sätze (leer = zulässig). Für Editor und Server gleich. */
 export function posProblems(entries, players) {
   const { cnt, bad, n } = posCheck(entries, players); const out = [];
-  if (n < 11) out.push(`Zu wenige Spieler: ${n} statt 11 (es fehlen ${11 - n})`);
+  if (n < 11) out.push(`Zu wenige Spieler: ${n} statt 11 (${11 - n === 1 ? 'es fehlt 1' : `es fehlen ${11 - n}`})`);
   if (n > 11) out.push(`Zu viele Spieler: ${n} statt 11 (${n - 11} zu viel)`);
   for (const k of bad) { const [lo, hi] = POSRULE[k]; out.push(`${POSNAME[k]}: ${cnt[k]} aufgestellt, erlaubt ${lo === hi ? `genau ${lo}` : `${lo} bis ${hi}`}`); }
   // Positionsfähigkeit (Ziff. 5.2): nur Grundposition oder erworbene Zusatzpositionen

@@ -33,8 +33,11 @@ export async function loginAction(prev, fd) {
 }
 export async function logoutAction() { clearSession(); redirect('/login'); }
 export const changePasswordAction = wrap(async (prev, fd) => {
-  const u = await requireUser(); const pw = String(fd.get('password') || ''), pw2 = String(fd.get('password2') || '');
-  if (pw.length < 8) return fail('Mindestens 8 Zeichen'); if (pw !== pw2) return fail('Passwörter stimmen nicht überein');
+  const u = await requireUser(); const pw = String(fd.get('password') || ''), pw2 = String(fd.get('password2') || ''), cur = String(fd.get('current') || '');
+  const row = await one('select password_hash from users where id=$1', [u.id]); const bcrypt = (await import('bcryptjs')).default;
+  if (!row || !(await bcrypt.compare(cur, row.password_hash))) return fail('Aktuelles Passwort stimmt nicht');
+  if (pw.trim().length < 8) return fail('Mindestens 8 Zeichen (ohne Leerzeichen am Rand)'); if (pw !== pw2) return fail('Passwörter stimmen nicht überein');
+  if (pw === cur) return fail('Das neue Passwort muss sich vom aktuellen unterscheiden');
   await q('update users set password_hash=$1, must_change_pw=false where id=$2', [await hashPassword(pw), u.id]);
   return ok('Passwort geändert');
 });
@@ -130,9 +133,15 @@ export const submitBidAction = wrap(async (prev, fd) => {
   const u = await requireUser(); const managerId = u.role === 'admin' ? Number(fd.get('manager_id')) : u.manager_id;
   if (!managerId) return fail('Kein Manager');
   const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
-  const bid = { player_name: String(fd.get('player_name') || '').trim(), club: String(fd.get('club') || ''), pos: String(fd.get('pos') || '').toUpperCase(), price: Math.floor(Number(fd.get('price'))), release: String(fd.get('release') || ''), swap: String(fd.get('swap') || '') };
+  const bid = { player_name: String(fd.get('player_name') || '').trim(), club: String(fd.get('club') || ''), pos: String(fd.get('pos') || '').toUpperCase(), price: Number(fd.get('price')), release: String(fd.get('release') || ''), swap: String(fd.get('swap') || '') };
   if (!bid.player_name) return fail('Spielername fehlt'); if (!'TVMS'.includes(bid.pos) || !bid.pos) return fail('Position');
-  if (!(bid.price >= R.MIN_BID)) return fail(`Gebot in ganzen Franken, mindestens ${R.MIN_BID}`);
+  if (!Number.isInteger(bid.price) || !(bid.price >= R.MIN_BID)) return fail(`Gebot in ganzen Franken, mindestens ${R.MIN_BID}`);
+  { // Ziff. 7.3: eigener Abgang erst eine Runde später, sonst alter Wert als Mindestgebot
+    const pr = await one("select t.* from transfers t join rounds r on r.id=t.round_id where t.type='entlassung' and lower(t.player_name)=lower($1) and r.number < $2 order by r.number desc limit 1", [bid.player_name, open.number]);
+    const prevNo = await one('select number from rounds where number < $1 order by number desc limit 1', [open.number]);
+    if (pr && prevNo && pr.round_id && (await one('select number from rounds where id=$1', [pr.round_id])).number === prevNo.number) {
+      if (pr.manager_id === managerId) return fail(`${bid.player_name} hast du in der Vorrunde selbst entlassen: frühestens nächste Runde bieten (Ziff. 7.3)`);
+      if (bid.price < Number(pr.price)) return fail(`Mindestgebot für ${bid.player_name} in dieser Runde: CHF ${Number(pr.price)} (alter Wert, Ziff. 7.3)`); } }
   const budget = await D.budgetLeft(managerId); if (bid.price > budget) return fail(`Kaufbudget reicht nicht (${budget} verfügbar, Ziff. 7.4)`);
   const rel = await one('select * from players where id=$1', [bid.release]); if (!rel || rel.manager_id !== managerId || rel.status !== 'active') return fail('Zu entlassender Spieler fehlt (Kader bleibt 22, Ziff. 7.1)');
   const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1) and ($2 = '' or p.club is null or p.club=$2)", [bid.player_name, bid.club]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
@@ -164,6 +173,8 @@ export const proposeTradeAction = wrap(async (prev, fd) => {
   const ps = await q('select * from players where id = any($1)', [give.concat(get)]);
   if (give.some(id => !ps.find(p => p.id === id && p.manager_id === from && p.status === 'active'))) return fail('Eigene Spieler ungültig');
   if (get.some(id => !ps.find(p => p.id === id && p.manager_id === to && p.status === 'active'))) return fail('Spieler des Partners ungültig');
+  const busy = await q("select id from trades where status='proposed' and (give && $1 or get_ && $1)", [give.concat(get)]);
+  if (busy.length) return fail('Mindestens einer dieser Spieler steht schon in einem offenen Trade. Erst diesen abschliessen oder ablehnen.');
   await q('insert into trades(from_manager,to_manager,give,get_) values($1,$2,$3,$4)', [from, to, give, get]); rev(); return ok('Trade vorgeschlagen');
 });
 export const respondTradeAction = wrap(async (tradeId, accept) => {
@@ -310,7 +321,7 @@ export const applyBidsAction = wrap(async (roundId) => { const a = await require
       if (rel) { await x.q("update players set status='released', valid_to=$2 where id=$1", [rel.id, round.number - 1]); await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,$5)", [round.id, m, rel.name, R.value(rel), `mit Gebot ${round.label}`]); }
       const lu = await materializeLineup(x, round, m, b);
       if (lu) { const e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false;
-        if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; delete e[bid.swap_out_player_id]; e[id] = { pos: pos === bid.pos ? pos : bid.pos }; free.push(id); ch = true; }
+        if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; const can = [basePos, ...extra]; if (can.includes(pos)) { delete e[bid.swap_out_player_id]; e[id] = { pos }; free.push(id); ch = true; } }   // passt die Position nicht, bleibt die Aufstellung (Rundencheck meldet es)
         if (rel && e[rel.id]) { delete e[rel.id]; ch = true; }
         if (ch) await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]); }
     }

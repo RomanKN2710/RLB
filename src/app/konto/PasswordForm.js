@@ -7,6 +7,7 @@ export default function PasswordForm() {
   const [state, action] = useFormState(changePasswordAction, null);
   return (
     <form action={action} className="stack">
+      <label>Aktuelles Passwort<br /><input type="password" name="current" required autoComplete="current-password" /></label>
       <label>Neues Passwort (min. 8 Zeichen)<br /><input type="password" name="password" minLength={8} required autoComplete="new-password" /></label>
       <label>Wiederholen<br /><input type="password" name="password2" minLength={8} required autoComplete="new-password" /></label>
       <Msg state={state} />

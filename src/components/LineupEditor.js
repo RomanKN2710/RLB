@@ -31,12 +31,12 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
         <tr key={p.id} className={on ? '' : 'off'}>
           <td className="l"><input type="checkbox" checked={on} onChange={() => toggle(p)} /></td>
           <td className="l">{on ? (p.positions.length > 1 ? <select value={e.pos} onChange={ev => setPos(p.id, ev.target.value)}>{p.positions.map(x => <option key={x}>{x}</option>)}</select> : e.pos) : <span className="muted">{p.positions.join('/')}</span>}</td>
-          <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j">Eventualauftrag</span>}</td>
+          <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j" title="Eventualauftrag oder Trade: ohne Wechselkosten">gratis</span>}</td>
           <td className="l muted">{p.club}</td><td>{p.price}</td></tr>); })}</tbody>
     </table></div>
     {!zulaessig && <div className="err"><b>Unzulässige Aufstellung – so kann sie nicht abgegeben werden.</b>
       <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{probleme.map(x => <li key={x}>{x}</li>)}</ul>
-      <span className="mini">Regel (Ziff. 5.1): genau 11 Spieler, davon 1 Torwart, 3–5 Verteidiger, 3–6 Mittelfeld, 1–3 Sturm. Solange nichts Gültiges gespeichert ist, gilt die Aufstellung der Vorrunde.</span></div>}
+      <span className="mini">Regel (Ziff. 5.1): genau 11 Spieler, davon 1 Torwart, 3–5 Verteidiger, 3–6 Mittelfeld, 1–3 Sturm. Gewertet wird die zuletzt gültig gespeicherte Aufstellung, ohne gespeicherte Aufstellung die der Vorrunde.</span></div>}
     <Msg state={msg} />
     <div className="row"><button onClick={save} disabled={pending || !zulaessig} title={zulaessig ? '' : 'Aufstellung ist unzulässig (siehe Hinweis)'}>{pending ? 'Speichern…' : 'Aufstellung speichern'}</button><span className="mini">{zulaessig ? 'Speichern ist bis zur Deadline beliebig oft möglich; es gilt der letzte Stand.' : 'Speichern ist gesperrt, bis die Aufstellung zulässig ist.'}</span></div>
   </div>);
