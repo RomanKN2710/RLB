@@ -14,7 +14,7 @@ export default async function Tabelle({ searchParams }) {
   const all = await D.rounds();
   const played = all.filter(r => r.deadline && new Date(r.deadline) < new Date());
   if (!played.length) return <div className="card"><h2>Noch keine gewertete Runde</h2><p className="mini">Die Tabelle erscheint, sobald die erste Deadline vorbei ist.</p></div>;
-  const sel = Number(searchParams?.r) || played[played.length - 1].number;
+  const want = Number(searchParams?.r); const sel = played.some(r => r.number === want) ? want : played[played.length - 1].number;
   const sd = await D.season(sel);
   const cur = sd.upto[sd.upto.length - 1]; const curData = sd.datas[sd.datas.length - 1];
   const prev = sd.history.length > 1 ? sd.history[sd.history.length - 2].table : null;

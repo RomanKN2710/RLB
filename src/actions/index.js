@@ -53,12 +53,13 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   return ok('Aufstellung gespeichert');
 });
 async function writeLineup(u, roundId, managerId, clean) {
+  const rd = await D.roundById(roundId); const effective = rd && rd.deadline && new Date(rd.deadline) <= new Date();
   await tx(async t => {
     const old = await t.one('select * from lineups where round_id=$1 and manager_id=$2', [roundId, managerId]);
     await t.q(`insert into lineups(round_id,manager_id,entries,free_in,updated_at,updated_by) values($1,$2,$3,$4,now(),$5)
       on conflict(round_id,manager_id) do update set entries=excluded.entries, updated_at=now(), updated_by=excluded.updated_by`, [roundId, managerId, JSON.stringify(clean), old ? old.free_in : [], u.id]);
     // Jugendspieler verlieren den Status bei Aufstellung (Ziff. 4.3.4)
-    await t.q('update players set jugend=false where jugend and id = any($1)', [Object.keys(clean)]);
+    if (effective) await t.q('update players set jugend=false where jugend and id = any($1)', [Object.keys(clean)]);   // vor der Deadline: erst beim Abschluss der Runde
   });
   await audit(u.id, 'lineup', { roundId, managerId, entries: clean });
 }
@@ -134,8 +135,8 @@ export const submitBidAction = wrap(async (prev, fd) => {
   if (!(bid.price >= R.MIN_BID)) return fail(`Gebot in ganzen Franken, mindestens ${R.MIN_BID}`);
   const budget = await D.budgetLeft(managerId); if (bid.price > budget) return fail(`Kaufbudget reicht nicht (${budget} verfügbar, Ziff. 7.4)`);
   const rel = await one('select * from players where id=$1', [bid.release]); if (!rel || rel.manager_id !== managerId || rel.status !== 'active') return fail('Zu entlassender Spieler fehlt (Kader bleibt 22, Ziff. 7.1)');
-  const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1)", [bid.player_name]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
-  if (bid.swap) { const lu = await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId]); if (!lu || !lu.entries[bid.swap]) return fail('Eventualauftrag: der zu ersetzende Spieler steht nicht in deiner Aufstellung'); }
+  const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1) and ($2 = '' or p.club is null or p.club=$2)", [bid.player_name, bid.club]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
+  if (bid.swap) { const lu = (await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId])) || (await D.prevLineup(open, managerId)); if (!lu || !lu.entries[bid.swap]) return fail('Eventualauftrag: der zu ersetzende Spieler steht nicht in deiner Aufstellung'); }
   await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now())
     on conflict(round_id,manager_id) do update set player_name=excluded.player_name, club=excluded.club, pos=excluded.pos, price=excluded.price, release_player_id=excluded.release_player_id, swap_out_player_id=excluded.swap_out_player_id, status='sealed', reason=null, created_at=now()`,
     [open.id, managerId, bid.player_name, bid.club || null, bid.pos, bid.price, bid.release, bid.swap || null]);
@@ -146,6 +147,15 @@ export const withdrawBidAction = wrap(async () => {
   const u = await requireUser(); const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
   await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, u.manager_id]); rev(); return ok('Gebot zurückgezogen');
 });
+
+/** Aufstellung einer Runde holen; fehlt sie, aus der letzten Vorrunde übernehmen (Ziff. 5.1) und speichern. */
+async function materializeLineup(x, round, m, b) {
+  const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]); if (lu) return lu;
+  const prev = await x.one('select l.* from lineups l join rounds r on r.id=l.round_id where l.manager_id=$1 and r.number < $2 order by r.number desc limit 1', [m, round.number]); if (!prev) return null;
+  const entries = {}; for (const [pid, e] of Object.entries(prev.entries || {})) { const p = b.players[pid]; if (p && p.manager_id === m && p.status === 'active' && R.playerValid(p, round.number)) entries[pid] = e; }
+  await x.q('insert into lineups(round_id,manager_id,entries,free_in,updated_at) values($1,$2,$3,$4,now()) on conflict do nothing', [round.id, m, JSON.stringify(entries), []]);
+  return x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]);
+}
 
 /* ---------- Trades (Ziff. 6) ---------- */
 export const proposeTradeAction = wrap(async (prev, fd) => {
@@ -162,7 +172,13 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
   if (!accept) { if (!admin && u.manager_id !== t.to_manager && u.manager_id !== t.from_manager) return fail('Nicht beteiligt'); await q("update trades set status='rejected' where id=$1", [tradeId]); rev(); return ok('Trade abgelehnt'); }
   if (!admin && u.manager_id !== t.to_manager) return fail('Nur der angefragte Manager kann annehmen');
   const open = await D.openRound(); const roundId = open ? open.id : null;
+  const cur = await q('select id, manager_id, status from players where id = any($1)', [t.give.concat(t.get_)]);
+  if (t.give.some(id => !cur.find(p => p.id === id && p.manager_id === t.from_manager && p.status === 'active')) || t.get_.some(id => !cur.find(p => p.id === id && p.manager_id === t.to_manager && p.status === 'active'))) {
+    await q("update trades set status='rejected' where id=$1", [tradeId]); rev(); return fail('Trade nicht mehr gültig: mindestens ein Spieler ist nicht mehr im ursprünglichen Kader. Trade wurde verworfen.'); }
+  const b0 = open ? await D.base() : null;
   await tx(async x => {
+    // Aufstellungen der offenen Runde vor dem Besitzwechsel sichern (sonst fiele der abgegebene Spieler beim Übertrag ersatzlos weg)
+    if (open) for (const m of [t.from_manager, t.to_manager]) await materializeLineup(x, open, m, b0);
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.to_manager, t.give]);
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.from_manager, t.get_]);
     for (const m of [t.from_manager, t.to_manager]) await x.q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'trade',$3,$4)", [m, roundId, R.TRADE_FEE, `Trade #${t.id}`]);
@@ -232,7 +248,10 @@ export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const 
   await q("update rounds set tdr=$1, sdt=$2, label=coalesce(nullif($3,''),label) where id=$4", [names, sdt || null, label || '', roundId]);
   await audit(a.id, 'round_tdr_manual', { roundId, n: tdrPids.size, sdt: sdtPid }); rev();
   return ok(`Team der Runde: ${tdrPids.size} von ${names.length} Namen in Aufstellungen${sdtPid ? ', Spieler des Tages +1' : ''}, ${written} Zeilen geändert.${notes.length ? ' ' + notes.join(' · ') : ''}`); });
-export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin(); await q('update rounds set status=$1 where id=$2', [final ? 'final' : 'open', roundId]); await audit(a.id, 'round_status', { roundId, final }); rev();
+export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin(); await q('update rounds set status=$1 where id=$2', [final ? 'final' : 'open', roundId]); await audit(a.id, 'round_status', { roundId, final });
+  // Ziff. 4.3.4: Jugendspieler verlieren den Status, wenn sie in eine gültige (gewertete) Aufstellung berufen wurden
+  if (final) await q("update players set jugend=false where jugend and id in (select jsonb_object_keys(entries) from lineups where round_id=$1)", [roundId]);
+  rev();
   if (!final) return ok('Runde wieder geöffnet');
   // Spieltagsbericht entsteht im Hintergrund (eigene Funktion mit längerer Laufzeit)
   const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'http://127.0.0.1:' + (process.env.PORT || 3000));
@@ -285,11 +304,11 @@ export const applyBidsAction = wrap(async (roundId) => { const a = await require
       const contract = bid.price >= R.CONTRACT_MIN ? '1J' : null;
       // Positionen aus dem Spielerpool: Grundposition laut kicker-Kader, Zusatzpositionen aus Startaufstellungen dieser Saison (Ziff. 5.2)
       const { playerMatches } = await import('@/lib/kicker'); const poolRows = await x.q('select * from bl_players where club=$1', [bid.club]); const pp = poolRows.find(r => playerMatches(r.slug, r.name, bid.player_name));
-      const basePos = (pp && pp.squad_pos) || bid.pos; const extra = pp ? [...new Set([...(pp.played_pos || []), bid.pos].filter(x => x && x !== basePos))] : (bid.pos !== basePos ? [bid.pos] : []);
+      const basePos = (pp && pp.squad_pos) || bid.pos; const extra = pp ? [...new Set((pp.played_pos || []).filter(x => x && x !== basePos))] : [];   // Zusatzpositionen nur aus kicker-Startelf (Ziff. 5.2), nie aus dem Gebot
       await x.q(`insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10)`, [id, m, bid.player_name, bid.club, basePos, extra, bid.price, round.number, contract, !!contract]);
       await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,$5)", [round.id, m, bid.player_name, bid.price, `Gebot ${round.label}${contract ? ', Vertragspflicht (7.4), Laufzeit wählbar' : ''}`]);
       if (rel) { await x.q("update players set status='released', valid_to=$2 where id=$1", [rel.id, round.number - 1]); await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,$5)", [round.id, m, rel.name, R.value(rel), `mit Gebot ${round.label}`]); }
-      const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]);
+      const lu = await materializeLineup(x, round, m, b);
       if (lu) { const e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false;
         if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; delete e[bid.swap_out_player_id]; e[id] = { pos: pos === bid.pos ? pos : bid.pos }; free.push(id); ch = true; }
         if (rel && e[rel.id]) { delete e[rel.id]; ch = true; }
@@ -305,7 +324,7 @@ export const manualBuyAction = wrap(async (prev, fd) => { const a = await requir
   const r = from ? await one('select * from rounds where number=$1', [from]) : await D.openRound();
   // Positionen aus dem kicker-Pool: Grundposition laut Kaderliste, Zusatzpositionen laut bisherigen Startelf-Einsätzen (Ziff. 5.2)
   const pp = (await q('select * from bl_players where club=$1', [club])).find(x => playerMatches(x.slug, x.name, name));
-  const basePos = (pp && pp.squad_pos) || pos; const extra = pp ? [...new Set([...(pp.played_pos || []), pos].filter(x => x && x !== basePos))] : [];
+  const basePos = (pp && pp.squad_pos) || pos; const extra = pp ? [...new Set((pp.played_pos || []).filter(x => x && x !== basePos))] : [];
   await q("insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory,kicker_slug) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10,$11)", [id, m, name, club || null, basePos, extra, price, r ? r.number : 1, contract, !!contract, pp ? pp.slug : null]);
   await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,'manuell (Admin)')", [r ? r.id : null, m, name, price]); await audit(a.id, 'manual_buy', { id }); rev(); return ok(`${name} gebucht`); });
 export const releasePlayerAction = wrap(async (pid) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const open = await D.openRound(); const last = await one('select * from rounds where number < $1 order by number desc limit 1', [open ? open.number : 9999]);
@@ -349,7 +368,7 @@ export const importGoalsAction = wrap(async (roundId) => { const a = await requi
 /* ---------- Blog-Archiv ---------- */
 export const blogImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const text = String(fd.get('text') || ''); const date = String(fd.get('date') || '') || null;
   if (!text.trim()) return fail('Kein Text');
-  const b = await base(); const rounds = await q("select * from rounds where type='regulaer' order by number");
+  const b = await D.base(); const rounds = await q("select * from rounds where type='regulaer' order by number");
   const posts = Blog.parseBlogText(text, { defaultDate: date }); if (!posts.length) return fail('Keine Einträge erkannt. Erwartet wird der Blog-Text (Titel, Text, «Eingestellt von … um HH:MM») oder der Textexport (### Titel / Datum: … | Autor: …).');
   const r = await Blog.importPosts(posts, b.managers, rounds, 'paste'); await audit(a.id, 'blog_import', { neu: r.neu, vorhanden: r.vorhanden }); rev(); revalidatePath('/archiv');
   return ok(`${posts.length} Einträge erkannt, ${r.neu} neu gespeichert, ${r.vorhanden} schon vorhanden.${r.log.length ? ' ' + r.log.join(' · ') : ''}`); });

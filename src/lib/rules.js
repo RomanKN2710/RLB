@@ -127,7 +127,7 @@ export function resolveBids(bids, ctx) {
     if (b.price < MIN_BID) { b.status = 'invalid'; b.reason = `Mindestgebot ${MIN_BID}`; continue; }
     if (!rel || rel.manager_id !== b.manager_id || rel.status !== 'active') { b.status = 'invalid'; b.reason = 'Entlassung fehlt oder ungültig (Kader 22)'; continue; }
     if (b.price > ctx.budgetLeft(b.manager_id)) { b.status = 'invalid'; b.reason = `Budget ${ctx.budgetLeft(b.manager_id)} reicht nicht (7.4)`; continue; }
-    const own = Object.values(ctx.players).find(p => p.status === 'active' && norm(p.name) === norm(b.player_name));
+    const own = Object.values(ctx.players).find(p => p.status === 'active' && norm(p.name) === norm(b.player_name) && (!b.club || !p.club || p.club === b.club));
     if (own) { b.status = 'invalid'; b.reason = `Spieler bereits im Kader von ${ctx.managerName(own.manager_id)}`; continue; }
     const pr = (ctx.prevReleases || []).find(t => norm(t.player_name) === norm(b.player_name));
     if (pr) {
@@ -136,7 +136,9 @@ export function resolveBids(bids, ctx) {
     }
   }
   const groups = {};
-  for (const b of list) { if (b.status === 'invalid') continue; (groups[norm(b.player_name)] ||= []).push(b); }
+  // Gleicher Spieler = gleicher Verein und gleicher Name; Teilnamen («El Mala» / «Said El Mala») gelten als derselbe Spieler
+  const keyOf = b => `${b.club || ''}|${norm(b.player_name)}`;
+  for (const b of list) { if (b.status === 'invalid') continue; const k = Object.keys(groups).find(g => { const [c, n] = g.split('|'); const nb = norm(b.player_name); return c === (b.club || '') && (n === nb || n.endsWith(nb) || nb.endsWith(n)); }) || keyOf(b); (groups[k] ||= []).push(b); }
   const order = ctx.tiebreak;
   for (const g of Object.values(groups)) {
     g.sort((a, b) => b.price - a.price || order.indexOf(a.manager_id) - order.indexOf(b.manager_id));
