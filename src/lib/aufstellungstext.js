@@ -282,7 +282,7 @@ function readBlock(b, kader, gone, clubWords, managers) {
     if (stop) continue;
     if (!line) { mode = 'lineup'; continue; }
     if (/^(pos(ition)?|nr\.?|#|spieler|name)\b.*\b(name|spieler|verein|team|club|pos)\b/i.test(line) || /^pos\b/i.test(line)) { subCol = line.split(/\s*[|\t]\s*/).findIndex((c, i) => i > 0 && /wechsel|für|fuer|statt|raus|ersetzt|^out$|^for$/i.test(c)); continue; }   // Tabellenkopf, evtl. mit Spalte «Wechsel»
-    if (dateLine(line) || /^public$/i.test(line)) continue;
+    if (dateLine(line) || /^public$/i.test(line) || /^(gesendet|sent|von|from|an|to|cc|bcc|betreff|subject|datum|date)\s*:/i.test(line)) continue;   // Mail-Kopfzeilen
     if (SIG.test(line)) { stop = true; continue; }                 // Grussformel, Signatur, Mail-Disclaimer: ab hier nichts mehr
     if (line === b.title && m) continue;                             // Titel mit Rundennummer
     const h = line.match(HEAD); let lm = mode;

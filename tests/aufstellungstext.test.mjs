@@ -114,6 +114,7 @@ describe('Manager erkennen', () => {
     assert.deepEqual(res.blocks.map(b => b.name + ':' + b.ok).sort(), ['David:true', 'Mike:true', 'Pädi:true', 'René:true']);
     assert.ok(!res.blocks.some(b => b.name === 'Mark'), 'MARKADONA-Post ohne Namen wird nicht Mark zugeordnet');
     assert.equal(res.unclear.length, 1, 'Post ohne erkennbaren Manager wird gemeldet');
+    assert.deepEqual(block(res, 'René').unmatched, [], 'Mail-Kopfzeilen erzeugen keine «nicht zugeordnet»-Einträge');
   });
   test('Chat-Text ohne Blog-Fusszeilen', () => {
     const res = parse('Arbi:\nKramaric für Lemperle\n\nMike\nkeine Änderungen\n\nRoman\nRieder raus, Karl rein', { roundNumbers: [50, 5], baseOf: base4 });
