@@ -69,7 +69,8 @@ function zurich(date, hh, mm) {
 function splitBlocks(lines, managers, kaderOf) {
   const mgrByNorm = {}; managers.forEach(m => { mgrByNorm[norm(m.name)] = m; });
   const byName = n => mgrByNorm[norm(n)] || (NICK[norm(n)] && mgrByNorm[norm(NICK[norm(n)])]) || null;
-  const mgrIn = line => { const found = new Set(); words(line).forEach(w => { const m = byName(w); if (m) found.add(m); }); return [...found]; };
+  // Namen auch aus Mail-Adressen lesen (rene.peter@…, mike_buehler@…): nur Buchstabenfolgen zaehlen
+  const mgrIn = line => { const found = new Set(); String(line || '').split(/[^\p{L}]+/u).filter(Boolean).forEach(w => { const m = byName(w); if (m) found.add(m); }); return [...found]; };
   const blocks = [];
   if (lines.some(l => ENDE.test(l))) {
     let cur = [], curDate = null, sawDate = false;
@@ -80,12 +81,19 @@ function splitBlocks(lines, managers, kaderOf) {
     }
     const out = blocks.map(bl => {
       const nonEmpty = bl.lines.filter(Boolean);
-      // Manager: zuerst im Titel (erste Zeilen), sonst der einzige Managername im ganzen Post (Signatur)
-      let mgr = null; const title = nonEmpty.find(l => !/^public$/i.test(l)) || '';
-      for (const l of nonEmpty.slice(0, 3)) { if (/^public$/i.test(l)) continue; const ms = mgrIn(l); if (ms.length === 1) { mgr = ms[0]; break; } }
-      if (!mgr) { const all = new Set(); nonEmpty.forEach(l => mgrIn(l).forEach(m => all.add(m))); if (all.size === 1) mgr = [...all][0]; else if (all.size > 1) return { ...bl, manager: null, title: nonEmpty[0] || '', unclear: [...all].map(m => m.name) }; }
-      // Rueckfall: der Verfasser laut «Eingestellt von …» (nicht das Sammelkonto, das fuer alle postet)
-      if (!mgr && bl.author && !/markadona|admin|sabine/i.test(bl.author)) mgr = byName(bl.author) || mgrIn(bl.author)[0] || null;
+      // Manager bestimmen. Das Blog-Konto (MARKADONA) postet die gemailten Aufstellungen aller Manager, der Verfasser
+      // laut «Eingestellt von» sagt also nichts. Reihenfolge: Titel – Betreff – Absender (Von:/From:, auch Mail-Adresse)
+      // – einziger Name im Text (ohne Anrede «Hi Sabine, Mark» und Empfänger An:/Cc:) – Unterschrift am Schluss.
+      const title = nonEmpty.find(l => !/^public$/i.test(l)) || '';
+      const pick = l => { const ms = mgrIn(l); return ms.length === 1 ? ms[0] : null; };
+      const header = re => nonEmpty.slice(0, 8).find(l => re.test(l));
+      let mgr = pick(title) || pick(header(/^(betreff|subject)\s*:/i) || '') || pick((header(/^(von|from)\s*:/i) || '').replace(/^(von|from)\s*:/i, '')) || null;
+      if (!mgr) { const body = nonEmpty.filter(l => !/^(an|to|cc|bcc|gesendet|sent|datum|date)\s*:/i.test(l) && !/^(hi|hallo|hoi|salut|liebe[rs]?|guten|servus|sali|hey)\b/i.test(l));
+        const all = new Set(); body.forEach(l => mgrIn(l).forEach(m => all.add(m)));
+        if (all.size === 1) mgr = [...all][0];
+        else if (all.size > 1) { const sig = [...body].reverse().find(l => words(l).length <= 3 && mgrIn(l).length === 1); if (sig) mgr = mgrIn(sig)[0]; else return { ...bl, manager: null, title, unclear: [...all].map(m => m.name) }; } }
+      // Rueckfall: der Verfasser laut «Eingestellt von …», sofern es nicht das Sammelkonto ist
+      if (!mgr && bl.author && !/markadona|admin|sabine|gebot|rlb|blog/i.test(bl.author)) mgr = byName(bl.author) || mgrIn(bl.author)[0] || null;
       return { ...bl, manager: mgr, title };
     });
     // Der Blog zeigt den neuesten Post oben: mit Datum nach Zeit sortieren, sonst die Reihenfolge umdrehen
@@ -159,11 +167,12 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
   const per = new Map();   // managerId -> zeitlich geordnete, ausgewertete Posts (Reihenfolge des ersten Auftretens)
   const fmtAt = d => d ? d.toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
   for (const b of raw) {
-    if (!b.manager) { if (b.unclear) unclear.push(`«${b.title}»: mehrere Managernamen (${b.unclear.join(', ')})`); continue; }
+    if (!b.manager) { if (b.unclear) unclear.push(`«${b.title}»: mehrere Managernamen (${b.unclear.join(', ')})`); else if (!/\b(gebote?|biete)\b/i.test(b.lines.filter(Boolean).slice(0, 6).join('\n').replace(/\S+@\S+/g, ''))) unclear.push(`«${b.title}»: kein Managername erkennbar (weder im Titel, Betreff, Absender noch im Text)`); continue; }
     const tag = `${b.manager.name}: «${b.title}»${b.at ? ' (' + fmtAt(b.at) + ')' : ''}`;
     // Gebots-Posts gehoeren nicht hierher (Eventualauftraege laufen ueber die Gebote)
-    const head = b.lines.filter(Boolean).slice(0, 6).join('\n');
-    if (/\b(gebote?|biete)\b/i.test(b.title) || /^(fw|fwd|wg|aw)\s*:/i.test(b.title) || /^(betreff|subject)\s*:.*\b(gebote?|biete)\b/im.test(head) || /^(ich\s+)?biete\b/im.test(head)) { skipped.push(`${tag} – Gebot`); continue; }
+    const head = b.lines.filter(Boolean).slice(0, 6).join('\n').replace(/\S+@\S+/g, '');   // Mail-Adressen (gebot@gmx.ch) zaehlen nicht
+    // Gebots-Posts (auch weitergeleitete Mails) gehoeren nicht hierher; «Fw:» allein heisst nichts, Aufstellungen kommen genauso per Mail
+    if (/\b(gebote?|biete)\b/i.test(b.title) || /^(betreff|subject)\s*:.*\b(gebote?|biete)\b/im.test(head) || /^(ich\s+)?biete\b/im.test(head)) { skipped.push(`${tag} – Gebot`); continue; }
     const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i); const rn = m && Number(m[1] || m[2]);
     if (b.at && opts.notBefore && b.at <= new Date(opts.notBefore)) { skipped.push(`${tag} – vor der Deadline der Vorrunde gepostet`); continue; }
     // Titel nennt eine andere Runde: eine spaetere ist ein Post fuer spaeter; eine fruehere ist meist ein alter Titel

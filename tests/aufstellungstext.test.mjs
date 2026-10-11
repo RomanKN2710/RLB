@@ -103,6 +103,18 @@ describe('Manager erkennen', () => {
     const res = parse(blogger([post('Aufstellung Runde 5', 'Wechsel: Karaman für Leweling', { author: 'RÖFE' }), post('Team Roefe Runde 5', 'Keine Wechsel', { time: '13:00' }), post('Aufstellung Runde 5', 'Keine Wechsel', { author: 'Rolf Stauffer', time: '14:00' })]), { roundNumbers: [50, 5], baseOf: base4 });
     assert.equal(res.blocks.length, 1); assert.equal(res.blocks[0].name, 'Röfe'); assert.equal(res.blocks[0].title, 'Aufstellung Runde 5 + Team Roefe Runde 5 + Aufstellung Runde 5');
   });
+  test('MARKADONA ist das Sammelkonto: Manager aus Betreff, Absender oder Unterschrift, nicht aus dem Verfasser', () => {
+    const res = parse(blogger([
+      post('Aufstellung Runde 5', 'Hi Sabine, Mark,\n\nhier meine Aufstellung für Runde 5.\n\nWechsel: Rothe (V, Union) für Baum (V, Frankfurt)\n\nVielen Dank und VG\nDavid', { time: '09:00' }),
+      post('Fw: Aufstellung', 'Gesendet: Freitag, 16. Oktober 2026 um 10:00\nVon: rene.peter@sem.admin.ch\nAn: gebot@gmx.ch\nBetreff: Aufstellung Runde 5\n\nJuranovic rein, Rots raus', { time: '10:00' }),
+      post('Fw: Aufstellung Runde 5', 'Von: "Patrick Duss" <patrick.duss@gmx.ch>\nAn: gebot@gmx.ch\nBetreff: Runde 5\n\nGrüll -> Prömel', { time: '11:00' }),
+      post('Fw: Runde 5', 'Von: mike_buehler@gmx.ch\nAn: Mark Fehlmann\nBetreff: Runde 5\n\nWechsel: Stiller für El Mala', { time: '11:30' }),
+      post('Runde 5', 'Wechsel: Schick für Kofane', { time: '12:00', author: 'MARKADONA' }),
+    ]), { roundNumbers: [50, 5], baseOf: base4 });
+    assert.deepEqual(res.blocks.map(b => b.name + ':' + b.ok).sort(), ['David:true', 'Mike:true', 'Pädi:true', 'René:true']);
+    assert.ok(!res.blocks.some(b => b.name === 'Mark'), 'MARKADONA-Post ohne Namen wird nicht Mark zugeordnet');
+    assert.equal(res.unclear.length, 1, 'Post ohne erkennbaren Manager wird gemeldet');
+  });
   test('Chat-Text ohne Blog-Fusszeilen', () => {
     const res = parse('Arbi:\nKramaric für Lemperle\n\nMike\nkeine Änderungen\n\nRoman\nRieder raus, Karl rein', { roundNumbers: [50, 5], baseOf: base4 });
     assert.deepEqual(res.blocks.map(b => b.name + ':' + b.ok), ['Arbi:true', 'Mike:true', 'Roman:true']);
