@@ -74,7 +74,17 @@ async function parsePaste(roundId, text) {
   for (const m of b.managers) kaders[m.id] = (await D.kader(m.id, round.number)).map(p => {
     // voller kicker-Name als Alias ("Miguel" -> miguel-gutierrez), damit auch der Nachname im Blog passt
     const bl = pool.filter(x => x.club === p.club && playerMatches(x.slug, x.name, p.name)); return { ...p, alias: bl.length === 1 ? bl[0].slug.split('-').filter(t => !/^\d+$/.test(t)) : [] }; });
-  const parsed = parseLineupText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { clubs: (b.clubs || []).map(c => c.name || c.id), roundNumbers: [round.number, round.matchday].filter(Boolean), roundLabel: round.label });
+  // Basis fuer reine Wechsel-Posts ("Kramaric für Lemperle", "Keine Wechsel"): die Aufstellung der Vorrunde
+  const bases = {}; for (const m of b.managers) bases[m.id] = await D.prevLineup(round, m.id);
+  // Spieler, die nicht mehr im Kader sind (entlassen, abgegeben), aber in der Vorrunde oder im Post noch auftauchen
+  const goneOf = id => { const ids = new Set(kaders[id].map(p => p.id)); const ref = new Set(Object.keys(bases[id]?.entries || {}));
+    return b.playersArr.filter(p => !ids.has(p.id) && (p.manager_id === id || ref.has(p.id))); };
+  // Gewonnene Gebote mit Eventualauftrag: der Neue ersetzt den genannten Spieler
+  const bidsWon = await q("select * from bids where round_id=$1 and status='won' and swap_out_player_id is not null", [round.id]);
+  const eventualOf = id => bidsWon.filter(x => x.manager_id === id).map(x => ({ inId: (kaders[id].find(p => p.valid_from === round.number && R.norm(p.name) === R.norm(x.player_name)) || {}).id, outId: x.swap_out_player_id })).filter(x => x.inId);
+  const prevRound = await one('select * from rounds where number < $1 and deadline is not null order by number desc limit 1', [round.number]);
+  const parsed = parseLineupText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { clubs: (b.clubs || []).map(c => c.name || c.id), roundNumbers: [round.number, round.matchday].filter(Boolean), roundLabel: round.label,
+    baseOf: id => bases[id], goneOf, eventualOf, notBefore: prevRound?.deadline || null, deadline: round.deadline || null });
   // Abgleich mit dem, was in der App schon steht: vom Manager selbst gespeichert, vom Admin, automatisch aus der
   // Vorrunde uebernommen oder noch nichts (dann gilt die Vorrunde). Im Zweifel gilt der Blog; der Unterschied wird gezeigt.
   const cur = await q('select l.*, u.role as by_role, u.manager_id as by_manager, u.name as by_name from lineups l left join users u on u.id=l.updated_by where l.round_id=$1', [round.id]);
@@ -110,7 +120,7 @@ async function parsePaste(roundId, text) {
 const fmtStamp = d => d ? new Date(d).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 export const previewLineupTextAction = wrap(async (roundId, text) => { await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
-  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear, warnung: parsed.warnung }); });
+  return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined, ambiguous: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear, skipped: parsed.skipped, warnung: parsed.warnung }); });
 export const applyLineupTextAction = wrap(async (roundId, text) => { const u = await requireAdmin();
   const { parsed } = await parsePaste(roundId, text);
   const log = []; let n = 0;
@@ -122,6 +132,7 @@ export const applyLineupTextAction = wrap(async (roundId, text) => { const u = a
     log.push(`${x.name}: ${Object.keys(x.entries).length} Spieler aus dem Blog gespeichert${x.selbst ? ' – überschreibt die selbst in der App gespeicherte Aufstellung' : ''}${x.diff.length ? ' (' + x.diff.join(', ') + ')' : ''}${x.notes.length ? ' – ' + x.notes.join('; ') : ''}${x.unmatched.length ? ' – nicht zugeordnet: ' + x.unmatched.join(', ') : ''}`);
   }
   if (parsed.ohnePost.length) log.push(`Ohne Post im Blog: ${parsed.ohnePost.join('; ')}`);
+  if (parsed.skipped?.length) log.push(`Übersprungen: ${parsed.skipped.join('; ')}`);
   // Protokoll dauerhaft ablegen (wie beim kicker-Import), damit ein Lauf spaeter nachvollziehbar ist
   const prevLog = (await getSetting(`lineup_paste_${roundId}`)) || { runs: [] };
   await setSetting(`lineup_paste_${roundId}`, { runs: [...(prevLog.runs || []).slice(-9), { at: new Date().toISOString(), by: u.name || u.email, n, log, text: String(text || '').slice(0, 20000) }] });
