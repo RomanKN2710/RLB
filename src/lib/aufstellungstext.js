@@ -2,7 +2,7 @@
    Post/Block, darin die Spieler in beliebiger Schreibweise: "1 T Zentner Mainz", "V\tSvensson\tDortmund",
    "Latte Lath (M)", Position auf eigener Zeile, Tippfehler ("Ulrich", "Gregrotisch"). Reine Funktionen
    ohne Datenbank; die Zuordnung laeuft gegen den Kader des jeweiligen Managers. */
-import { norm, positionsOf, posProblems } from './rules';
+import { norm, positionsOf, posProblems, posCheck, POSRULE } from './rules';
 
 const POSMAP = { t: 'T', tw: 'T', tor: 'T', torwart: 'T', goalie: 'T', v: 'V', iv: 'V', av: 'V', lv: 'V', rv: 'V', abw: 'V', abwehr: 'V', verteidiger: 'V', verteidigung: 'V', m: 'M', mf: 'M', zm: 'M', dm: 'M', om: 'M', lm: 'M', rm: 'M', mittelfeld: 'M', s: 'S', st: 'S', sturm: 'S', stuermer: 'S', sturmer: 'S', a: 'S', angriff: 'S', la: 'S', ra: 'S' };
 // Vereinsworte, die hinter dem Spielernamen stehen koennen ("Kim Bayern München", "Moore Köln")
@@ -169,7 +169,7 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
   for (const { manager, posts } of Object.values(per)) {
     const kader = kaderOf(manager.id) || []; const gone = (opts.goneOf && opts.goneOf(manager.id)) || [];
     const byId = Object.fromEntries([...gone, ...kader].map(p => [p.id, p]));
-    const notes = [], unmatched = [], ambiguous = [], titles = []; let state = null, art = null; const marks = {};
+    const notes = [], unmatched = [], ambiguous = [], titles = []; let state = null, art = null; const marks = {}; const explicit = new Set();
     for (const r of posts) {
       unmatched.push(...r.unmatched); ambiguous.push(...r.ambiguous); notes.push(...r.notes);
       if (r.kind === 'leer') continue;
@@ -184,6 +184,14 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
         art = art === 'voll' || art === 'voll+wechsel' ? 'voll+wechsel' : 'wechsel';
       }
       const voll = r.kind === 'voll'; const ref = Object.keys(baseE).length ? baseE : state;
+      if (voll) { const expl = new Set(Object.entries(r.list).filter(([, e]) => e.explicit).map(([pid]) => pid)); expl.forEach(pid => explicit.add(pid)); }
+      // Elf-Liste zuerst: stehen genau 11 Spieler im Post, gilt diese Liste; die Wechselzeilen darunter erklaeren nur noch
+      if (voll && Object.keys(r.list).length === 11) {
+        for (const w of r.subs) { const ignored = [];
+          w.ins.forEach(i => { if (state[i.p.id]) { if (w.outs.length) marks[i.p.id] = `für ${w.outs.map(o => o.p.name).join(', ')}`; } else ignored.push(i.p.name + ' rein'); });
+          w.outs.forEach(o => { if (state[o.p.id] && !w.ins.some(i => i.p.id === o.p.id)) ignored.push(o.p.name + ' raus'); });
+          if (ignored.length) notes.push(`Wechselzeile «${[...w.ins, ...w.outs].map(x => x.raw?.trim() || x.p.name).join(' / ')}» nicht angewendet (${ignored.join(', ')}) – die Elf-Liste im Post zählt`); }
+        continue; }
       for (let w of r.subs) {
         // Richtung unklar ("A - B", "A -> B", "A gegen B"): wer in der Vorrunde spielte, geht raus
         if (w.unsure) { const inRef = w.ins.some(i => ref[i.p.id]), outRef = w.outs.some(o => ref[o.p.id]); if (inRef && !outRef) w = { ins: w.outs, outs: w.ins }; }
@@ -208,6 +216,7 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     // Spieler, die nicht mehr im Kader sind (entlassen, verkauft): fallen raus, die Pruefung meldet die Luecke
     const kaderIds = new Set(kader.map(p => p.id));
     for (const pid of Object.keys(state)) if (!kaderIds.has(pid)) { notes.push(`${byId[pid]?.name || pid} ist nicht mehr im Kader – fällt raus`); delete state[pid]; }
+    fitPositions(state, byId, explicit, notes, marks);
     const found = Object.entries(state).map(([pid, e]) => ({ name: byId[pid]?.name || pid, pos: e.pos, note: marks[pid] || '' })).sort((a, z) => 'TVMS'.indexOf(a.pos) - 'TVMS'.indexOf(z.pos));
     const problems = posProblems(state, byId);
     // Zu viele Spieler: zeigen, wer gegenueber der Vorrunde dazukam (meist ein nicht erkannter Wechsel)
@@ -242,8 +251,8 @@ function readBlock(b, kader, gone, clubWords, managers) {
       else if (r.pos?.length) pending = r.pos; }
     return res; };
   const addList = r => { const e = list[r.p.id]; const allowed = positionsOf(r.p); const np = r.want.find(x => allowed.includes(x));
-    if (!e) { list[r.p.id] = { pos: np || r.p.base_pos }; if (r.want.length && !np) notes.push(`${r.p.name}: ${r.want.join('/')} nicht erlaubt (${allowed.join('/')}), als ${r.p.base_pos}`); else if (r.how === 'ähnlich') notes.push(`«${r.raw.trim()}» als ${r.p.name} gelesen`); }
-    else if (np && e.pos !== np) e.pos = np; };
+    if (!e) { list[r.p.id] = { pos: np || r.p.base_pos, explicit: !!np }; if (r.want.length && !np) notes.push(`${r.p.name}: ${r.want.join('/')} nicht erlaubt (${allowed.join('/')}), als ${r.p.base_pos}`); else if (r.how === 'ähnlich') notes.push(`«${r.raw.trim()}» als ${r.p.name} gelesen`); }
+    else if (np && e.pos !== np) { e.pos = np; e.explicit = true; } };
   for (let line of b.lines) {
     if (stop) continue;
     if (!line) { mode = 'lineup'; continue; }
@@ -293,4 +302,25 @@ function readBlock(b, kader, gone, clubWords, managers) {
   const listed = new Set([...Object.keys(list), ...subs.flatMap(w => w.ins.map(i => i.p.id))]);
   let kind = listed.size >= 7 ? 'voll' : subs.length ? 'wechsel' : noChange ? 'keine' : Object.keys(list).length ? 'voll' : 'leer';
   return { kind, list, subs, unmatched, ambiguous, notes };
+}
+
+/** Positionen passend machen: stimmt die Zahl je Position nicht, aber Spieler mit Zusatzposition (Ziff. 5.2) koennten
+    umgestellt werden, die Umstellung mit den wenigsten Aenderungen waehlen. Spieler ohne ausdrueckliche Positionsangabe
+    im Post werden zuerst umgestellt (der Manager hat sie nur vergessen), ausdrueckliche nur, wenn es nicht anders geht. */
+export function fitPositions(state, byId, explicit = new Set(), notes = [], marks = {}) {
+  const ids = Object.keys(state); if (ids.length !== 11) return false;
+  if (!posCheck(state, byId).bad.length) return false;
+  const flex = ids.filter(pid => byId[pid] && positionsOf(byId[pid]).length > 1).slice(0, 8); if (!flex.length) return false;
+  let best = null;
+  const go = (k, cost, changes) => {
+    if (best && cost >= best.cost) return;
+    if (k === flex.length) { const cnt = { T: 0, V: 0, M: 0, S: 0 }; ids.forEach(pid => { const pos = changes[pid] || state[pid].pos; if (cnt[pos] !== undefined) cnt[pos]++; });
+      if (Object.entries(POSRULE).every(([p, [lo, hi]]) => cnt[p] >= lo && cnt[p] <= hi)) best = { cost, changes: { ...changes } }; return; }
+    const pid = flex[k];
+    for (const pos of positionsOf(byId[pid])) { const same = pos === state[pid].pos; if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : explicit.has(pid) ? 3 : 1), changes); delete changes[pid]; }
+  };
+  go(0, 0, {});
+  if (!best) return false;
+  for (const [pid, pos] of Object.entries(best.changes)) { const was = state[pid].pos; state[pid].pos = pos; notes.push(`${byId[pid].name} als ${pos} statt ${was} aufgestellt${explicit.has(pid) ? '' : ' (keine Positionsangabe im Post)'} – so stimmt die Zahl je Position`); marks[pid] = marks[pid] ? marks[pid] + `, als ${pos}` : `als ${pos}`; }
+  return true;
 }

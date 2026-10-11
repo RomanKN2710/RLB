@@ -1,6 +1,6 @@
 /* Einmalige Datenkorrekturen und Nachträge laufen automatisch: beim Aufruf der Admin-Seite werden alle Schritte
    eingespielt, die laut settings noch fehlen. Jeder Schritt ist idempotent und protokolliert sich selbst. */
-import { q, getSetting, setSetting } from './db';
+import { q, one, getSetting, setSetting, audit } from './db';
 import { base } from './data';
 import { applyKorrektur20260915 } from './korrektur-20260915';
 import { applyKorrektur20260920, applyAufstellungenST4 } from './korrektur-20260920';
@@ -19,6 +19,17 @@ export const STEPS = [
   { key: 'gebote_st4', title: 'Gebote Spieltag 4 laut Blog (Karius → Pädi, Fellhauer → René, Konstantelias → Mike) und Mikes Aufstellung Spieltag 4', run: applyGeboteST4 },
   { key: 'karius_rene_revert', title: 'Karius Spieltag 4: Zuschlag an Pädi, Renés Kauf zurückgenommen, kicker-Werte neu eingelesen', run: applyKariusRevert },
   { key: 'arbi_st4_scally', title: 'Arbi Spieltag 4: Wechsel Scally → Hlozek ungültig, Scally spielt, Lemperle im Sturm (Entscheid Admins 21.09.2026)', run: applyArbiST4 },
+  { key: 'beier_m_st5', title: 'Roman Spieltag 5: Beier im Mittelfeld (M) statt im Sturm – im Blog fehlte die Positionsangabe', run: async userId => {
+    const log = []; const roman = await one("select * from managers where name='Roman'"); const r5 = await one("select * from rounds where type='regulaer' and matchday=5");
+    const beier = roman && await one("select * from players where manager_id=$1 and name='Beier' and status='active'", [roman.id]);
+    if (!roman || !r5 || !beier) throw new Error('Roman, Spieltag 5 oder Beier fehlt');
+    if (!(beier.extra_pos || []).includes('M')) { await q("update players set extra_pos=array(select distinct unnest(coalesce(extra_pos,'{}'::text[]) || '{M}'::text[])) where id=$1", [beier.id]); log.push('Beier: Zusatzposition M eingetragen'); }
+    const lu = await one('select * from lineups where round_id=$1 and manager_id=$2', [r5.id, roman.id]);
+    if (!lu) log.push('Spieltag 5: noch keine Aufstellung von Roman gespeichert – beim nächsten Blog-Import wird Beier automatisch auf M gesetzt');
+    else if (!lu.entries[beier.id]) log.push('Spieltag 5: Beier steht nicht in Romans Aufstellung – nichts geändert');
+    else if (lu.entries[beier.id].pos === 'M') log.push('Spieltag 5: Beier stand schon auf M');
+    else { const e = { ...lu.entries, [beier.id]: { pos: 'M' } }; await q('update lineups set entries=$3, updated_at=now() where round_id=$1 and manager_id=$2', [r5.id, roman.id, JSON.stringify(e)]); log.push(`Spieltag 5: Beier von ${lu.entries[beier.id].pos} auf M gesetzt`); }
+    await setSetting('beier_m_st5', { at: new Date().toISOString(), log }); await audit(userId, 'beier_m_st5', { log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];
