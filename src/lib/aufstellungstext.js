@@ -2,7 +2,7 @@
    Post/Block, darin die Spieler in beliebiger Schreibweise: "1 T Zentner Mainz", "V\tSvensson\tDortmund",
    "Latte Lath (M)", Position auf eigener Zeile, Tippfehler ("Ulrich", "Gregrotisch"). Reine Funktionen
    ohne Datenbank; die Zuordnung laeuft gegen den Kader des jeweiligen Managers. */
-import { norm, positionsOf, posProblems, fitPositions } from './rules';
+import { norm, positionsOf, posProblems, fitPositions } from './rules.js';
 
 const POSMAP = { t: 'T', tw: 'T', tor: 'T', torwart: 'T', goalie: 'T', v: 'V', iv: 'V', av: 'V', lv: 'V', rv: 'V', abw: 'V', abwehr: 'V', verteidiger: 'V', verteidigung: 'V', m: 'M', mf: 'M', zm: 'M', dm: 'M', om: 'M', lm: 'M', rm: 'M', mittelfeld: 'M', s: 'S', st: 'S', sturm: 'S', stuermer: 'S', sturmer: 'S', a: 'S', angriff: 'S', la: 'S', ra: 'S' };
 // Vereinsworte, die hinter dem Spielernamen stehen koennen ("Kim Bayern München", "Moore Köln")
@@ -46,7 +46,9 @@ export function findPlayer(name, kader) {
 const NOISE = /^(hi|hallo|hoi|salut|public|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|januar|februar|maerz|märz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|aufstellung|auswechslung|einwechslung|runde|spieltag|wechsel|system|update|sollte|erhalte|falls/i;
 const SIG = /^(freundliche gr|viele gr|liebe gr|vielen dank|besten dank|danke|gruss|grüss|gruess|merci|lg\b|mfg|vg\b|this e-?mail|---|uploaded image|eingestellt von)/i;
 const UI = /^(Keine Kommentare|\d+ Kommentare?|Kommentar veröffentlichen|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|Auf Twitter teilen|In Facebook freigeben|Auf Pinterest teilen|Labels?:|Neuerer Post|Älterer Post|Startseite|Abonnieren|Posts? kommentieren|Share|Teilen)\b/i;
-const ENDE = /^Eingestellt von\b.*?\bum\s+(\d{1,2}):(\d{2})/i;
+const ENDE = /^Eingestellt von\s+(.+?)\s+um\s+(\d{1,2}):(\d{2})/i;
+// Spitznamen und buergerliche Namen, wie sie im Blog vorkommen (Blog-Konto MARKADONA postet fuer alle: kein Rueckschluss)
+const NICK = { rofe: 'Röfe', rolf: 'Röfe', stauffer: 'Röfe', daniel: 'Dani', allenspach: 'Dani', patrick: 'Pädi', duss: 'Pädi', fehlmann: 'Mark', lenz: 'David', knipprath: 'Roman', berisha: 'Arbi', berishaa: 'Arbi', peter: 'René' };
 const MONTHS = { januar: 1, january: 1, februar: 2, february: 2, maerz: 3, marz: 3, march: 3, april: 4, mai: 5, may: 5, juni: 6, june: 6, juli: 7, july: 7, august: 8, september: 9, oktober: 10, october: 10, november: 11, dezember: 12, december: 12 };
 /** Datumszeile des Blogs ("Freitag, 18. September 2026" oder "Friday, September 18, 2026") -> "2026-09-18" */
 function dateLine(l) {
@@ -66,22 +68,25 @@ function zurich(date, hh, mm) {
     Liefert die Bloecke in zeitlicher Reihenfolge (aeltester zuerst), damit ein «Update» den frueheren Post ergaenzt. */
 function splitBlocks(lines, managers, kaderOf) {
   const mgrByNorm = {}; managers.forEach(m => { mgrByNorm[norm(m.name)] = m; });
-  const mgrIn = line => { const found = new Set(); words(line).forEach(w => { const m = mgrByNorm[norm(w)]; if (m) found.add(m); }); return [...found]; };
+  const byName = n => mgrByNorm[norm(n)] || (NICK[norm(n)] && mgrByNorm[norm(NICK[norm(n)])]) || null;
+  const mgrIn = line => { const found = new Set(); words(line).forEach(w => { const m = byName(w); if (m) found.add(m); }); return [...found]; };
   const blocks = [];
   if (lines.some(l => ENDE.test(l))) {
     let cur = [], curDate = null, sawDate = false;
     for (const line of lines) {
       const d = dateLine(line); if (d) { curDate = d; sawDate = true; continue; }
-      const e = line.match(ENDE); if (e) { if (cur.some(Boolean)) blocks.push({ lines: cur, at: curDate ? zurich(curDate, e[1], e[2]) : null, time: `${e[1].padStart(2, '0')}:${e[2]}` }); cur = []; }
+      const e = line.match(ENDE); if (e) { if (cur.some(Boolean)) blocks.push({ lines: cur, author: e[1].trim(), at: curDate ? zurich(curDate, e[2], e[3]) : null, time: `${e[2].padStart(2, '0')}:${e[3]}` }); cur = []; }
       else if (!UI.test(line)) cur.push(line);
     }
     const out = blocks.map(bl => {
       const nonEmpty = bl.lines.filter(Boolean);
       // Manager: zuerst im Titel (erste Zeilen), sonst der einzige Managername im ganzen Post (Signatur)
-      let mgr = null, title = '';
-      for (const l of nonEmpty.slice(0, 3)) { if (/^public$/i.test(l)) continue; const ms = mgrIn(l); if (ms.length === 1) { mgr = ms[0]; title = l; break; } }
+      let mgr = null; const title = nonEmpty.find(l => !/^public$/i.test(l)) || '';
+      for (const l of nonEmpty.slice(0, 3)) { if (/^public$/i.test(l)) continue; const ms = mgrIn(l); if (ms.length === 1) { mgr = ms[0]; break; } }
       if (!mgr) { const all = new Set(); nonEmpty.forEach(l => mgrIn(l).forEach(m => all.add(m))); if (all.size === 1) mgr = [...all][0]; else if (all.size > 1) return { ...bl, manager: null, title: nonEmpty[0] || '', unclear: [...all].map(m => m.name) }; }
-      return { ...bl, manager: mgr, title: title || nonEmpty[0] || '' };
+      // Rueckfall: der Verfasser laut «Eingestellt von …» (nicht das Sammelkonto, das fuer alle postet)
+      if (!mgr && bl.author && !/markadona|admin|sabine/i.test(bl.author)) mgr = byName(bl.author) || mgrIn(bl.author)[0] || null;
+      return { ...bl, manager: mgr, title };
     });
     // Der Blog zeigt den neuesten Post oben: mit Datum nach Zeit sortieren, sonst die Reihenfolge umdrehen
     if (sawDate && out.every(b => b.at)) return out.map((b, i) => ({ b, i })).sort((x, y) => x.b.at - y.b.at || y.i - x.i).map(x => x.b);
@@ -151,22 +156,30 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
   const clubWords = new Set([...CLUBWORDS, ...(opts.clubs || []).flatMap(c => words(c).map(norm))]);
   const raw = splitBlocks(lines, managers, kaderOf);
   const unclear = [], skipped = [];
-  const per = {};   // managerId -> zeitlich geordnete, ausgewertete Posts
+  const per = new Map();   // managerId -> zeitlich geordnete, ausgewertete Posts (Reihenfolge des ersten Auftretens)
   const fmtAt = d => d ? d.toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
   for (const b of raw) {
     if (!b.manager) { if (b.unclear) unclear.push(`«${b.title}»: mehrere Managernamen (${b.unclear.join(', ')})`); continue; }
     const tag = `${b.manager.name}: «${b.title}»${b.at ? ' (' + fmtAt(b.at) + ')' : ''}`;
     // Gebots-Posts gehoeren nicht hierher (Eventualauftraege laufen ueber die Gebote)
-    if (/\b(gebote?|biete)\b/i.test(b.title) || /^(fw|fwd|wg|aw)\s*:/i.test(b.title)) { skipped.push(`${tag} – Gebot`); continue; }
+    const head = b.lines.filter(Boolean).slice(0, 6).join('\n');
+    if (/\b(gebote?|biete)\b/i.test(b.title) || /^(fw|fwd|wg|aw)\s*:/i.test(b.title) || /^(betreff|subject)\s*:.*\b(gebote?|biete)\b/im.test(head) || /^(ich\s+)?biete\b/im.test(head)) { skipped.push(`${tag} – Gebot`); continue; }
     const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i); const rn = m && Number(m[1] || m[2]);
-    if (rn && opts.roundNumbers?.length && !opts.roundNumbers.includes(rn)) { skipped.push(`${tag} – Post für Runde ${rn}`); continue; }
     if (b.at && opts.notBefore && b.at <= new Date(opts.notBefore)) { skipped.push(`${tag} – vor der Deadline der Vorrunde gepostet`); continue; }
+    // Titel nennt eine andere Runde: eine spaetere ist ein Post fuer spaeter; eine fruehere ist meist ein alter Titel
+    // (kopiert) – wenn der Post nachweislich in dieser Runde (nach der Vorrunden-Deadline) erschien, zaehlt er, mit Hinweis
+    let titleNote = null;
+    if (rn && opts.roundNumbers?.length && !opts.roundNumbers.includes(rn)) {
+      const inWindow = b.at && opts.notBefore && b.at > new Date(opts.notBefore);
+      if (rn > Math.max(...opts.roundNumbers) || !inWindow) { skipped.push(`${tag} – Post für Runde ${rn}`); continue; }
+      titleNote = `Titel nennt Runde ${rn}, der Post erschien aber in dieser Runde – als ${opts.roundLabel || 'diese Runde'} gelesen`; }
     const r = readBlock(b, kaderOf(b.manager.id) || [], (opts.goneOf && opts.goneOf(b.manager.id)) || [], clubWords, managers);
+    if (titleNote) r.notes.push(titleNote);
     if (b.at && opts.deadline && b.at > new Date(opts.deadline)) r.notes.push(`«${b.title}» nach der Deadline gepostet (${fmtAt(b.at)})`);
-    (per[b.manager.id] = per[b.manager.id] || { manager: b.manager, posts: [] }).posts.push({ ...r, title: b.title });
+    if (!per.has(b.manager.id)) per.set(b.manager.id, { manager: b.manager, posts: [] }); per.get(b.manager.id).posts.push({ ...r, title: b.title });
   }
   const out = [];
-  for (const { manager, posts } of Object.values(per)) {
+  for (const { manager, posts } of per.values()) {
     const kader = kaderOf(manager.id) || []; const gone = (opts.goneOf && opts.goneOf(manager.id)) || [];
     const byId = Object.fromEntries([...gone, ...kader].map(p => [p.id, p]));
     const notes = [], unmatched = [], ambiguous = [], titles = []; let state = null, art = null; const marks = {}; const explicit = new Set();
@@ -228,7 +241,7 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     if (art === 'wechsel' || art === 'vorrunde') notes.unshift(art === 'vorrunde' ? 'Keine Wechsel: Aufstellung der Vorrunde' : 'Nur Wechsel gepostet: Aufstellung der Vorrunde mit diesen Wechseln');
     out.push({ managerId: manager.id, name: manager.name, title: titles.join(' + ') || posts.map(p => p.title).join(' + '), entries: state, found, unmatched: [...new Set(unmatched)], ambiguous, problems, notes: [...new Set(notes)], ok: problems.length === 0, art });
   }
-  return { blocks: out, missing: managers.filter(m => !per[m.id]).map(m => m.name), unclear, skipped };
+  return { blocks: out, missing: managers.filter(m => !per.has(m.id)).map(m => m.name), unclear, skipped };
 }
 
 /** Einen Post lesen: Spielerliste und Wechsel getrennt erfassen. */
@@ -255,10 +268,11 @@ function readBlock(b, kader, gone, clubWords, managers) {
   const addList = r => { const e = list[r.p.id]; const allowed = positionsOf(r.p); const np = r.want.find(x => allowed.includes(x));
     if (!e) { list[r.p.id] = { pos: np || r.p.base_pos, explicit: !!np }; if (r.want.length && !np) notes.push(`${r.p.name}: ${r.want.join('/')} nicht erlaubt (${allowed.join('/')}), als ${r.p.base_pos}`); else if (r.how === 'ähnlich') notes.push(`«${r.raw.trim()}» als ${r.p.name} gelesen`); }
     else if (np && e.pos !== np) { e.pos = np; e.explicit = true; } };
+  if (/unver[äa]ndert|keine\s+(wechsel|änderung|aenderung)|wie\s+(gehabt|bisher|vorrunde|letzte)/i.test(b.title)) noChange = true;   // «Runde 5 unverändert» im Titel
   for (let line of b.lines) {
     if (stop) continue;
     if (!line) { mode = 'lineup'; continue; }
-    if (/^pos\b/i.test(line)) { subCol = line.split(/\s*[|\t]\s*/).findIndex((c, i) => i > 0 && /wechsel|für|fuer|statt|raus|ersetzt|^out$|^for$/i.test(c)); continue; }   // Tabellenkopf, evtl. mit Spalte «Wechsel»
+    if (/^(pos(ition)?|nr\.?|#|spieler|name)\b.*\b(name|spieler|verein|team|club|pos)\b/i.test(line) || /^pos\b/i.test(line)) { subCol = line.split(/\s*[|\t]\s*/).findIndex((c, i) => i > 0 && /wechsel|für|fuer|statt|raus|ersetzt|^out$|^for$/i.test(c)); continue; }   // Tabellenkopf, evtl. mit Spalte «Wechsel»
     if (dateLine(line) || /^public$/i.test(line)) continue;
     if (SIG.test(line)) { stop = true; continue; }                 // Grussformel, Signatur, Mail-Disclaimer: ab hier nichts mehr
     if (line === b.title && m) continue;                             // Titel mit Rundennummer
