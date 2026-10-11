@@ -103,15 +103,17 @@ function splitBlocks(lines, managers, kaderOf) {
 
 /* ---------- Wechsel erkennen ---------- */
 // "X für Y", "X anstelle Y", "X statt Y", "X ersetzt Y", "X kommt für Y": X kommt rein, Y geht raus
-const IN_FIRST = /(?:^|\s+)(?:kommt\s+(?:rein\s+)?)?(?:für|fuer|anstelle(?:\s+von)?|anstatt|statt|ersetzt|f)\s+/i;
+const IN_FIRST = /(?:^|\s+)(?:kommt\s+(?:rein\s+)?)?(?:für|fuer|anstelle(?:\s+von)?|anstatt|statt|ersetzt|f|for|instead\s+of|replaces)\s+/i;
 // "Y wird durch X ersetzt", "Y durch X": Y geht raus, X kommt rein
 const DURCH = /\s+(?:wird\s+)?(?:ersetzt\s+)?durch\s+/i;
 // "Y -> X", "Y → X", "Y gegen X", "Y <-> X": Richtung nicht ganz eindeutig, darum spaeter am Kader pruefen
 const ARROW = /\s*(?:<->|↔|->|→|=>|⇒)\s*|\s+>\s+|\s+gegen\s+/i;
 const NOCHANGE = /^(?:keine?|0)\s+(?:wechsel|änderung(?:en)?|aenderung(?:en)?|auswechslung(?:en)?|einwechslung(?:en)?)\b|^(?:unverändert|unveraendert|gleiche\s+aufstellung|alles\s+wie|wie\s+(?:in\s+der\s+)?(?:vorrunde|letzte|bisher|gehabt|letzter))/i;
-const HEAD = /^(?:(\d+|eine?|zwei|drei|vier|fünf|fuenf)\s+)?(einwechslung(?:en)?|auswechslung(?:en)?|wechsel(?:\s+(?:gegenüber|gegenueber|zu|zur|zum|vs\.?)\s+[\p{L}.]+)?|änderung(?:en)?|aenderung(?:en)?|update|korrektur|startaufstellung|aufstellung|startelf|system|zugänge?|zugaenge?|abgänge?|abgaenge?)(?![\p{L}])\s*:?\s*/iu;
-const SHORT = /^(rein|raus|in|out|ein|aus)\s*(?::\s*(.*)|$)/i;
-const modeOf = w => { const n = norm(w); return /^(einwechslung|zugang|zugange|rein|in|ein)/.test(n) ? 'in' : /^(auswechslung|abgang|abgange|raus|out|aus)/.test(n) ? 'out' : /^(wechsel|anderung|update|korrektur)/.test(n) ? 'sub' : /^system/.test(n) ? 'skip' : 'lineup'; };
+const HEAD = /^(?:(\d+|eine?|zwei|drei|vier|fünf|fuenf)\s+)?(einwechslung(?:en)?|auswechslung(?:en)?|wechsel(?:\s+(?:gegenüber|gegenueber|zu|zur|zum|vs\.?)\s+[\p{L}.]+)?|änderung(?:en)?|aenderung(?:en)?|update|korrektur|startaufstellung|aufstellung|startelf|system|zugänge?|zugaenge?|abgänge?|abgaenge?|ersatzbank|bankspieler|bank|ersatz|reserve)(?![\p{L}])\s*:?\s*/iu;
+const SHORT = /^(rein|raus|in|out|ein|aus)\s*:?\s*$/i;
+// "X raus, Y rein", "raus: X rein: Y", "IN: X OUT: Y"
+const KEYTOK = /(?:^|\s)(raus|rein|(?:in|out|ein|aus)(?=\s*:))(?=[\s:,;.!]|$)\s*:?/i;
+const modeOf = w => { const n = norm(w); return /^(ersatzbank|bankspieler|bank|ersatz|reserve)$/.test(n) ? 'bench' : /^(einwechslung|zugang|zugange|rein|in|ein)/.test(n) ? 'in' : /^(auswechslung|abgang|abgange|raus|out|aus)/.test(n) ? 'out' : /^(wechsel|anderung|update|korrektur)/.test(n) ? 'sub' : /^system/.test(n) ? 'skip' : 'lineup'; };
 const CHUNK_SPLIT = /\s*[,;|]\s*(?![^(]*\))|\s+[\/–]\s+|\s+-\s+|\s+(?:u|und|&)\s+/;
 
 /** Eine Zeile in Ereignisse zerlegen: Spielerliste, Wechselpaar, nur rein, nur raus, keine Aenderung. */
@@ -119,11 +121,11 @@ function lineEvents(line, mode) {
   // "Davies (für Gosens)" -> "Davies für Gosens", "Musiala (rein)" -> "Musiala rein"
   line = line.replace(/\(\s*((?:für|fuer|statt|anstatt|anstelle|raus|rein)\b[^)]*)\)/gi, ' $1 ').replace(/\s+/g, ' ').trim();
   if (NOCHANGE.test(line)) return [{ t: 'nochange' }];
-  const short = line.match(SHORT); if (short) { const md = modeOf(short[1]); return short[2] ? lineEvents(short[2], md) : [{ t: 'mode', mode: md }]; }
+  const short = line.match(SHORT); if (short) return [{ t: 'mode', mode: modeOf(short[1]) }];
   if (/^\+\s*\S/.test(line)) return lineEvents(line.replace(/^\+\s*/, ''), 'in');
   // "X raus, Y rein" / "raus X rein Y"
-  if (/(?:^|\s)(raus|rein)(?=[\s:,;.!]|$)/i.test(line)) {
-    const parts = line.split(/(?:^|\s)(raus|rein)(?=[\s:,;.!]|$)\s*:?/i); const ins = [], outs = [];
+  if (KEYTOK.test(line)) {
+    const parts = line.split(new RegExp(KEYTOK.source, 'gi')); const ins = [], outs = [];
     const prefix = !parts[0].trim();
     for (let i = 1; i < parts.length; i += 2) { const names = (prefix ? parts[i + 1] : parts[i - 1]) || ''; if (names.replace(/[\s,;.!]/g, '')) (modeOf(parts[i]) === 'in' ? ins : outs).push(names); }
     if (ins.length || outs.length) return [{ t: 'pair', ins: ins.join(', '), outs: outs.join(', ') }];
@@ -132,6 +134,7 @@ function lineEvents(line, mode) {
   if (IN_FIRST.test(line)) { const parts = line.split(IN_FIRST); return parts.length > 2 ? [{ t: 'chain', parts }] : [{ t: 'pair', ins: parts[0], outs: parts[1] }]; }
   if (ARROW.test(line)) { const [a, ...rest] = line.split(ARROW); if (rest.join('').trim()) return [{ t: 'pair', ins: rest.join(', '), outs: a, unsure: true }]; }
   if (mode === 'in' || mode === 'out') return [{ t: mode, seg: line }];
+  if (mode === 'sub') return [{ t: 'subline', seg: line }];
   return [{ t: 'list', seg: line }];
 }
 
@@ -171,23 +174,24 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
       unmatched.push(...r.unmatched); ambiguous.push(...r.ambiguous); notes.push(...r.notes);
       if (r.kind === 'leer') continue;
       titles.push(r.title);
-      if (r.kind === 'voll') {
-        state = {}; for (const [pid, e] of Object.entries(r.list)) state[pid] = { pos: e.pos }; art = 'voll';
-        for (const w of r.subs) { for (const o of w.outs) if (state[o.p.id] && !w.ins.some(i => i.p.id === o.p.id)) { delete state[o.p.id]; } }
-        for (const w of r.subs) w.ins.forEach(i => { if (state[i.p.id]) marks[i.p.id] = `für ${w.outs.map(o => o.p.name).join(', ') || '?'}`; });
-        continue; }
-      // Nur Wechsel (oder «keine Wechsel»): auf den vorherigen Post dieser Runde oder die Vorrunde anwenden
-      if (!state) { const base = opts.baseOf && opts.baseOf(manager.id); if (!base) { notes.push(`«${r.title}» nennt nur Wechsel, aber es gibt keine Vorrunden-Aufstellung`); continue; }
-        state = {}; for (const [pid, e] of Object.entries(base.entries || {})) state[pid] = { pos: e.pos }; art = art || 'vorrunde'; }
-      if (r.kind === 'keine') { notes.push(`«${r.title}»: keine Wechsel – Aufstellung wie bisher`); continue; }
-      art = art === 'voll' ? 'voll+wechsel' : 'wechsel';
+      const baseE = (opts.baseOf && opts.baseOf(manager.id))?.entries || {};
+      if (r.kind === 'voll') { state = {}; for (const [pid, e] of Object.entries(r.list)) state[pid] = { pos: e.pos }; art = 'voll'; }
+      else {
+        // Nur Wechsel (oder «keine Wechsel»): auf den vorherigen Post dieser Runde oder die Vorrunde anwenden
+        if (!state) { if (!Object.keys(baseE).length) { notes.push(`«${r.title}» nennt nur Wechsel, aber es gibt keine Vorrunden-Aufstellung`); continue; }
+          state = {}; for (const [pid, e] of Object.entries(baseE)) state[pid] = { pos: e.pos }; art = art || 'vorrunde'; }
+        if (r.kind === 'keine') { notes.push(`«${r.title}»: keine Wechsel – Aufstellung wie bisher`); continue; }
+        art = art === 'voll' || art === 'voll+wechsel' ? 'voll+wechsel' : 'wechsel';
+      }
+      const voll = r.kind === 'voll'; const ref = Object.keys(baseE).length ? baseE : state;
       for (let w of r.subs) {
-        // unsichere Richtung ("A -> B", "A gegen B"): steht B schon drin und A nicht, ist es umgekehrt gemeint
-        if (w.unsure && w.outs.every(o => !state[o.p.id]) && w.ins.length && w.ins.every(i => state[i.p.id])) w = { ins: w.outs, outs: w.ins };
+        // Richtung unklar ("A - B", "A -> B", "A gegen B"): wer in der Vorrunde spielte, geht raus
+        if (w.unsure) { const inRef = w.ins.some(i => ref[i.p.id]), outRef = w.outs.some(o => ref[o.p.id]); if (inRef && !outRef) w = { ins: w.outs, outs: w.ins }; }
         const freed = [];
-        for (const o of w.outs) { if (state[o.p.id]) { freed.push(state[o.p.id].pos); delete state[o.p.id]; } else notes.push(`${o.p.name} soll raus, stand aber nicht in der Aufstellung`); }
+        for (const o of w.outs) { if (w.ins.some(i => i.p.id === o.p.id)) continue;
+          if (state[o.p.id]) { freed.push(state[o.p.id].pos); delete state[o.p.id]; } else if (!voll) notes.push(`${o.p.name} soll raus, stand aber nicht in der Aufstellung`); }
         w.ins.forEach((i, k) => {
-          if (state[i.p.id]) { if (i.want.length) { const np = i.want.find(x => positionsOf(i.p).includes(x)); if (np) state[i.p.id].pos = np; } notes.push(`${i.p.name} stand schon in der Aufstellung`); return; }
+          if (state[i.p.id]) { const np = i.want.find(x => positionsOf(i.p).includes(x)); if (np) state[i.p.id].pos = np; if (!voll) notes.push(`${i.p.name} stand schon in der Aufstellung`); else if (w.outs.length) marks[i.p.id] = `für ${w.outs.map(o => o.p.name).join(', ')}`; return; }
           const allowed = positionsOf(i.p); const cand = [...i.want, freed[k], ...freed].filter(Boolean);
           state[i.p.id] = { pos: cand.find(x => allowed.includes(x)) || i.p.base_pos };
           marks[i.p.id] = w.outs.length ? `für ${w.outs.map(o => o.p.name).join(', ')}` : 'neu';
@@ -206,6 +210,9 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     for (const pid of Object.keys(state)) if (!kaderIds.has(pid)) { notes.push(`${byId[pid]?.name || pid} ist nicht mehr im Kader – fällt raus`); delete state[pid]; }
     const found = Object.entries(state).map(([pid, e]) => ({ name: byId[pid]?.name || pid, pos: e.pos, note: marks[pid] || '' })).sort((a, z) => 'TVMS'.indexOf(a.pos) - 'TVMS'.indexOf(z.pos));
     const problems = posProblems(state, byId);
+    // Zu viele Spieler: zeigen, wer gegenueber der Vorrunde dazukam (meist ein nicht erkannter Wechsel)
+    const baseAll = (opts.baseOf && opts.baseOf(manager.id))?.entries;
+    if (Object.keys(state).length > 11 && baseAll) { const neu = Object.keys(state).filter(pid => !baseAll[pid]).map(pid => byId[pid]?.name || pid); if (neu.length) problems.push(`neu gegenüber der Vorrunde: ${neu.join(', ')} – wer geht dafür raus? (z. B. «X für Y» schreiben)`); }
     if (ambiguous.length) problems.unshift(...ambiguous.map(a => `«${a.raw.trim()}» ist mehrdeutig: ${a.options.join(' oder ')}`));
     if (art === 'wechsel' || art === 'vorrunde') notes.unshift(art === 'vorrunde' ? 'Keine Wechsel: Aufstellung der Vorrunde' : 'Nur Wechsel gepostet: Aufstellung der Vorrunde mit diesen Wechseln');
     out.push({ managerId: manager.id, name: manager.name, title: titles.join(' + ') || posts.map(p => p.title).join(' + '), entries: state, found, unmatched: [...new Set(unmatched)], ambiguous, problems, notes: [...new Set(notes)], ok: problems.length === 0, art });
@@ -216,7 +223,7 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
 /** Einen Post lesen: Spielerliste und Wechsel getrennt erfassen. */
 function readBlock(b, kader, gone, clubWords, managers) {
   const list = {}, subs = [], unmatched = [], ambiguous = [], notes = [];
-  let noChange = false, stop = false, mode = 'lineup', pending = [];
+  let noChange = false, stop = false, mode = 'lineup', pending = [], subCol = -1;
   const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i);
   const resolve = (chunkRaw, quiet) => {
     if (words(chunkRaw).length === 1 && posList(chunkRaw.trim()).length) return { pos: posList(chunkRaw.trim()), none: true };
@@ -240,21 +247,34 @@ function readBlock(b, kader, gone, clubWords, managers) {
   for (let line of b.lines) {
     if (stop) continue;
     if (!line) { mode = 'lineup'; continue; }
-    if (dateLine(line) || /^public$/i.test(line) || /^pos\b/i.test(line)) continue;
+    if (/^pos\b/i.test(line)) { subCol = line.split(/\s*[|\t]\s*/).findIndex((c, i) => i > 0 && /wechsel|für|fuer|statt|raus|ersetzt|^out$|^for$/i.test(c)); continue; }   // Tabellenkopf, evtl. mit Spalte «Wechsel»
+    if (dateLine(line) || /^public$/i.test(line)) continue;
     if (SIG.test(line)) { stop = true; continue; }                 // Grussformel, Signatur, Mail-Disclaimer: ab hier nichts mehr
     if (line === b.title && m) continue;                             // Titel mit Rundennummer
-    const h = line.match(HEAD);
+    const h = line.match(HEAD); let lm = mode;
     if (h) { const md = modeOf(h[2]); const rest = line.slice(h[0].length).trim();
       if (md === 'skip') continue;
-      if (!rest || !/\p{L}{3}/u.test(rest)) { if (!h[1]) mode = md === 'sub' ? 'sub' : md; continue; }   // reine Ueberschrift ("Wechsel:", "Eine Auswechslung")
-      line = rest; if (md === 'in' || md === 'out') { lineEvents(line, md).forEach(ev => handle(ev, md)); continue; } }
+      if (md === 'bench') { mode = 'bench'; continue; }                // Ersatzbank: gehoert nicht zur Elf
+      if (!rest || !/\p{L}{3}/u.test(rest)) { if (!h[1]) mode = md; continue; }   // reine Ueberschrift ("Wechsel:", "Eine Auswechslung")
+      line = rest; lm = md === 'lineup' ? mode : md; }
+    if (mode === 'bench') continue;
     if (posList(line).length && words(line).length === 1) { pending = posList(line); continue; }   // Position auf eigener Zeile
-    lineEvents(line, mode).forEach(ev => handle(ev, mode));
+    // Tabellenzeile mit Eintrag in der Spalte «Wechsel»: der dort genannte Spieler geht raus
+    if (subCol > 0 && /[|\t]/.test(line)) { const cells = line.split(/\s*[|\t]\s*/); const sub = (cells[subCol] || '').replace(/^(?:für|fuer|statt|anstelle|anstatt|for|f)\s+/i, '').trim();
+      if (sub) { handle({ t: 'pair', ins: cells.filter((_, i) => i !== subCol).join(' | '), outs: sub }, lm); continue; } }
+    lineEvents(line, lm).forEach(ev => handle(ev, lm));
   }
   function handle(ev, md) {
     if (ev.t === 'mode') { mode = ev.mode; return; }
     if (ev.t === 'nochange') { noChange = true; return; }
     if (ev.t === 'list') { players(ev.seg).forEach(addList); return; }
+    // Zeile im Wechsel-Abschnitt ohne «für»: "A - B", "A / B", "A (B)", auch mehrere durch Komma getrennt.
+    // Richtung offen: wer in der Vorrunde spielte, geht raus (siehe parseLineupText)
+    if (ev.t === 'subline') { let any = false;
+      for (const seg of ev.seg.split(/\s*[,;]\s*(?![^(]*\))/)) { const m2 = seg.match(/^(.+?)\s*\(([^)]+)\)\s*$/) || seg.match(/^(.+?)\s*(?:\s[-–—]\s|\/|\t)\s*(.+)$/);
+        if (m2) { const a = players(m2[1], true), z = players(m2[2], true); if (a.length && z.length) { subs.push({ ins: a, outs: z, unsure: true }); any = true; continue; } }
+        players(seg).forEach(addList); }
+      return; }
     if (ev.t === 'in') { const ins = players(ev.seg); if (ins.length) subs.push({ ins, outs: [] }); return; }
     if (ev.t === 'out') { const outs = players(ev.seg, true); if (outs.length) subs.push({ ins: [], outs }); return; }
     if (ev.t === 'pair') { const ins = players(ev.ins); const outs = players(ev.outs, true);
@@ -272,6 +292,5 @@ function readBlock(b, kader, gone, clubWords, managers) {
   // Ein Post mit (fast) vollstaendiger Elf ist eine Aufstellung; sonst eine Liste von Wechseln zur bisherigen Aufstellung
   const listed = new Set([...Object.keys(list), ...subs.flatMap(w => w.ins.map(i => i.p.id))]);
   let kind = listed.size >= 7 ? 'voll' : subs.length ? 'wechsel' : noChange ? 'keine' : Object.keys(list).length ? 'voll' : 'leer';
-  if (kind === 'voll') for (const w of subs) for (const i of w.ins) if (!list[i.p.id]) addList(i); else { const np = i.want.find(x => positionsOf(i.p).includes(x)); if (np) list[i.p.id].pos = np; }
   return { kind, list, subs, unmatched, ambiguous, notes };
 }
