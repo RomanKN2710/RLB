@@ -42,6 +42,26 @@ export function entryValues(player, pos, result, clubRes) {
   };
 }
 
+/** Spieler mit mehreren Positionen (Ziff. 5.2) so einsetzen, dass die Positionsregel stimmt. Liefert null, wenn die
+    Aufstellung schon passt oder keine Umstellung hilft, sonst {changes: {pid: pos}} mit möglichst wenigen Änderungen.
+    fixed: Spieler, deren Position ausdrücklich gewählt wurde (werden nur umgestellt, wenn es nicht anders geht). */
+export function fitPositions(entries, players, fixed = new Set()) {
+  const ids = Object.keys(entries); if (!ids.length) return null;
+  if (!posCheck(entries, players).bad.length) return null;
+  const posOf = pid => entries[pid].pos || players[pid]?.base_pos;
+  const flex = ids.filter(pid => players[pid] && positionsOf(players[pid]).length > 1).slice(0, 8); if (!flex.length) return null;
+  let best = null;
+  const go = (k, cost, changes) => {
+    if (best && cost >= best.cost) return;
+    if (k === flex.length) { const cnt = { T: 0, V: 0, M: 0, S: 0 }; ids.forEach(pid => { const pos = changes[pid] || posOf(pid); if (cnt[pos] !== undefined) cnt[pos]++; });
+      if (Object.entries(POSRULE).every(([p, [lo, hi]]) => cnt[p] >= lo && cnt[p] <= hi)) best = { cost, changes: { ...changes } }; return; }
+    const pid = flex[k];
+    for (const pos of positionsOf(players[pid])) { const same = pos === posOf(pid); if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : fixed.has(pid) ? 3 : 1), changes); delete changes[pid]; }
+  };
+  go(0, 0, {});
+  return best && Object.keys(best.changes).length ? { changes: best.changes } : null;
+}
+
 /** Positionsregel prüfen. entries: {pid: {pos}} */
 export function posCheck(entries, players) {
   const cnt = { T: 0, V: 0, M: 0, S: 0 };

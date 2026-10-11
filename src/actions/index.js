@@ -51,9 +51,12 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   const b = await D.base();
   const clean = {}; for (const [pid, e] of Object.entries(entries || {})) { const p = b.players[pid]; if (!p || p.manager_id !== managerId || p.status !== 'active' || !R.playerValid(p, round.number)) return fail(`Spieler ${pid} nicht im Kader`);
     const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2)`); clean[pid] = { pos }; }
+  // Spieler mit mehreren Positionen: immer die Position, mit der die Elf regelkonform ist
+  const fit = R.fitPositions(clean, b.players); const umgestellt = [];
+  if (fit) for (const [pid, pos] of Object.entries(fit.changes)) { umgestellt.push(`${b.players[pid].name} als ${pos}`); clean[pid] = { pos }; }
   const probleme = R.posProblems(clean, b.players); if (probleme.length) return fail(`Unzulässige Aufstellung (Ziff. 5.1): ${probleme.join('; ')}`);
   await writeLineup(u, roundId, managerId, clean); rev();
-  return ok('Aufstellung gespeichert');
+  return ok('Aufstellung gespeichert' + (umgestellt.length ? ` – umgestellt, damit die Positionsregel stimmt: ${umgestellt.join(', ')}` : ''));
 });
 async function writeLineup(u, roundId, managerId, clean) {
   const rd = await D.roundById(roundId); const effective = rd && rd.deadline && new Date(rd.deadline) <= new Date();
@@ -335,7 +338,11 @@ export const applyBidsAction = wrap(async (roundId) => { const a = await require
       if (rel) { await x.q("update players set status='released', valid_to=$2 where id=$1", [rel.id, round.number - 1]); await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,$5)", [round.id, m, rel.name, R.value(rel), `mit Gebot ${round.label}`]); }
       const lu = await materializeLineup(x, round, m, b);
       if (lu) { const e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false;
-        if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; const can = [basePos, ...extra]; if (can.includes(pos)) { delete e[bid.swap_out_player_id]; e[id] = { pos }; free.push(id); ch = true; } }   // passt die Position nicht, bleibt die Aufstellung (Rundencheck meldet es)
+        if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; const can = [basePos, ...extra];
+          const e2 = { ...e }; delete e2[bid.swap_out_player_id]; e2[id] = { pos: can.includes(pos) ? pos : basePos };
+          const P2 = { ...b.players, [id]: { id, name: bid.player_name, base_pos: basePos, extra_pos: extra } }; const fit = R.fitPositions(e2, P2);   // passt die Position nicht: andere Spieler mit Zusatzposition umstellen
+          if (fit) for (const [pid, p2] of Object.entries(fit.changes)) e2[pid] = { pos: p2 };
+          if (!R.posCheck(e2, P2).bad.length) { Object.keys(e).forEach(k => delete e[k]); Object.assign(e, e2); free.push(id); ch = true; } }   // geht es nicht auf, bleibt die Aufstellung (Rundencheck meldet es)
         if (rel && e[rel.id]) { delete e[rel.id]; ch = true; }
         if (ch) await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]); }
     }

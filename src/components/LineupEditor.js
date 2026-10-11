@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { saveLineupAction } from '@/actions';
-import { POSRULE, SWAP_PCT, posProblems } from '@/lib/rules';
+import { POSRULE, SWAP_PCT, posProblems, fitPositions } from '@/lib/rules';
 import { chf, Msg } from '@/components/ui';
 
 export default function LineupEditor({ roundId, managerId, players, initial, prevEntries, freeIn, isFirst }) {
@@ -17,8 +17,12 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
   const free = new Set(freeIn || []);
   const swaps = isFirst || !prevEntries ? [] : Object.keys(entries).filter(pid => !(pid in prevEntries) && !free.has(pid)).map(pid => ({ name: byId[pid]?.name, cost: (byId[pid]?.price || 0) * SWAP_PCT }));
   const swapTotal = swaps.reduce((a, x) => a + x.cost, 0);
-  const toggle = p => setEntries(e => { const c = { ...e }; if (c[p.id]) delete c[p.id]; else c[p.id] = { pos: p.base_pos }; return c; });
-  const setPos = (pid, pos) => setEntries(e => ({ ...e, [pid]: { pos } }));
+  // Spieler mit mehreren Positionen landen automatisch auf der Position, mit der die Elf regelkonform ist;
+  // eine von Hand gewählte Position bleibt, solange es anders aufgeht.
+  const [manual, setManual] = useState(() => new Set()); const [hint, setHint] = useState('');
+  const fitted = (c, fixed) => { const fit = fitPositions(c, byId, fixed); if (!fit) return c; const out = { ...c }; for (const [pid, pos] of Object.entries(fit.changes)) out[pid] = { pos }; setHint(Object.entries(fit.changes).map(([pid, pos]) => `${byId[pid]?.name} als ${pos}`).join(', ')); return out; };
+  const toggle = p => setEntries(e => { const c = { ...e }; if (c[p.id]) delete c[p.id]; else c[p.id] = { pos: p.base_pos }; return fitted(c, manual); });
+  const setPos = (pid, pos) => { const m = new Set(manual); m.add(pid); setManual(m); setEntries(e => fitted({ ...e, [pid]: { pos } }, m)); };
   const order = { T: 0, V: 1, M: 2, S: 3 };
   const sorted = players.slice().sort((a, b) => order[a.base_pos] - order[b.base_pos] || (a.slot > b.slot ? 1 : -1) || a.name.localeCompare(b.name));
   const save = () => start(async () => { const r = await saveLineupAction(roundId, managerId, entries); setMsg(r); });
@@ -34,6 +38,7 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
           <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j" title="Eventualauftrag oder Trade: ohne Wechselkosten">gratis</span>}</td>
           <td className="l muted">{p.club}</td><td>{p.price}</td></tr>); })}</tbody>
     </table></div>
+    {hint && zulaessig && <div className="mini">Automatisch umgestellt, damit die Positionsregel stimmt: {hint}</div>}
     {!zulaessig && <div className="err"><b>Unzulässige Aufstellung – so kann sie nicht abgegeben werden.</b>
       <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{probleme.map(x => <li key={x}>{x}</li>)}</ul>
       <span className="mini">Regel (Ziff. 5.1): genau 11 Spieler, davon 1 Torwart, 3–5 Verteidiger, 3–6 Mittelfeld, 1–3 Sturm. Gewertet wird die zuletzt gültig gespeicherte Aufstellung, ohne gespeicherte Aufstellung die der Vorrunde.</span></div>}

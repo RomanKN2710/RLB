@@ -2,7 +2,7 @@
    Post/Block, darin die Spieler in beliebiger Schreibweise: "1 T Zentner Mainz", "V\tSvensson\tDortmund",
    "Latte Lath (M)", Position auf eigener Zeile, Tippfehler ("Ulrich", "Gregrotisch"). Reine Funktionen
    ohne Datenbank; die Zuordnung laeuft gegen den Kader des jeweiligen Managers. */
-import { norm, positionsOf, posProblems, posCheck, POSRULE } from './rules';
+import { norm, positionsOf, posProblems, fitPositions } from './rules';
 
 const POSMAP = { t: 'T', tw: 'T', tor: 'T', torwart: 'T', goalie: 'T', v: 'V', iv: 'V', av: 'V', lv: 'V', rv: 'V', abw: 'V', abwehr: 'V', verteidiger: 'V', verteidigung: 'V', m: 'M', mf: 'M', zm: 'M', dm: 'M', om: 'M', lm: 'M', rm: 'M', mittelfeld: 'M', s: 'S', st: 'S', sturm: 'S', stuermer: 'S', sturmer: 'S', a: 'S', angriff: 'S', la: 'S', ra: 'S' };
 // Vereinsworte, die hinter dem Spielernamen stehen koennen ("Kim Bayern München", "Moore Köln")
@@ -216,7 +216,9 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     // Spieler, die nicht mehr im Kader sind (entlassen, verkauft): fallen raus, die Pruefung meldet die Luecke
     const kaderIds = new Set(kader.map(p => p.id));
     for (const pid of Object.keys(state)) if (!kaderIds.has(pid)) { notes.push(`${byId[pid]?.name || pid} ist nicht mehr im Kader – fällt raus`); delete state[pid]; }
-    fitPositions(state, byId, explicit, notes, marks);
+    // Spieler mit mehreren Positionen: immer die Position, mit der die Elf regelkonform ist
+    const fit = fitPositions(state, byId, explicit);
+    if (fit) for (const [pid, pos] of Object.entries(fit.changes)) { const was = state[pid].pos; state[pid].pos = pos; notes.push(`${byId[pid].name} als ${pos} statt ${was} aufgestellt${explicit.has(pid) ? '' : ' (keine Positionsangabe im Post)'} – so stimmt die Zahl je Position`); marks[pid] = marks[pid] ? marks[pid] + `, als ${pos}` : `als ${pos}`; }
     const found = Object.entries(state).map(([pid, e]) => ({ name: byId[pid]?.name || pid, pos: e.pos, note: marks[pid] || '' })).sort((a, z) => 'TVMS'.indexOf(a.pos) - 'TVMS'.indexOf(z.pos));
     const problems = posProblems(state, byId);
     // Zu viele Spieler: zeigen, wer gegenueber der Vorrunde dazukam (meist ein nicht erkannter Wechsel)
@@ -302,25 +304,4 @@ function readBlock(b, kader, gone, clubWords, managers) {
   const listed = new Set([...Object.keys(list), ...subs.flatMap(w => w.ins.map(i => i.p.id))]);
   let kind = listed.size >= 7 ? 'voll' : subs.length ? 'wechsel' : noChange ? 'keine' : Object.keys(list).length ? 'voll' : 'leer';
   return { kind, list, subs, unmatched, ambiguous, notes };
-}
-
-/** Positionen passend machen: stimmt die Zahl je Position nicht, aber Spieler mit Zusatzposition (Ziff. 5.2) koennten
-    umgestellt werden, die Umstellung mit den wenigsten Aenderungen waehlen. Spieler ohne ausdrueckliche Positionsangabe
-    im Post werden zuerst umgestellt (der Manager hat sie nur vergessen), ausdrueckliche nur, wenn es nicht anders geht. */
-export function fitPositions(state, byId, explicit = new Set(), notes = [], marks = {}) {
-  const ids = Object.keys(state); if (ids.length !== 11) return false;
-  if (!posCheck(state, byId).bad.length) return false;
-  const flex = ids.filter(pid => byId[pid] && positionsOf(byId[pid]).length > 1).slice(0, 8); if (!flex.length) return false;
-  let best = null;
-  const go = (k, cost, changes) => {
-    if (best && cost >= best.cost) return;
-    if (k === flex.length) { const cnt = { T: 0, V: 0, M: 0, S: 0 }; ids.forEach(pid => { const pos = changes[pid] || state[pid].pos; if (cnt[pos] !== undefined) cnt[pos]++; });
-      if (Object.entries(POSRULE).every(([p, [lo, hi]]) => cnt[p] >= lo && cnt[p] <= hi)) best = { cost, changes: { ...changes } }; return; }
-    const pid = flex[k];
-    for (const pos of positionsOf(byId[pid])) { const same = pos === state[pid].pos; if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : explicit.has(pid) ? 3 : 1), changes); delete changes[pid]; }
-  };
-  go(0, 0, {});
-  if (!best) return false;
-  for (const [pid, pos] of Object.entries(best.changes)) { const was = state[pid].pos; state[pid].pos = pos; notes.push(`${byId[pid].name} als ${pos} statt ${was} aufgestellt${explicit.has(pid) ? '' : ' (keine Positionsangabe im Post)'} – so stimmt die Zahl je Position`); marks[pid] = marks[pid] ? marks[pid] + `, als ${pos}` : `als ${pos}`; }
-  return true;
 }
