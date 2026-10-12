@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
-import { savePage, status } from '@/lib/kicker-inbox';
+import { savePage, status, page } from '@/lib/kicker-inbox';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -26,6 +26,9 @@ export async function POST(req) {
 /** Stand des Eingangs: GET ?matchday=N */
 export async function GET(req) {
   if (!await allowed(req)) return new NextResponse('forbidden', { status: 403, headers: CORS });
-  const md = Number(new URL(req.url).searchParams.get('matchday')); if (!md) return new NextResponse('?matchday=N', { status: 400, headers: CORS });
+  const sp = new URL(req.url).searchParams; const md = Number(sp.get('matchday')); if (!md) return new NextResponse('?matchday=N', { status: 400, headers: CORS });
+  // ?page=elf oder ?page=<Spiel-Kennung>: die abgelegte Seite selbst (zum Nachsehen, was der Import zu lesen bekam)
+  if (sp.get('page')) { const p = await page(md, sp.get('page')); if (!p) return new NextResponse('Seite nicht im Eingang', { status: 404, headers: CORS });
+    return new NextResponse(p.html, { headers: { ...CORS, 'content-type': 'text/html; charset=utf-8', 'content-disposition': `inline; filename="kicker-st${md}-${sp.get('page')}.html"` } }); }
   const s = await status(md); return NextResponse.json(s, { headers: CORS });
 }

@@ -12,7 +12,7 @@ export async function GET(req) {
   const script = `// ==UserScript==
 // @name         RLB kicker-Sender
 // @namespace    rlb
-// @version      1.0
+// @version      1.1
 // @description  Sendet kicker-Aufstellungsseiten und die Elf des Tages an das RLB Managerspiel
 // @match        https://www.kicker.de/*
 // @match        https://www.kicker.ch/*
@@ -20,13 +20,14 @@ export async function GET(req) {
 // @connect      ${host}
 // ==/UserScript==
 (function () {
-  if (!/\\/aufstellung$|\\/elf-des-tages\\//.test(location.pathname)) return;
+  // Aufstellungsseiten und Elf des Tages, auch mit Schraegstrich am Ende oder anderem Pfad auf dem Handy; der Server prueft die Seite
+  if (!/\\/aufstellung\\/?$|elf-des-tages|elf-der-woche/i.test(location.pathname) && !/Elf des Tages/i.test(document.title)) return;
   var hinweis = document.createElement('div');
   hinweis.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99999;background:#1E6B3A;color:#fff;padding:12px 14px;border-radius:8px;font:15px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.35)';
   hinweis.textContent = 'RLB: sende Seite …';
   document.body.appendChild(hinweis);
   GM_xmlhttpRequest({
-    method: 'POST', url: ${JSON.stringify(url)},
+    method: 'POST', url: ${JSON.stringify(url)} + '&url=' + encodeURIComponent(location.href),
     headers: { 'Content-Type': 'text/plain' }, data: document.documentElement.outerHTML,
     onload: function (r) { hinweis.textContent = 'RLB: ' + r.responseText; setTimeout(function () { hinweis.remove(); }, 8000); },
     onerror: function () { hinweis.textContent = 'RLB: Senden fehlgeschlagen'; }

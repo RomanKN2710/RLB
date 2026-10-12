@@ -6,6 +6,8 @@
 import * as cheerio from 'cheerio';
 import { q, one, setSetting } from './db';
 import clubSlugs from '../../db/seed/kicker-clubs.json';
+import { parseElfDesTages, slugOfHref, teamOfHref } from './kicker-parse.js';
+export { parseElfDesTages };
 
 /* ---------- Namens- und Vereinsabgleich ---------- */
 /** Kanonische Schreibweise: Umlaute zu ae/oe/ue (wie in kicker-Slugs), Akzente weg, nur a-z0-9 und Bindestrich. */
@@ -33,8 +35,6 @@ export function clubMatches(kTeamSlug, ourClub) {
   const fixed = clubSlugOf(ourClub); if (fixed) return t === fixed;
   const c = fold(slugify(ourClub)); return fold(t).includes(c);
 }
-const teamOfHref = href => (String(href).split('/spieler/')[1] || '').split('/').slice(1).join('/');
-const slugOfHref = href => { const m = String(href).match(/kicker\.\w+\/([^/]+)\/spieler\//) || String(href).match(/^\/([^/]+)\/spieler\//); return m ? m[1] : ''; };
 
 /* ---------- Parser ---------- */
 /** Aufstellungsseite eines Spiels: Startelf (mit Position aus den Formationszeilen), Reservebank, Wechsel, Tore/Vorlagen, Karten. */
@@ -71,16 +71,6 @@ export function parseMatchPage(html) {
     else if (/^Spielerwechsel/i.test(head)) events.push({ type: 'sub', minute, in: links[0], out: links[1] });
   });
   return { teams, starters, bench, events };
-}
-
-/** Elf-des-Tages-Seite: 11 Spieler {slug, name, team} und Spieler des Tages. */
-export function parseElfDesTages(html) {
-  const $ = cheerio.load(html);
-  const elf = $('.kick__lineup-field a.kick__lineup-player-card').toArray().map(a => ({ slug: slugOfHref($(a).attr('href')), name: $(a).find('.kick__lineup-player-card__name').text().trim() || $(a).find('img').attr('alt') || '', team: teamOfHref($(a).attr('href')).split('/').pop(), fullName: $(a).find('img').attr('alt') || '' }));
-  let sdt = null; const h = $('h3.kick__card-headline').filter((_, e) => /Spieler des Tages/i.test($(e).text())).first();
-  if (h.length) { const card = h.closest('.kick__card'); const a = card.find('.kick__player-hero a[href*="/spieler/"]').first();
-    if (a.length) sdt = { slug: slugOfHref(a.attr('href')), name: (a.find('img').attr('alt') || '').trim() || slugOfHref(a.attr('href')).replace(/-/g, ' '), team: teamOfHref(a.attr('href')).split('/').pop() }; }
-  return { elf, sdt };
 }
 
 /* ---------- Bewertung pro Spieler aus den Spieldaten ---------- */
@@ -170,7 +160,9 @@ export async function importPages(round, b, pages, opts = {}) {
   log.push(...await acquirePositions(allStarters, b, round));
   // 3) Elf des Tages
   let elf = null; const tdrPids = new Set(); const tdrNames = []; let sdtPid = null;
-  if (pages.elf) { try { elf = parseElfDesTages(pages.elf); if (!elf.elf.length) throw new Error(/liegt noch nicht vor/i.test(pages.elf) ? 'auf kicker noch nicht veröffentlicht – Seite später erneut senden' : 'keine Elf im Quelltext'); } catch (e) { errors.push('Elf des Tages: ' + e.message); elf = null; } }
+  if (pages.elf) { try { elf = parseElfDesTages(pages.elf);
+      if (!elf.elf.length) throw new Error(/liegt noch nicht vor|noch nicht ver(ö|oe)ffentlicht/i.test(pages.elf) ? 'auf kicker noch nicht veröffentlicht – Seite später erneut senden' : `keine Elf im Quelltext (${elf.diag.playerLinks} Spielerlinks auf der Seite, Titel «${elf.diag.title}») – Seite unter «Eingang» ansehen und melden`);
+      if (elf.elf.length < 11) log.push(`Elf des Tages: nur ${elf.elf.length} Spieler erkannt (${elf.diag.how})`); } catch (e) { errors.push('Elf des Tages: ' + e.message); elf = null; } }
   if (elf) { for (const kp of elf.elf) { tdrNames.push(kp.name); const r = resolveKickerPlayer(kp, lineupPlayers, log); if (r) { tdrPids.add(r.player.id); await fixSlug(r.player, kp.slug, r.via); } }
     if (elf.sdt) { const r = resolveKickerPlayer(elf.sdt, lineupPlayers, log); if (r) sdtPid = r.player.id; }
     log.push(`Elf des Tages: ${elf.elf.length} Spieler, ${tdrPids.size} in RLB-Aufstellungen${elf.sdt ? ', Spieler des Tages ' + elf.sdt.name + (sdtPid ? ' (+1 TdR)' : '') : ''}`); }
