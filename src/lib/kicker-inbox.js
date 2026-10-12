@@ -30,7 +30,10 @@ export async function savePage(html, opts = {}) {
 export async function status(matchday) {
   await ensureTable();
   const rows = await q('select page_id, kind, title, at, length(html) as bytes from kicker_pages where matchday=$1 order by at', [matchday]);
-  return { matchday, matches: rows.filter(r => r.kind === 'match').map(r => ({ id: r.page_id, title: r.title, at: r.at })), elf: rows.some(r => r.kind === 'elf'), n: rows.filter(r => r.kind === 'match').length };
+  const elfRow = rows.find(r => r.kind === 'elf');
+  // Elf des Tages unter einem anderen Spieltag abgelegt (z. B. Spieltag aus der kicker-Seite falsch gelesen)? Zum Verschieben anbieten
+  const elsewhere = elfRow ? [] : (await q("select matchday, title, at from kicker_pages where kind='elf' and matchday<>$1 order by at desc", [matchday])).map(r => ({ matchday: r.matchday, title: r.title, at: r.at }));
+  return { matchday, matches: rows.filter(r => r.kind === 'match').map(r => ({ id: r.page_id, title: r.title, at: r.at })), elf: !!elfRow, elfTitle: elfRow ? elfRow.title : null, elfAt: elfRow ? elfRow.at : null, elfElsewhere: elsewhere, n: rows.filter(r => r.kind === 'match').length };
 }
 
 export async function pages(matchday) {
@@ -41,6 +44,9 @@ export async function pages(matchday) {
 
 /** Eine abgelegte Seite (zum Nachsehen, wenn der Import sie nicht lesen kann). */
 export async function page(matchday, pageId) { await ensureTable(); return one('select kind, title, html, at from kicker_pages where matchday=$1 and page_id=$2', [matchday, pageId]); }
+
+/** Elf des Tages von einem Spieltag zu einem anderen verschieben (falsch zugeordnet). */
+export async function moveElf(fromMd, toMd) { await ensureTable(); await q("delete from kicker_pages where matchday=$1 and kind='elf'", [toMd]); const r = await q("update kicker_pages set matchday=$2, at=now() where matchday=$1 and kind='elf' returning page_id", [fromMd, toMd]); return r.length; }
 
 export async function clear(matchday) { await ensureTable(); await q('delete from kicker_pages where matchday=$1', [matchday]); }
 

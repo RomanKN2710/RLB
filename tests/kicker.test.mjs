@@ -33,6 +33,9 @@ describe('classify', () => {
     assert.equal(classify('<title>Elf des Tages - 7. Spieltag | kicker</title>').matchday, 7);
     assert.equal(classify('<title>Bundesliga</title><h1>Elf des Tages</h1><p>bundesliga_2026-27_6</p>').matchday, 6);
     assert.equal(classify('<title>Bundesliga</title><h1>Elf des Tages</h1>').matchday, null);
+    // Spieltag-Auswahl auf der Seite («1. Spieltag», «2. Spieltag» …) darf den Spieltag nicht bestimmen
+    assert.equal(classify('<title>Elf des Tages | kicker</title><select><option>1. Spieltag</option><option>2. Spieltag</option></select>').matchday, null);
+    assert.equal(classify('<title>Elf des Tages | kicker</title><select><option>1. Spieltag</option></select>', 'https://www.kicker.de/bundesliga/elf-des-tages/2026-27/5').matchday, 5);
   });
   test('Aufstellungsseite: Kennung und Teams, auch mit Schrägstrich am Ende der Adresse', () => {
     const html = '<title>Bayern - Dortmund | kicker</title><div class="kick__lineup__teamrow"><div class="kick__lineup__teamrow__teamname">FC Bayern</div></div><div class="kick__lineup__teamrow"><div class="kick__lineup__teamrow__teamname">Dortmund</div></div><span>bundesliga_2026-27_5</span>';

@@ -21,7 +21,8 @@ export function classify(html, hintUrl = '') {
   const isElf = !!elfMd || /elf-des-tages/i.test(hintUrl) || /Elf des Tages/i.test(title) || /Elf des Tages/i.test(h1) || (/elf-des-tages/.test(h) && !/kick__lineup__teamrow/.test(h) && /Spieler des Tages/i.test(h));
   // Spieltag: Tracking-Kennung "…_bundesliga_2026-27_3", sonst JSON "spieltag":3, sonst Brotkrumen/Titel "3. Spieltag"
   const md = (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || h.match(/(\d{1,2})\.\s*Spieltag/) || title.match(/(\d{1,2})\.\s*Spieltag/) || [])[1];
-  if (isElf) return { kind: 'elf', matchday: elfMd ? Number(elfMd) : md ? Number(md) : null, id: 'elf', title: title || h1 || 'Elf des Tages' };
+  if (isElf) { const tmd = (title.match(/(\d{1,2})\.\s*Spieltag/) || h1.match(/(\d{1,2})\.\s*Spieltag/) || h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || [])[1];
+    return { kind: 'elf', matchday: elfMd ? Number(elfMd) : tmd ? Number(tmd) : null, id: 'elf', title: title || h1 || 'Elf des Tages' }; }
   const hasLineup = /kick__lineup__teamrow/.test(h);
   const id = (h.match(/rel="canonical" href="[^"]*?-(\d+)\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)?"?/) || h.match(/\/([0-9]{6,})\/aufstellung/) || h.match(/-(\d{6,})\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)\b/) || hintUrl.match(/-(\d+)\/\w*\/?$/) || [])[1];
   const teams = [...h.matchAll(/kick__lineup__teamrow__teamname[^>]*>\s*([^<]+?)\s*</g)].map(m => decode(m[1])).slice(0, 2);
