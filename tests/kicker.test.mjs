@@ -29,7 +29,7 @@ describe('parseElfDesTages', () => {
 
 describe('classify', () => {
   test('Elf des Tages an Adresse, Titel oder Überschrift, Spieltag aus Adresse/Titel', () => {
-    assert.deepEqual(classify('<html><head><title>x</title></head></html>', 'https://www.kicker.de/bundesliga/elf-des-tages/2026-27/5'), { kind: 'elf', matchday: 5, id: 'elf', title: 'x' });
+    assert.deepEqual(classify('<html><head><title>x</title></head></html>', 'https://www.kicker.de/bundesliga/elf-des-tages/2026-27/5'), { kind: 'elf', matchday: 5, matchdaySource: 'url', id: 'elf', title: 'x' });
     assert.equal(classify('<title>Elf des Tages - 7. Spieltag | kicker</title>').matchday, 7);
     assert.equal(classify('<title>Bundesliga</title><h1>Elf des Tages</h1><p>bundesliga_2026-27_6</p>').matchday, 6);
     assert.equal(classify('<title>Bundesliga</title><h1>Elf des Tages</h1>').matchday, null);
@@ -42,4 +42,16 @@ describe('classify', () => {
     const c = classify(html, 'https://www.kicker.de/bayern-gegen-dortmund-2026-bundesliga-4932121/aufstellung/'); assert.equal(c.kind, 'match'); assert.equal(c.id, '4932121'); assert.equal(c.matchday, 5); assert.equal(c.title, 'FC Bayern – Dortmund');
   });
   test('Spielbericht statt Aufstellung: unbekannt', () => { assert.equal(classify('<title>Spielbericht</title>').kind, 'unknown'); });
+});
+
+describe('parseElfDesTages ohne Spielerlinks (Handy)', () => {
+  const NAMES = ['Neuer', 'Kimmich', 'Schlotterbeck', 'Anton', 'Davies', 'Stiller', 'Olise', 'Wirtz', 'Gittens', 'Kane', 'Guirassy'];
+  test('Spielerkarten als div mit Namensfeld', () => {
+    const html = `<html><head><title>Elf des Tages</title></head><body><h1>Elf des Tages</h1><div class="kick__lineup">${NAMES.map(n => `<div class="kick__lineup-player-card"><img src="x.jpg"><div class="kick__lineup-player-card__name">${n}</div></div>`).join('')}</div><h3>Spieler des Tages</h3><div class="kick__player-hero"><img alt="Harry Kane"><div class="kick__player-hero__name">Harry Kane</div></div></body></html>`;
+    const r = parseElfDesTages(html); assert.equal(r.elf.length, 11); assert.equal(r.elf[0].name, 'Neuer'); assert.equal(r.elf[0].slug, 'neuer'); assert.equal(r.elf[0].team, ''); assert.equal(r.sdt.name, 'Harry Kane'); assert.equal(r.diag.how, 'namen');
+  });
+  test('nur Bilder mit Namen nach der Überschrift', () => {
+    const html = `<html><body><h2>Elf des Tages</h2><ul>${NAMES.map(n => `<li><img alt="${n}"><span>${n}</span></li>`).join('')}</ul><h3>Spieler des Tages</h3><img alt="Harry Kane"></body></html>`;
+    const r = parseElfDesTages(html); assert.equal(r.elf.length, 11); assert.equal(r.elf[10].name, 'Guirassy'); assert.equal(r.sdt.name, 'Harry Kane');
+  });
 });

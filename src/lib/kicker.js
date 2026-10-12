@@ -106,6 +106,9 @@ const surnameOf = name => { const t = stripInitials(tokens(name)); return t[t.le
  * Bei mehreren Treffern entscheidet die Position (kicker-Position muss zu Grund-/Zusatzposition passen); bleibt es mehrdeutig, wird nicht zugeordnet.
  */
 export function resolveKickerPlayer(kp, candidates, log) {
+  // Ohne Vereinsangabe (Handy-Seite nur mit Namen): ueber alle Kandidaten nach Namen, auch bei bekannter kicker-Kennung (deren Nachnamensteil passt)
+  if (!kp.team) { const nm = slugify(kp.name); const hits0 = candidates.filter(p => playerMatches(kp.slug, kp.name, p.name) || (p.kicker_slug && (p.kicker_slug === nm || p.kicker_slug.endsWith('-' + nm) || p.kicker_slug.split('-').includes(nm))));
+    if (hits0.length === 1) return { player: hits0[0], via: 'name' }; if (hits0.length > 1 && log) log.push(`mehrdeutig: ${kp.name} passt auf ${hits0.map(h => h.name + ' (' + h.club + ')').join(', ')} – nicht zugeordnet`); return null; }
   const sameClub = candidates.filter(p => clubMatches(kp.team, p.club));
   const bySlug = sameClub.filter(p => p.kicker_slug && p.kicker_slug === kp.slug); if (bySlug.length === 1) return { player: bySlug[0], via: 'slug' };
   let hits = sameClub.filter(p => !p.kicker_slug && playerMatches(kp.slug, kp.name, p.name));
@@ -163,7 +166,7 @@ export async function importPages(round, b, pages, opts = {}) {
   if (pages.elf) { try { elf = parseElfDesTages(pages.elf);
       if (!elf.elf.length) throw new Error(/liegt noch nicht vor|noch nicht ver(ö|oe)ffentlicht/i.test(pages.elf) ? 'auf kicker noch nicht veröffentlicht – Seite später erneut senden' : `keine Elf im Quelltext (${elf.diag.playerLinks} Spielerlinks auf der Seite, Titel «${elf.diag.title}») – Seite unter «Eingang» ansehen und melden`);
       if (elf.elf.length < 11) log.push(`Elf des Tages: nur ${elf.elf.length} Spieler erkannt (${elf.diag.how})`); } catch (e) { errors.push('Elf des Tages: ' + e.message); elf = null; } }
-  if (elf) { for (const kp of elf.elf) { tdrNames.push(kp.name); const r = resolveKickerPlayer(kp, lineupPlayers, log); if (r) { tdrPids.add(r.player.id); await fixSlug(r.player, kp.slug, r.via); } }
+  if (elf) { for (const kp of elf.elf) { tdrNames.push(kp.name); const r = resolveKickerPlayer(kp, lineupPlayers, log); if (r) { tdrPids.add(r.player.id); if (kp.team) await fixSlug(r.player, kp.slug, r.via); } }   // Kennung nur von echten kicker-Links übernehmen
     if (elf.sdt) { const r = resolveKickerPlayer(elf.sdt, lineupPlayers, log); if (r) sdtPid = r.player.id; }
     log.push(`Elf des Tages: ${elf.elf.length} Spieler, ${tdrPids.size} in RLB-Aufstellungen${elf.sdt ? ', Spieler des Tages ' + elf.sdt.name + (sdtPid ? ' (+1 TdR)' : '') : ''}`); }
   // 4) Vollständigkeitsbericht: jeder aufgestellte Spieler bekommt einen Status

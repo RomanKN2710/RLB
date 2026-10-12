@@ -2,7 +2,7 @@
    Quelltext der geoeffneten kicker-Seite an /api/kicker-inbox. Die Seite wird erkannt (Spiel-Aufstellung
    oder Elf des Tages, Spieltag), ausgeduennt und abgelegt; der Admin importiert den Eingang mit einem Klick. */
 import { q, one } from './db';
-import { slimHtml, classify } from './kicker-parse.js';
+import { slimHtml, classify, parseElfDesTages } from './kicker-parse.js';
 
 let ready = false;
 async function ensureTable() {
@@ -16,15 +16,19 @@ export { slimHtml, classify };
 export async function savePage(html, opts = {}) {
   await ensureTable();
   const c = classify(html, opts.url || ''); let md = opts.matchday || c.matchday;
-  // Elf des Tages ohne erkennbaren Spieltag: zum Spieltag, dessen Spiele zuletzt eingegangen sind
-  if (!md && c.kind === 'elf') { const last = await one("select matchday from kicker_pages where kind='match' order by at desc limit 1"); if (last) md = last.matchday; }
+  // Elf des Tages: nennt die Adresse den Spieltag nicht, gehoert sie zur Runde in Auswertung (Deadline vorbei, noch nicht final),
+  // sonst zum Spieltag, dessen Spiele zuletzt eingegangen sind. Ein nur aus dem Seitentext geratener Spieltag zaehlt weniger als die Runde in Auswertung.
+  let parsedElf = null;
+  if (c.kind === 'elf') { parsedElf = parseElfDesTages(html);
+    if (!opts.matchday && c.matchdaySource !== 'url') { const pend = await one("select matchday from rounds where type='regulaer' and status='open' and deadline is not null and deadline <= now() order by number desc limit 1");
+      const last = await one("select matchday from kicker_pages where kind='match' order by at desc limit 1"); md = (pend && pend.matchday) || (last && last.matchday) || md; } }
   if (!md) throw new Error('Spieltag nicht erkennbar – bitte ?matchday=N mitgeben');
   if (c.kind === 'unknown') throw new Error(`Keine Aufstellungsseite: «${c.title}» – bei kicker den Reiter «Aufstellung» öffnen, nicht Spielbericht/Ticker`);
   if (c.kind === 'match' && !c.id) throw new Error('Spiel-Kennung nicht erkennbar');
   const slim = slimHtml(html);
   await q(`insert into kicker_pages(matchday,page_id,kind,title,html,at) values($1,$2,$3,$4,$5,now()) on conflict(matchday,page_id) do update set kind=excluded.kind, title=excluded.title, html=excluded.html, at=now()`, [md, c.id, c.kind, c.title, slim]);
   const st = await status(md);
-  return { ...c, matchday: md, bytes: slim.length, status: st };
+  return { ...c, matchday: md, bytes: slim.length, status: st, elf: parsedElf ? { n: parsedElf.elf.length, sdt: parsedElf.sdt ? parsedElf.sdt.name : null, how: parsedElf.diag.how, links: parsedElf.diag.playerLinks } : null };
 }
 
 export async function status(matchday) {

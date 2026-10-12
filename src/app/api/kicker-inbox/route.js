@@ -19,7 +19,7 @@ export async function POST(req) {
   if (!html || html.length < 500) return new NextResponse('Kein Quelltext empfangen (Body leer)', { status: 400, headers: CORS });
   try {
     const r = await savePage(html, { url, matchday: Number(sp.get('matchday')) || null });
-    const msg = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday} gespeichert` : `${r.title} gespeichert – Spieltag ${r.matchday}: ${r.status.n}/9 Spiele, Elf des Tages ${r.status.elf ? 'ja' : 'fehlt'}`;
+    const msg = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday} gespeichert: ${r.elf?.n || 0} Spieler${r.elf?.sdt ? ', Spieler des Tages ' + r.elf.sdt : ', Spieler des Tages nicht erkannt'}${(r.elf?.n || 0) < 11 ? ` – nur ${r.elf?.n || 0} erkannt (${r.elf?.links || 0} Spielerlinks), bitte die Seite melden` : ' – jetzt in der App «Eingang importieren»'}` : `${r.title} gespeichert – Spieltag ${r.matchday}: ${r.status.n}/9 Spiele, Elf des Tages ${r.status.elf ? 'ja' : 'fehlt'}`;
     return new NextResponse(msg, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
   } catch (e) { return new NextResponse('Fehler: ' + e.message, { status: 422, headers: CORS }); }
 }
