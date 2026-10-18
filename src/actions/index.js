@@ -6,7 +6,7 @@ import { login, clearSession, requireUser, requireAdmin, hashPassword } from '@/
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines } from '@/lib/oldb';
-import { importPages, playerMatches, ensureColumns as ensureKickerColumns } from '@/lib/kicker';
+import { importInbox, importSummary, playerMatches, ensureColumns as ensureKickerColumns } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
 import * as BlogImport from '@/lib/blog-import';
 import * as Blog from '@/lib/blog-archiv';
@@ -303,12 +303,9 @@ export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, html
   for (const h of matches) await Inbox.savePage(h, { matchday: round.matchday }); if (elf) await Inbox.savePage(elf, { matchday: round.matchday });
   return importKickerInboxAction(roundId, unlock); });
 /* Eingang (Handy oder eingefügter Quelltext) importieren */
-export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); const b = await D.base();
-  const pg = await Inbox.pages(round.matchday); if (!pg.matches.length && !pg.elf) return fail(`Eingang für Spieltag ${round.matchday} ist leer`);
-  await D.ensureLineups(round, b);
-  if (unlock) await q('update results set locked=false where round_id=$1', [round.id]);
-  const r = await importPages(round, b, { matches: pg.matches, elf: pg.elf || null }); await audit(a.id, 'kicker_import', { roundId, games: r.games, elf: r.elf, counts: r.counts }); rev();
-  const c = r.counts; const parts = [`${r.games} Spiele${r.elf ? ' + Elf des Tages' : ''}`, `Startelf ${c.startelf || 0}`, `eingewechselt ${c.eingewechselt || 0}`, `Bank ${c.bank || 0}`, `nicht im Kader ${c.nicht_im_kader || 0}`, `Name prüfen ${c.nicht_gefunden || 0}`, `Spiel fehlt ${c.spiel_fehlt || 0}`];
+export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  let r; try { r = await importInbox(round.matchday, { unlock, userId: a.id }); } catch (e) { return fail(e.message); } rev();
+  const parts = importSummary(r);
   if (r.errors.length) return fail(`Import mit ${r.errors.length} Problem(en): ${r.errors.join(' · ')} — ${parts.join(', ')}`);
   return ok(`Import ok: ${parts.join(', ')}`); });
 export const importKickerInboxMatchdayAction = wrap(async (matchday, unlock = false) => { const round = await one("select * from rounds where type='regulaer' and matchday=$1", [matchday]); if (!round) return fail(`Keine Runde für Spieltag ${matchday}`); return importKickerInboxAction(round.id, unlock); });

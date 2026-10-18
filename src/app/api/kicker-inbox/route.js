@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
 import { savePage, status, page } from '@/lib/kicker-inbox';
+import { importInbox, importSummary } from '@/lib/kicker';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -17,11 +18,16 @@ export async function POST(req) {
   if (ct.includes('application/json')) { const j = await req.json().catch(() => ({})); html = j.html || j.body || ''; url = j.url || url; }
   else html = await req.text();
   if (!html || html.length < 500) return new NextResponse('Kein Quelltext empfangen (Body leer)', { status: 400, headers: CORS });
-  try {
-    const r = await savePage(html, { url, matchday: Number(sp.get('matchday')) || null });
-    const msg = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday} gespeichert: ${r.elf?.n || 0} Spieler${r.elf?.sdt ? ', Spieler des Tages ' + r.elf.sdt : ', Spieler des Tages nicht erkannt'}${(r.elf?.n || 0) < 11 ? ` – nur ${r.elf?.n || 0} erkannt (${r.elf?.links || 0} Spielerlinks), bitte die Seite melden` : ' – jetzt in der App «Eingang importieren»'}` : `${r.title} gespeichert – Spieltag ${r.matchday}: ${r.status.n}/9 Spiele, Elf des Tages ${r.status.elf ? 'ja' : 'fehlt'}`;
-    return new NextResponse(msg, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
-  } catch (e) { return new NextResponse('Fehler: ' + e.message, { status: 422, headers: CORS }); }
+  let r; try { r = await savePage(html, { url, matchday: Number(sp.get('matchday')) || null }); }
+  catch (e) { return new NextResponse('Fehler: ' + e.message, { status: 422, headers: CORS }); }
+  const head = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday}: ${r.elf?.n || 0} Spieler${r.elf?.sdt ? ', Spieler des Tages ' + r.elf.sdt : ', Spieler des Tages nicht erkannt'}${(r.elf?.n || 0) < 11 ? ` – nur ${r.elf?.n || 0} erkannt (${r.elf?.links || 0} Spielerlinks), bitte die Seite melden` : ''}` : `${r.title} – Spieltag ${r.matchday}`;
+  const stand = `Eingang ${r.status.n}/9 Spiele${r.status.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'}`;
+  // Direkt importieren: die Werte stehen sofort in der Datenbank, der Admin muss nichts mehr anklicken
+  if (sp.get('noimport')) return new NextResponse(`${head} gespeichert · ${stand}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
+  try { const u = await getUser(); const imp = await importInbox(r.matchday, { userId: u ? u.id : null, auto: true });
+    const probs = imp.errors.length ? ` · ${imp.errors.length} Problem(e): ${imp.errors.slice(0, 2).join(' · ')}${imp.errors.length > 2 ? ' …' : ''}` : '';
+    return new NextResponse(`${head} ✓ importiert · ${stand} · ${importSummary(imp).join(', ')}${probs}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }
+  catch (e) { return new NextResponse(`${head} gespeichert · ${stand} · Import fehlgeschlagen: ${e.message} – in der App «Eingang importieren»`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }
 }
 /** Stand des Eingangs: GET ?matchday=N */
 export async function GET(req) {

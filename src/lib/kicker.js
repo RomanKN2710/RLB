@@ -207,6 +207,32 @@ export async function importPages(round, b, pages, opts = {}) {
   return summary;
 }
 
+/** Spieltag einer Aufstellungsseite verbindlich aus der Paarung: kicker-Teams -> unsere Vereine -> Spielplan (matches).
+    Zuverlaessiger als Zahlen aus dem Seitentext (Navigation nennt auch andere Spieltage). null, wenn die Paarung nicht im Spielplan steht. */
+export async function matchdayOfPage(html, b) {
+  let parsed; try { parsed = parseMatchPage(html); } catch (e) { return null; }
+  if (!parsed.teams || parsed.teams.length !== 2) return null;
+  b = b || await (await import('./data')).base();
+  const clubIds = parsed.teams.map(t => (b.clubs || []).map(c => c.id).find(id => clubMatches(t.slug, id)) || null); if (clubIds.some(x => !x)) return null;
+  const oldb = id => Number(Object.keys(b.teamToClub || {}).find(k => b.teamToClub[k] === id)) || null; const [t1, t2] = clubIds.map(oldb); if (!t1 || !t2) return null;
+  const m = await one('select matchday, id from matches where (team1=$1 and team2=$2) or (team1=$2 and team2=$1) order by case when team1=$1 then 0 else 1 end limit 1', [t1, t2]);
+  return m ? { matchday: m.matchday, matchId: m.id, paarung: parsed.teams.map(t => t.name).join(' – ') } : null;
+}
+
+/** Eingang eines Spieltags importieren (Handy-Skript, API und Admin-Knopf nehmen denselben Weg). */
+export async function importInbox(matchday, opts = {}) {
+  const Inbox = await import('./kicker-inbox'); const D = await import('./data');
+  const round = await one("select * from rounds where type='regulaer' and matchday=$1", [matchday]); if (!round) throw new Error(`Keine Runde für Spieltag ${matchday}`);
+  const pg = await Inbox.pages(matchday); if (!pg.matches.length && !pg.elf) throw new Error(`Eingang für Spieltag ${matchday} ist leer`);
+  const b = await D.base(); await D.ensureLineups(round, b);
+  if (opts.unlock) await q('update results set locked=false where round_id=$1', [round.id]);
+  const r = await importPages(round, b, { matches: pg.matches, elf: pg.elf || null });
+  try { await q('insert into audit(user_id,action,detail) values($1,$2,$3)', [opts.userId || null, 'kicker_import', JSON.stringify({ roundId: round.id, games: r.games, elf: r.elf, counts: r.counts, auto: !!opts.auto })]); } catch (e) { /* best effort */ }
+  return { ...r, round };
+}
+/** Kurzfassung eines Importberichts fuer Meldungen. */
+export function importSummary(r) { const c = r.counts || {}; return [`${r.games} Spiele${r.elf ? ' + Elf des Tages' : ''}`, `Startelf ${c.startelf || 0}`, `eingewechselt ${c.eingewechselt || 0}`, `Bank ${c.bank || 0}`, `nicht im Kader ${c.nicht_im_kader || 0}`, `Name prüfen ${c.nicht_gefunden || 0}`, `Spiel fehlt ${c.spiel_fehlt || 0}`]; }
+
 /** Spielerpool pflegen: jeder Spieler, der laut kicker im Spieltagskader stand, mit Verein und kicker-Position. */
 export async function upsertPool(stats, b, matchday) {
   const seen = new Set(); const rows = [];
