@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBlogAction, applyBlogAction, importKickerHtmlAction, unlockResultsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBlogAction, applyBlogAction, importKickerHtmlAction, unlockResultsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, undoBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -58,12 +58,12 @@ export function Header({ round, managers, corrections }) {
   </div>);
 }
 
-export function Bids({ roundId, resolved, passed }) {
+export function Bids({ roundId, resolved, passed, final }) {
   const { msg, pending, run } = useRun(); const [preview, setPreview] = useState(null);
   return (<div className="stack" style={{ marginTop: 8 }}>
-    {resolved ? <span className="pill ok">Gebote aufgelöst und veröffentlicht</span> : <div className="row"><button className="sm sec" disabled={pending} onClick={() => run(async () => { const r = await previewBidsAction(roundId); if (r.ok) setPreview(r.list); return r; })}>Vorschau Auflösung</button>{preview && <button className="sm komm" disabled={pending} onClick={() => run(() => applyBidsAction(roundId))}>Zuteilen &amp; veröffentlichen</button>}{!passed && <span className="mini">Deadline noch nicht vorbei.</span>}<M msg={msg} /></div>}
+    {resolved ? <div className="row"><span className="pill ok">Gebote aufgelöst und veröffentlicht</span>{!final && <button className="sm sec" disabled={pending} onClick={() => { if (confirm('Auflösung zurücksetzen? Käufe, Entlassungen und Eventualaufträge dieser Runde werden rückgängig gemacht, die Gebote sind wieder verdeckt und können neu aufgelöst werden.')) run(() => undoBidsAction(roundId)); }}>Auflösung zurücksetzen</button>}<M msg={msg} /></div> : <div className="row"><button className="sm sec" disabled={pending} onClick={() => run(async () => { const r = await previewBidsAction(roundId); if (r.ok) setPreview(r.list); return r; })}>Vorschau Auflösung</button>{preview && <button className="sm komm" disabled={pending} onClick={() => run(() => applyBidsAction(roundId))}>Zuteilen &amp; veröffentlichen</button>}{!passed && <span className="mini">Deadline noch nicht vorbei.</span>}<M msg={msg} /></div>}
     {preview && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Nr.</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventualauftrag</th><th className="l">Ergebnis</th></tr></thead><tbody>{preview.map(b => <tr key={b.id}><td className="l">{b.manager_name || b.manager_id}</td><td>{b.priority || 1}{b.max_wins > 1 ? <span className="mini"> / max. {b.max_wins}</span> : ''}</td><td className="l">{b.pos} {b.player_name} <span className="mini">{b.club}</span></td><td>{b.price}</td><td className="l">{b.release_name || <span className="mini">aus Liste</span>}</td><td className="l">{b.swap_name || ''}</td><td className="l"><span className={`pill ${b.status === 'won' ? 'ok' : b.status === 'invalid' ? 'bad' : 'grey'}`}>{b.status === 'won' ? 'Zuschlag' : b.status === 'invalid' ? 'ungültig' : 'kein Zuschlag'}</span> <span className="mini">{b.reason}</span></td></tr>)}</tbody></table></div>}
-    <p className="mini">Zuteilen bucht Kauf, Entlassung (zählt ab dieser Runde nicht mehr), Vertragspflicht ab 20 und setzt Eventualaufträge in die Aufstellung (gratis). Regelwerk 7.1: Bekanntgabe nach der Runde; technisch jederzeit nach der Deadline möglich.</p>
+    <p className="mini">Zuteilen bucht Kauf, Entlassung (zählt ab dieser Runde nicht mehr), Vertragspflicht ab 20 und führt Eventualaufträge aus: der Neue ersetzt den genannten Spieler in der Aufstellung dieser Runde, gratis – das gilt auch, wenn die Aufstellung aus dem Blog ihn noch nicht nennt (Ziff. 7.1). Gleichstand: schlechterer Tabellenplatz gewinnt. Regelwerk 7.1: Bekanntgabe nach der Runde; technisch jederzeit nach der Deadline möglich.</p>
   </div>);
 }
 

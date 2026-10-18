@@ -234,8 +234,8 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     // Gewonnene Gebote mit Eventualauftrag: der Neue ersetzt den genannten Spieler, auch wenn der Post ihn noch nicht kennt
     for (const ev of (opts.eventualOf && opts.eventualOf(manager.id)) || []) {
       const np = byId[ev.inId]; if (!np || state[ev.inId] || !state[ev.outId]) continue;
-      const pos = state[ev.outId].pos; if (!positionsOf(np).includes(pos)) continue;
-      delete state[ev.outId]; state[ev.inId] = { pos }; marks[ev.inId] = `Eventualauftrag für ${byId[ev.outId]?.name || ev.outId}`;
+      const pos = state[ev.outId].pos;   // passt die Position nicht: Grundposition, die Umstellung unten (fitPositions) richtet es
+      delete state[ev.outId]; state[ev.inId] = { pos: positionsOf(np).includes(pos) ? pos : np.base_pos }; marks[ev.inId] = `Eventualauftrag für ${byId[ev.outId]?.name || ev.outId}`;
     }
     // Spieler, die nicht mehr im Kader sind (entlassen, verkauft): fallen raus, die Pruefung meldet die Luecke
     const kaderIds = new Set(kader.map(p => p.id));

@@ -162,6 +162,98 @@ export async function resolveRoundBids(round, b, bids) {
   return R.resolveBids(bids.map(x => ({ ...x, price: Number(x.price) })), { players: b.players, budgetLeft: m => budgets[m], managerName: m => b.managerName[m], tiebreak, prevReleases });
 }
 
+/** Aufstellung der Runde anlegen, falls noch keine da ist: Kopie der Vorrunde ohne Spieler, die nicht mehr spielberechtigt sind. */
+export async function materializeLineup(x, round, m, b) {
+  const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]); if (lu) return lu;
+  const prev = await x.one('select l.* from lineups l join rounds r on r.id=l.round_id where l.manager_id=$1 and r.number < $2 order by r.number desc limit 1', [m, round.number]); if (!prev) return null;
+  const entries = {}; for (const [pid, e] of Object.entries(prev.entries || {})) { const p = b.players[pid]; if (p && p.manager_id === m && p.status === 'active' && R.playerValid(p, round.number)) entries[pid] = e; }
+  await x.q('insert into lineups(round_id,manager_id,entries,free_in,updated_at) values($1,$2,$3,$4,now()) on conflict do nothing', [round.id, m, JSON.stringify(entries), []]);
+  return x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]);
+}
+const slugId = s => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+/** Kennung des gekauften Spielers (Manager-Name-Runde), beim Zuteilen und beim Zuruecksetzen gleich. */
+export const kaufPlayerId = (b, bid, round) => slugId(`${b.managerName[bid.manager_id]}-${bid.player_name}-${round.number}`);
+const setSettingTx = (x, key, value) => x.q('insert into settings(key,value) values($1,$2) on conflict(key) do update set value=excluded.value', [key, JSON.stringify(value)]);
+
+/** Gebote zuteilen (Ziff. 7.1, 7.3, 7.4): Kauf, Entlassung, Vertragspflicht ab 20 und Eventualauftrag.
+    Der Eventualauftrag ist verbindlich: der Neue ersetzt den genannten Spieler in der Aufstellung dieser Runde – auch
+    wenn die Aufstellung aus dem Blog oder der App ihn noch nicht kennt – und ist in dieser Runde gratis (free_in).
+    Vorher werden die Aufstellungen gesichert, damit «Auflösung zurücksetzen» sie wiederherstellen kann. */
+export async function applyBids(userId, roundId) {
+  await ensureBidColumns(); const round = await D.roundById(roundId); if (!round) throw new Error('Runde?'); if (round.bids_resolved) throw new Error('Bereits aufgelöst');
+  const b = await D.base(); const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await resolveRoundBids(round, b, bids);
+  const { playerMatches: pm } = await import('./kicker'); const usedRel = new Set(); const log = [];
+  await tx(async x => {
+    const snap = await x.q('select manager_id, entries, free_in from lineups where round_id=$1', [round.id]);
+    await setSettingTx(x, `bids_snapshot_${round.id}`, { at: new Date().toISOString(), lineups: snap });
+    for (const bid of list) {
+      await x.q('update bids set status=$1, reason=$2 where id=$3', [bid.status, bid.reason || null, bid.id]);
+      if (bid.status !== 'won') continue;
+      // Entlassung: je Gebot genannt, sonst die naechste freie aus der Reihenfolge-Liste des Managers
+      const m = bid.manager_id; let relId = bid.release_player_id; if (!relId) relId = (bid.release_order || []).find(pid => !usedRel.has(pid) && b.players[pid] && b.players[pid].status === 'active' && b.players[pid].manager_id === m) || null;
+      if (relId) { usedRel.add(relId); if (!bid.release_player_id) await x.q('update bids set release_player_id=$1 where id=$2', [relId, bid.id]); }
+      const rel = b.players[relId];
+      const id = kaufPlayerId(b, bid, round); const contract = bid.price >= R.CONTRACT_MIN ? '1J' : null;
+      // Positionen aus dem Spielerpool: Grundposition laut kicker-Kader, Zusatzpositionen nur aus Startaufstellungen dieser Saison (Ziff. 5.2), nie aus dem Gebot
+      const poolRows = await x.q('select * from bl_players where club=$1', [bid.club]); const pp = poolRows.find(r => pm(r.slug, r.name, bid.player_name));
+      const basePos = (pp && pp.squad_pos) || bid.pos; const extra = pp ? [...new Set((pp.played_pos || []).filter(p => p && p !== basePos))] : [];
+      await x.q(`insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10)`, [id, m, bid.player_name, bid.club, basePos, extra, bid.price, round.number, contract, !!contract]);
+      await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,$5)", [round.id, m, bid.player_name, bid.price, `Gebot ${round.label}${contract ? ', Vertragspflicht (7.4), Laufzeit wählbar' : ''}`]);
+      if (rel) { await x.q("update players set status='released', valid_to=$2 where id=$1", [rel.id, round.number - 1]); await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,$5)", [round.id, m, rel.name, R.value(rel), `mit Gebot ${round.label}`]); }
+      const np = { id, name: bid.player_name, base_pos: basePos, extra_pos: extra, manager_id: m }; let note = `${b.managerName[m]}: ${bid.player_name} für ${bid.price}${rel ? ', ' + rel.name + ' entlassen' : ''}`;
+      const lu = await materializeLineup(x, round, m, b);
+      if (lu) { let e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false; const marks = [];
+        if (bid.swap_out_player_id) {
+          const out = b.players[bid.swap_out_player_id]; const sw = R.swapIn(e, bid.swap_out_player_id, np, b.players);
+          if (sw) { e = sw.entries; ch = true; marks.push(`eingewechselt für ${out?.name || '?'}` + (Object.keys(sw.changes).length ? ' (' + Object.entries(sw.changes).map(([pid, p2]) => `${b.players[pid]?.name || pid} als ${p2}`).join(', ') + ')' : '') + (sw.ok ? '' : ' – Aufstellung prüfen, Positionsregel verletzt')); }
+          else if (e[id]) marks.push('steht schon in der Aufstellung');
+          else marks.push(`Eventualauftrag nicht ausführbar: ${out?.name || '?'} steht nicht in der Aufstellung`);
+          if (!free.includes(id)) { free.push(id); ch = true; }   // Eventualauftrag: Einwechslung in dieser Runde ohne Wechselkosten (7.1)
+        }
+        if (rel && e[rel.id]) { delete e[rel.id]; ch = true; marks.push(`${rel.name} entlassen – fällt aus der Aufstellung`); }
+        if (ch) await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]);
+        if (marks.length) { await x.q('update bids set reason=$1 where id=$2', [[bid.reason, ...marks].filter(Boolean).join(' · '), bid.id]); note += ' · ' + marks.join(' · '); }
+      }
+      log.push(note);
+    }
+    await x.q('update rounds set bids_resolved=true where id=$1', [round.id]);
+  });
+  await audit(userId, 'bids_applied', { roundId, log });
+  return { list, log, won: list.filter(x => x.status === 'won').length };
+}
+
+/** Zuteilung zuruecknehmen (nur solange die Runde nicht abgeschlossen ist): Käufe, Entlassungen, Verträge und
+    Aufstellungsänderungen rückgängig, Gebote wieder verdeckt. Danach kann neu aufgelöst werden. */
+export async function undoBids(userId, roundId) {
+  await ensureBidColumns(); const round = await D.roundById(roundId); if (!round) throw new Error('Runde?');
+  if (!round.bids_resolved) throw new Error('Gebote sind nicht aufgelöst'); if (round.status === 'final') throw new Error('Runde ist abgeschlossen');
+  const b = await D.base(); const won = await q("select * from bids where round_id=$1 and status='won'", [roundId]); const snap = await getSetting(`bids_snapshot_${roundId}`); const log = [];
+  await tx(async x => {
+    for (const bid of won) {
+      const m = bid.manager_id; const id = kaufPlayerId(b, bid, round); const np = b.players[id]; let note = `${b.managerName[m]}: Kauf ${bid.player_name} zurück`;
+      if (np) { await x.q('delete from results where player_id=$1', [id]); await x.q('delete from players where id=$1', [id]); }
+      await x.q("delete from transfers where round_id=$1 and manager_id=$2 and type='kauf' and player_name=$3", [round.id, m, bid.player_name]);
+      const rel = bid.release_player_id && b.players[bid.release_player_id];
+      if (rel && rel.status === 'released' && rel.valid_to === round.number - 1) { await x.q("update players set status='active', valid_to=null where id=$1", [rel.id]); await x.q("delete from transfers where round_id=$1 and manager_id=$2 and type='entlassung' and player_name=$3", [round.id, m, rel.name]); note += `, ${rel.name} wieder im Kader`; }
+      const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]);
+      if (lu) { const s = snap && (snap.lineups || []).find(l => l.manager_id === m);
+        if (s) { await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(s.entries), s.free_in || [], round.id, m]); note += ', Aufstellung aus der Sicherung'; }
+        else if (snap) { await x.q('delete from lineups where round_id=$1 and manager_id=$2', [round.id, m]); note += ', Aufstellung (erst beim Zuteilen angelegt) entfernt'; }
+        else { // keine Sicherung (Zuteilung aus einer aelteren Version): Neuen raus, Ersetzten zurueck auf eine passende Position
+          const e = { ...lu.entries }; const free = (lu.free_in || []).filter(p => p !== id);
+          if (e[id]) { const pos = e[id].pos; delete e[id]; const out = bid.swap_out_player_id && b.players[bid.swap_out_player_id];
+            if (out && !e[out.id]) { e[out.id] = { pos: R.positionsOf(out).includes(pos) ? pos : out.base_pos }; const fit = R.fitPositions(e, b.players); if (fit) for (const [pid, p2] of Object.entries(fit.changes)) e[pid] = { pos: p2 }; } }
+          await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]); note += ', Aufstellung zurückgebaut (ohne Sicherung)'; } }
+      log.push(note);
+    }
+    await x.q("update bids set status='sealed', reason=null where round_id=$1", [round.id]);
+    await x.q('update rounds set bids_resolved=false where id=$1', [round.id]);
+    await x.q('delete from settings where key=$1', [`bids_snapshot_${round.id}`]);
+  });
+  await audit(userId, 'bids_undone', { roundId, log });
+  return { log };
+}
+
 /** Vorschau: Aufstellungen und Gebote aus demselben Text. */
 export async function previewBlog(roundId, text) {
   const l = await parseLineupPaste(roundId, text); const g = await parseBidPaste(roundId, text);

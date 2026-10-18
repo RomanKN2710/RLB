@@ -62,6 +62,13 @@ export async function roundCheck(round, b, d) {
   // 5) Gebote
   const sealed = await q("select count(*)::int as n from bids where round_id=$1 and status='sealed'", [round.id]);
   if (passed && sealed[0].n && !round.bids_resolved) add('warn', `${sealed[0].n} Gebot(e) noch nicht aufgelöst`);
+  // Eventualaufträge (Ziff. 7.1): der Neue muss in der Aufstellung dieser Runde stehen, der Ersetzte nicht mehr
+  if (round.bids_resolved) { const won = await q("select * from bids where round_id=$1 and status='won' and swap_out_player_id is not null", [round.id]);
+    for (const bid of won) { const lu = d.lineups[bid.manager_id]; const mn = b.managerName[bid.manager_id]; const neu = b.playersArr.find(p => p.manager_id === bid.manager_id && p.source === 'kauf' && p.valid_from === round.number && R.norm(p.name) === R.norm(bid.player_name)); const out = b.players[bid.swap_out_player_id];
+      if (!lu || !neu) continue;
+      if (!lu.entries[neu.id]) add('warn', `${mn}: Eventualauftrag ${neu.name} für ${out?.name || '?'} nicht ausgeführt – ${neu.name} steht nicht in der Aufstellung`);
+      else if (lu.entries[out?.id]) add('warn', `${mn}: Eventualauftrag ${neu.name} für ${out.name} – beide stehen in der Aufstellung`);
+      else if (!(lu.free_in || []).includes(neu.id)) add('warn', `${mn}: ${neu.name} per Eventualauftrag eingewechselt, aber nicht als gratis markiert`); } }
   const locked = await q('select count(*)::int as n from results where round_id=$1 and locked', [round.id]);
   if (locked[0].n) add('info', `${locked[0].n} Wertzeilen vom Admin gesperrt (kicker überschreibt sie nicht)`);
   return { problems: out.filter(x => x.level === 'bad'), warnings: out.filter(x => x.level === 'warn'), infos: out.filter(x => x.level === 'info'), ok: !out.some(x => x.level === 'bad') };

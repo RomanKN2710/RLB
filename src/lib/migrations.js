@@ -39,6 +39,16 @@ export const STEPS = [
     const r = await Blog.applyBlog({ id: userId, name: 'Admin', email: 'admin' }, r6.id, text);
     const log = [`Archiv: ${r.archiv.neu} neue Posts`, ...r.bids.log, ...r.lineups.log];
     await setSetting('blog_st6_20261018', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'st6_brackelmann_david', title: 'Spieltag 6: Gleichstand Brackelmann – Zuschlag an David (schlechterer Tabellenplatz, Ziff. 7.1), Eventualaufträge ausgeführt', run: async userId => {
+    // Nur noetig, wenn die Runde schon mit dem alten Stand aufgeloest wurde und Arbi den Zuschlag bekam; sonst passiert
+    // beim normalen «Zuteilen» das Richtige. Zuruecksetzen und neu aufloesen laeuft ueber denselben Code wie die Knoepfe.
+    const r6 = await one("select * from rounds where type='regulaer' and matchday=6"); if (!r6) throw new Error('Spieltag 6 fehlt');
+    const arbi = await one("select * from managers where name='Arbi'"); const log = [];
+    const wrong = r6.bids_resolved && arbi && await one("select * from bids where round_id=$1 and manager_id=$2 and status='won' and lower(player_name) like 'brackelmann%'", [r6.id, arbi.id]);
+    if (!wrong) { log.push(r6.bids_resolved ? 'Spieltag 6 war schon richtig aufgelöst – nichts zu tun' : 'Spieltag 6 noch nicht aufgelöst – nichts zu tun, «Zuteilen» entscheidet richtig'); }
+    else if (r6.status === 'final') { log.push('Spieltag 6 ist abgeschlossen – bitte von Hand prüfen'); }
+    else { const u = await Blog.undoBids(userId, r6.id); log.push('Zurückgesetzt: ' + u.log.join(' · ')); const a = await Blog.applyBids(userId, r6.id); log.push('Neu aufgelöst: ' + a.log.join(' · ')); }
+    await setSetting('st6_brackelmann_david', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

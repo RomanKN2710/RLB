@@ -62,6 +62,19 @@ export function fitPositions(entries, players, fixed = new Set()) {
   return best && Object.keys(best.changes).length ? { changes: best.changes } : null;
 }
 
+/** Einwechslung als Ersatz (Ziff. 7.1 Eventualauftrag, Ziff. 6 Trade): np ersetzt outId auf dessen Aufstellungsstelle.
+    Passt die Position nicht zu np, kommt er auf seine Grundposition und andere Spieler mit Zusatzposition werden
+    umgestellt, bis die Positionsregel stimmt. Geht es nicht auf, bleibt er trotzdem drin (der Auftrag ist verbindlich,
+    der Rundencheck meldet die Aufstellung). Liefert null, wenn outId nicht aufgestellt ist oder np schon drinsteht. */
+export function swapIn(entries, outId, np, players) {
+  if (!entries[outId] || entries[np.id]) return null;
+  const pos = entries[outId].pos; const allowed = positionsOf(np);
+  const e = { ...entries }; delete e[outId]; e[np.id] = { pos: allowed.includes(pos) ? pos : np.base_pos };
+  const P = { ...players, [np.id]: np }; const fit = fitPositions(e, P); const changes = fit ? fit.changes : {};
+  for (const [pid, p2] of Object.entries(changes)) e[pid] = { pos: p2 };
+  return { entries: e, ok: !posCheck(e, P).bad.length, changes };
+}
+
 /** Positionsregel prüfen. entries: {pid: {pos}} */
 export function posCheck(entries, players) {
   const cnt = { T: 0, V: 0, M: 0, S: 0 };

@@ -135,4 +135,11 @@ describe('Manager erkennen', () => {
     const res = parseLineupText(blogger([post('René R5', 'V Juranovic für V Rots')]), managers, kR, { roundNumbers: [50, 5], baseOf: base4, goneOf: id => id === rene ? [heuer] : [], eventualOf: id => id === rene ? [{ inId: karius.id, outId: heuer.id }] : [] });
     const x = block(res, 'René'); assert.ok(x.ok, x.problems.join('; ')); assert.ok(names(x).includes('Karius') && !names(x).includes('Heuer Fernandes'));
   });
+  test('Eventualauftrag mit anderer Position: Brackelmann (V) ersetzt El Aynaoui (M), Blog-Elf wird 4-4-2', () => {
+    const david = mid('David'); const brack = { id: 'david-brackelmann-60', name: 'Brackelmann', base_pos: 'V', extra_pos: [], club: 'Augsburg', alias: [] }; const ayn = kader[david].find(p => p.name === 'El Aynaoui');
+    const kD = id => id === david ? [...kader[david], brack] : kader[id];
+    const text = blogger([post('David Runde 6', '3-5-2\n\nT Seimen, Stuttgart\n\nV Tah, Bayern\nV Laimer, Bayern\nV Upamecano, Bayern\n\nM El Aynaoui, Leipzig\nM Pavlovic, Bayern\nM Sano, Mainz\nM Gruda, Leipzig\nM Grifo, Freiburg\n\nS Gomis, Leipzig\nS Gnabry, Bayern', { day: '2026-10-16' })]);
+    const res = parseLineupText(text, managers, kD, { roundNumbers: [60, 6], eventualOf: id => id === david ? [{ inId: brack.id, outId: ayn.id }] : [] });
+    const x = block(res, 'David'); assert.ok(x.ok, x.problems.join('; ')); assert.ok(names(x).includes('Brackelmann') && !names(x).includes('El Aynaoui')); assert.equal(pos(x, 'Brackelmann'), 'V'); assert.equal(x.found.filter(f => f.pos === 'V').length, 4);
+  });
 });

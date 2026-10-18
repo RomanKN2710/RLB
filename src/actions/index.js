@@ -99,14 +99,6 @@ export const withdrawBidAction = wrap(async () => {
 });
 
 /** Aufstellung einer Runde holen; fehlt sie, aus der letzten Vorrunde übernehmen (Ziff. 5.1) und speichern. */
-async function materializeLineup(x, round, m, b) {
-  const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]); if (lu) return lu;
-  const prev = await x.one('select l.* from lineups l join rounds r on r.id=l.round_id where l.manager_id=$1 and r.number < $2 order by r.number desc limit 1', [m, round.number]); if (!prev) return null;
-  const entries = {}; for (const [pid, e] of Object.entries(prev.entries || {})) { const p = b.players[pid]; if (p && p.manager_id === m && p.status === 'active' && R.playerValid(p, round.number)) entries[pid] = e; }
-  await x.q('insert into lineups(round_id,manager_id,entries,free_in,updated_at) values($1,$2,$3,$4,now()) on conflict do nothing', [round.id, m, JSON.stringify(entries), []]);
-  return x.one('select * from lineups where round_id=$1 and manager_id=$2', [round.id, m]);
-}
-
 /* ---------- Trades (Ziff. 6) ---------- */
 export const proposeTradeAction = wrap(async (prev, fd) => {
   const u = await requireUser(); const from = u.manager_id; const to = Number(fd.get('to')); const give = fd.getAll('give').map(String), get = fd.getAll('get').map(String);
@@ -130,7 +122,7 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
   const b0 = open ? await D.base() : null;
   await tx(async x => {
     // Aufstellungen der offenen Runde vor dem Besitzwechsel sichern (sonst fiele der abgegebene Spieler beim Übertrag ersatzlos weg)
-    if (open) for (const m of [t.from_manager, t.to_manager]) await materializeLineup(x, open, m, b0);
+    if (open) for (const m of [t.from_manager, t.to_manager]) await BlogImport.materializeLineup(x, open, m, b0);
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.to_manager, t.give]);
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.from_manager, t.get_]);
     for (const m of [t.from_manager, t.to_manager]) await x.q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'trade',$3,$4)", [m, roundId, R.TRADE_FEE, `Trade #${t.id}`]);
@@ -139,12 +131,13 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
     await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'trade',$3,$4,$5)", [roundId, t.to_manager, await names(t.get_), R.TRADE_FEE, 'erhält ' + await names(t.give)]);
     // Ziff. 6: Die erworbenen Spieler ersetzen provisorisch die Aufstellungsstelle inkl. Position der abgegebenen
     // (paarweise: give[i] gegen get[i]); das ist kein kostenpflichtiger Wechsel (free_in). Passt die Position nicht
-    // zum neuen Spieler, faellt die Stelle weg und der Manager muss vor der Deadline nachbessern.
-    if (open) { const rows = await x.q('select * from players where id = any($1)', [t.give.concat(t.get_)]); const P = Object.fromEntries(rows.map(p => [p.id, p]));
+    // zum neuen Spieler, werden Spieler mit Zusatzposition umgestellt; geht es nicht auf, muss der Manager vor der
+    // Deadline nachbessern (Rundencheck meldet es).
+    if (open) { const rows = await x.q('select * from players where id = any($1)', [t.give.concat(t.get_)]); const P = { ...b0.players }; rows.forEach(p => P[p.id] = p);
       for (const [m, out, inn] of [[t.from_manager, t.give, t.get_], [t.to_manager, t.get_, t.give]]) {
         const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, m]); if (!lu) continue;
-        const e = { ...lu.entries }; const free = (lu.free_in || []).slice();
-        out.forEach((id, i) => { if (!e[id]) return; const pos = e[id].pos; delete e[id]; const np = P[inn[i]]; if (np && R.positionsOf(np).includes(pos)) { e[np.id] = { pos }; free.push(np.id); } });
+        let e = { ...lu.entries }; const free = (lu.free_in || []).slice();
+        out.forEach((id, i) => { const np = P[inn[i]]; if (!np) return; const sw = R.swapIn(e, id, np, P); if (sw) { e = sw.entries; free.push(np.id); } });
         await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, open.id, m]); } }
     await x.q("update trades set status='done', done_at=now(), round_id=$2 where id=$1", [tradeId, roundId]);
   });
@@ -244,38 +237,9 @@ export const previewBidsAction = wrap(async (roundId) => { await requireAdmin();
 export const previewBidTextAction = wrap(async (roundId, text) => { await requireAdmin(); const { parsed } = await BlogImport.parseBidPaste(roundId, text);
   return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
 
-export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (round.bids_resolved) return fail('Bereits aufgelöst'); const b = await D.base();
-  await BlogImport.ensureBidColumns(); const bids = await q("select * from bids where round_id=$1 order by manager_id, priority", [roundId]); const list = await BlogImport.resolveRoundBids(round, b, bids);
-  const usedRel = new Set();
-  await tx(async x => {
-    for (const bid of list) {
-      await x.q('update bids set status=$1, reason=$2 where id=$3', [bid.status, bid.reason || null, bid.id]);
-      if (bid.status !== 'won') continue;
-      // Entlassung: je Gebot genannt, sonst die naechste freie aus der Reihenfolge-Liste des Managers
-      const m = bid.manager_id; let relId = bid.release_player_id; if (!relId) relId = (bid.release_order || []).find(pid => !usedRel.has(pid) && b.players[pid] && b.players[pid].status === 'active' && b.players[pid].manager_id === m) || null;
-      if (relId) { usedRel.add(relId); if (!bid.release_player_id) await x.q('update bids set release_player_id=$1 where id=$2', [relId, bid.id]); }
-      const rel = b.players[relId];
-      const id = `${b.managerName[m]}-${bid.player_name}-${round.number}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const contract = bid.price >= R.CONTRACT_MIN ? '1J' : null;
-      // Positionen aus dem Spielerpool: Grundposition laut kicker-Kader, Zusatzpositionen aus Startaufstellungen dieser Saison (Ziff. 5.2)
-      const { playerMatches } = await import('@/lib/kicker'); const poolRows = await x.q('select * from bl_players where club=$1', [bid.club]); const pp = poolRows.find(r => playerMatches(r.slug, r.name, bid.player_name));
-      const basePos = (pp && pp.squad_pos) || bid.pos; const extra = pp ? [...new Set((pp.played_pos || []).filter(x => x && x !== basePos))] : [];   // Zusatzpositionen nur aus kicker-Startelf (Ziff. 5.2), nie aus dem Gebot
-      await x.q(`insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10)`, [id, m, bid.player_name, bid.club, basePos, extra, bid.price, round.number, contract, !!contract]);
-      await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,$5)", [round.id, m, bid.player_name, bid.price, `Gebot ${round.label}${contract ? ', Vertragspflicht (7.4), Laufzeit wählbar' : ''}`]);
-      if (rel) { await x.q("update players set status='released', valid_to=$2 where id=$1", [rel.id, round.number - 1]); await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,$5)", [round.id, m, rel.name, R.value(rel), `mit Gebot ${round.label}`]); }
-      const lu = await materializeLineup(x, round, m, b);
-      if (lu) { const e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false;
-        if (bid.swap_out_player_id && e[bid.swap_out_player_id]) { const pos = e[bid.swap_out_player_id].pos; const can = [basePos, ...extra];
-          const e2 = { ...e }; delete e2[bid.swap_out_player_id]; e2[id] = { pos: can.includes(pos) ? pos : basePos };
-          const P2 = { ...b.players, [id]: { id, name: bid.player_name, base_pos: basePos, extra_pos: extra } }; const fit = R.fitPositions(e2, P2);   // passt die Position nicht: andere Spieler mit Zusatzposition umstellen
-          if (fit) for (const [pid, p2] of Object.entries(fit.changes)) e2[pid] = { pos: p2 };
-          if (!R.posCheck(e2, P2).bad.length) { Object.keys(e).forEach(k => delete e[k]); Object.assign(e, e2); free.push(id); ch = true; } }   // geht es nicht auf, bleibt die Aufstellung (Rundencheck meldet es)
-        if (rel && e[rel.id]) { delete e[rel.id]; ch = true; }
-        if (ch) await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]); }
-    }
-    await x.q('update rounds set bids_resolved=true where id=$1', [round.id]);
-  });
-  await audit(a.id, 'bids_applied', { roundId }); rev(); return ok(`Gebote aufgelöst: ${list.filter(x => x.status === 'won').length} Zuschläge`); });
+export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); if (round.bids_resolved) return fail('Bereits aufgelöst');
+  const r = await BlogImport.applyBids(a.id, roundId); rev(); return ok(`Gebote aufgelöst: ${r.won} Zuschlag${r.won === 1 ? '' : 'e'}` + (r.log.length ? ' · ' + r.log.join(' · ') : '')); });
+export const undoBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const r = await BlogImport.undoBids(a.id, roundId); rev(); return ok('Auflösung zurückgesetzt – Gebote sind wieder verdeckt' + (r.log.length ? ' · ' + r.log.join(' · ') : '')); });
 
 /* ---------- Admin: Spieler, Buchungen ---------- */
 export const manualBuyAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const m = Number(fd.get('manager_id')), name = String(fd.get('name') || '').trim(), pos = String(fd.get('pos')), club = String(fd.get('club')), price = Number(fd.get('price')) || 0, from = Number(fd.get('valid_from')) || 0;
