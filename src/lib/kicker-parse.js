@@ -38,14 +38,18 @@ export function parseElfDesTages(html) {
   const uniq = list => { const seen = new Set(); return list.filter(p => p.slug && !seen.has(p.slug) && seen.add(p.slug)); };
   const isPlayerLink = a => /\/spieler\//.test($(a).attr('href') || '');
   const diag = { playerLinks: $('a[href*="/spieler/"]').length, title: $('title').text().trim(), how: '' };
+  // Noch nicht veroeffentlicht («Die Elf des Tages liegt noch nicht vor»): nichts raten, die Seite zeigt dann nur Ranglisten
+  if (/liegt noch nicht vor|noch nicht ver(ö|oe)ffentlicht/i.test($('body').text()) && !$('.kick__lineup-field a[href*="/spieler/"]').length) { diag.how = 'unveroeffentlicht'; return { elf: [], sdt: null, diag }; }
+  // Spielerlinks in Navigation, Ranglisten-Tabellen («Berufungen») und Seitenleisten zaehlen bei den Rueckfall-Lesarten nicht
+  const noise = e => $(e).closest('nav, table, [class*="navbar"], [class*="ranking"], [class*="playersoftheday"], footer, header').length > 0;
   // 1) Spielfeld mit Spielerkarten (Desktop und Handy), 2) Spielerkarten irgendwo, 3) Spielerlinks in einem Aufstellungs-Block,
   // 4) die ersten elf verschiedenen Spielerlinks nach der Ueberschrift «Elf des Tages» (Listenansicht)
   let elf = [];
   const tries = [['feld', () => $('.kick__lineup-field a.kick__lineup-player-card').toArray()], ['karten', () => $('a.kick__lineup-player-card, a[class*="lineup-player-card"]').toArray()],
-    ['block', () => $('[class*="lineup"], [class*="elf-des-tages"], [class*="eleven"]').find('a[href*="/spieler/"]').toArray()],
+    ['block', () => $('[class*="lineup"], [class*="elf-des-tages"], [class*="eleven"]').find('a[href*="/spieler/"]').toArray().filter(e => !noise(e))],
     ['liste', () => { const all = $('body *').toArray(); const starts = all.map((e, i) => /^h[1-5]$/i.test(e.tagName) && /Elf des Tages/i.test($(e).text()) ? i : -1).filter(i => i >= 0); if (!starts.length) starts.push(-1);
       // von jeder Ueberschrift «Elf des Tages» bis «Spieler des Tages» sammeln; die Ueberschrift direkt ueber der Liste (wenigste Links, aber elf) gewinnt
-      const collect = from => { const links = []; for (let i = from + 1; i < all.length; i++) { const e = all[i]; if (/^h[1-5]$/i.test(e.tagName) && /Spieler des Tages/i.test($(e).text())) break; if (e.tagName === 'a' && isPlayerLink(e)) links.push(e); } return links; };
+      const collect = from => { const links = []; for (let i = from + 1; i < all.length; i++) { const e = all[i]; if (/^h[1-5]$/i.test(e.tagName) && /Spieler des Tages/i.test($(e).text())) break; if (e.tagName === 'a' && isPlayerLink(e) && !noise(e)) links.push(e); } return links; };
       const cands = starts.map(collect).sort((x, y) => (uniq(x.map(toPlayer)).length >= 11 ? 0 : 1) - (uniq(y.map(toPlayer)).length >= 11 ? 0 : 1) || x.length - y.length); return cands[0] || []; }]];
   for (const [how, fn] of tries) { const found = uniq(fn().map(toPlayer)); if (found.length >= 11) { elf = found.slice(0, 11); diag.how = how; break; } if (found.length > elf.length) { elf = found; diag.how = how; } }
   // 5) ohne Spielerlinks (Handy-Layout): Spielerkarten beliebiger Art oder Bilder/Namen nach der Ueberschrift «Elf des Tages»;
@@ -55,7 +59,7 @@ export function parseElfDesTages(html) {
     const cards = $('[class*="player-card"], [class*="playercard"], [class*="lineup-player"], [class*="lineup__player"]').toArray().map(e => $(e).find('[class*="__name"], [class*="-name"]').first().text().trim() || $(e).find('img').attr('alt') || $(e).attr('title') || $(e).text());
     let found = byName(cards);
     if (found.length < 11) { const all = $('body *').toArray(); const start = all.findIndex(e => /^h[1-5]$/i.test(e.tagName) && /Elf des Tages/i.test($(e).text())); const names = [];
-      for (let i = start + 1; i < all.length && names.length < 40; i++) { const e = all[i]; if (/^h[1-5]$/i.test(e.tagName) && /Spieler des Tages/i.test($(e).text())) break; if (e.tagName === 'img' && $(e).attr('alt')) names.push($(e).attr('alt')); else if (/name/i.test($(e).attr('class') || '') && $(e).children().length === 0) names.push($(e).text()); }
+      for (let i = start + 1; i < all.length && names.length < 40; i++) { const e = all[i]; if (/^h[1-5]$/i.test(e.tagName) && /Spieler des Tages/i.test($(e).text())) break; if (noise(e)) continue; if (e.tagName === 'img' && $(e).attr('alt')) names.push($(e).attr('alt')); else if (/name/i.test($(e).attr('class') || '') && $(e).children().length === 0) names.push($(e).text()); }
       const f2 = byName(names); if (f2.length > found.length) found = f2; }
     if (found.length > elf.length) { elf = found.slice(0, 11); diag.how = 'namen'; }
   }
@@ -64,11 +68,17 @@ export function parseElfDesTages(html) {
   const heads = $('h1, h2, h3, h4, h5, [class*="headline"], strong, b').toArray().filter(e => /Spieler des Tages/i.test($(e).text()) && $(e).text().trim().length < 60);
   for (const hEl of heads) {
     let a = null;
-    for (const sel of ['.kick__card', '[class*="card"]', 'section', 'article', 'div']) { const box = $(hEl).closest(sel); if (box.length) { const cand = box.find('.kick__player-hero a[href*="/spieler/"], a[href*="/spieler/"]').first(); if (cand.length) { a = cand.get(0); break; } } }
+    const hero = $(hEl).closest('.kick__player-hero, [class*="player-hero"], [class*="hero"]');
+    // cheerio liefert bei Komma-Selektoren Dokumentreihenfolge (das leere Bild-Link zuerst), darum nacheinander probieren
+    if (hero.length) for (const sel of ['h2 a[href*="/spieler/"]', 'h1 a[href*="/spieler/"]', 'h3 a[href*="/spieler/"]', 'a[href*="/spieler/"]']) { const cand = hero.find(sel).filter((_, e) => $(e).text().trim().length > 1).first(); if (cand.length) { a = cand.get(0); break; } }
+    if (!a) { const sib = $(hEl).nextAll('h1, h2, h3, h4').first().find('a[href*="/spieler/"]').first(); if (sib.length) a = sib.get(0); }   // Ueberschrift, dann h2 mit dem Namen
+    if (!a) for (const sel of ['[class*="card"]', 'section', 'article']) { const box = $(hEl).closest(sel); if (box.length && !box.find('.kick__lineup-field').length) { const cand = box.find('a[href*="/spieler/"]').first(); if (cand.length) { a = cand.get(0); break; } } }
     if (!a) { const all = $('body *').toArray(); const i = all.indexOf(hEl); for (let k = i + 1; k < all.length; k++) if (all[k].tagName === 'a' && isPlayerLink(all[k])) { a = all[k]; break; } }
-    if (a) { const p = toPlayer(a); sdt = { slug: p.slug, name: p.name, team: p.team }; break; }
+    if (a) { const p = toPlayer(a); sdt = { slug: p.slug, name: p.name.replace(/\s+\d+$/, ''), team: p.team }; break; }
   }
   if (!sdt) { const m = String(html).match(/Spieler des Tages[\s\S]{0,600}?href="([^"]*\/spieler\/[^"]*)"/i); if (m) sdt = { slug: slugOfHref(m[1]), name: slugOfHref(m[1]).replace(/-/g, ' '), team: teamOfHref(m[1]).split('/').pop() }; }
   if (!sdt) { for (const hEl of heads) { const all = $('body *').toArray(); const i = all.indexOf(hEl); for (let k = i + 1; k < Math.min(all.length, i + 80); k++) { const e = all[k]; const n = e.tagName === 'img' ? $(e).attr('alt') : /name/i.test($(e).attr('class') || '') && $(e).children().length === 0 ? $(e).text() : ''; if (n && n.trim().length >= 2) { const nm = decode(n).trim(); sdt = { slug: slugifyName(nm), name: nm, team: '' }; break; } } if (sdt) break; } }
+  // Kurzname wie auf der Spielerkarte («Nkunku» statt «Christopher Nkunku»), wenn der Spieler des Tages in der Elf steht
+  if (sdt) { const inElf = elf.find(p => p.slug && p.slug === sdt.slug); if (inElf && inElf.name) sdt.name = inElf.name; }
   return { elf, sdt, diag };
 }

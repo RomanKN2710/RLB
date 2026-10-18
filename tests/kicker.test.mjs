@@ -14,7 +14,7 @@ describe('parseElfDesTages', () => {
   });
   test('Handy: Spielerkarten ohne Spielfeld-Container, Name nur im Bild', () => {
     const html = head('Elf des Tages') + `<section class="kick__module">${P.map(p => link(p, `<img alt="${p[2]}">`)).join('')}</section>` + sdtCard + '</body></html>';
-    const r = parseElfDesTages(html); assert.equal(r.elf.length, 11); assert.equal(r.elf[2].name, 'Schlotterbeck'); assert.equal(r.sdt.name, 'Harry Kane');
+    const r = parseElfDesTages(html); assert.equal(r.elf.length, 11); assert.equal(r.elf[2].name, 'Schlotterbeck'); assert.equal(r.sdt.slug, 'harry-kane'); assert.equal(r.sdt.name, 'Kane', 'Kurzname wie auf der Karte');
   });
   test('Handy: Listenansicht nur mit Spielerlinks, doppelte Links, Spieler des Tages danach', () => {
     const plain = p => `<li><a href="/${p[0]}/spieler/bundesliga/${p[1]}">${p[2]}</a> <a href="/${p[0]}/spieler/bundesliga/${p[1]}">Profil</a></li>`;
@@ -53,5 +53,21 @@ describe('parseElfDesTages ohne Spielerlinks (Handy)', () => {
   test('nur Bilder mit Namen nach der Überschrift', () => {
     const html = `<html><body><h2>Elf des Tages</h2><ul>${NAMES.map(n => `<li><img alt="${n}"><span>${n}</span></li>`).join('')}</ul><h3>Spieler des Tages</h3><img alt="Harry Kane"></body></html>`;
     const r = parseElfDesTages(html); assert.equal(r.elf.length, 11); assert.equal(r.elf[10].name, 'Guirassy'); assert.equal(r.sdt.name, 'Harry Kane');
+  });
+});
+
+import fs from 'node:fs';
+describe('parseElfDesTages auf echten kicker-Seiten (Quelltexte aus dem Eingang)', () => {
+  const page = n => fs.readFileSync(new URL(`./fixtures/kicker-elf-des-tages-st${n}.html`, import.meta.url), 'utf8');
+  test('Spieltag 3: Elf und Spieler des Tages Matanovic (nicht der erste Spieler auf dem Feld)', () => {
+    const r = parseElfDesTages(page(3)); assert.equal(r.elf.length, 11); assert.equal(r.diag.how, 'feld'); assert.ok(r.elf.some(p => p.name === 'Matanovic'));
+    assert.equal(r.sdt.slug, 'igor-matanovic-2'); assert.equal(r.sdt.team, 'sc-freiburg'); assert.equal(r.sdt.name, 'Matanovic');
+  });
+  test('Spieltag 5: Spieler des Tages Nkunku', () => {
+    const r = parseElfDesTages(page(5)); assert.equal(r.elf.length, 11); assert.deepEqual(r.elf.map(p => p.name), ['Schick', 'Diaby', 'Stiller', 'Svensson', 'Caci', 'van den Bosch', 'Vandevoordt', 'Lukeba', 'Banzuzi', 'Nusa', 'Nkunku']);
+    assert.equal(r.sdt.slug, 'christopher-nkunku'); assert.equal(r.sdt.name, 'Nkunku');
+  });
+  test('Spieltag 4, Seite vor der Veröffentlichung: keine Elf, keine Rangliste als Elf', () => {
+    const r = parseElfDesTages(page(4)); assert.equal(r.elf.length, 0); assert.equal(r.sdt, null); assert.equal(r.diag.how, 'unveroeffentlicht');
   });
 });
