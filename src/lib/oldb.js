@@ -72,19 +72,11 @@ export async function syncCurrent() {
       await q('update matches set kickoff=$2, finished=$3, goals1=$4, goals2=$5, goals=$6, updated_at=now() where id=$1', [m.matchID, m.matchDateTimeUTC || null, !!m.matchIsFinished, er ? er.pointsTeam1 : null, er ? er.pointsTeam2 : null, JSON.stringify(goalsOf(m))]); n++; }
   }
   await refreshDeadlines();
-  await importGoalsPending();
   await setSetting('last_sync_current', { at: new Date().toISOString(), matches: n });
   return n;
 }
 
 /** Tore für alle Runden importieren, deren Deadline vorbei und die noch nicht final sind. */
-export async function importGoalsPending() {
-  const rounds = await q("select * from rounds where status='open' and deadline is not null and deadline <= now()");
-  if (!rounds.length) return;
-  const players = {}; (await q('select * from players')).forEach(p => players[p.id] = p);
-  const teamToClub = {}; (await q('select * from clubs where oldb_team_id is not null')).forEach(c => teamToClub[c.oldb_team_id] = c.id);
-  for (const r of rounds) { try { await importGoals(r.id, players, teamToClub); } catch (e) { console.error('Tore-Import', r.label, e.message); } }
-}
 
 /** Sync auslösen, wenn der letzte länger als maxAgeMin zurückliegt (wird beim Seitenaufruf verwendet). */
 export async function maybeSync(maxAgeMin = 60) {
@@ -94,7 +86,7 @@ export async function maybeSync(maxAgeMin = 60) {
     if (!last || Date.now() - new Date(last.at).getTime() > 24 * 3600e3) { await syncTeams(); await syncSchedule(); return 'full'; }
     const lc = await getSetting('last_sync_current');
     if (!lc || Date.now() - new Date(lc.at).getTime() > maxAgeMin * 60e3) { await syncCurrent(); return 'current'; }
-  } catch (e) { console.error('Sync fehlgeschlagen', e.message); try { await setSetting('last_sync_fail', { at: new Date().toISOString(), error: e.message }); } catch {} try { await importGoalsPending(); } catch {} return 'error: ' + e.message; }
+  } catch (e) { console.error('Sync fehlgeschlagen', e.message); try { await setSetting('last_sync_fail', { at: new Date().toISOString(), error: e.message }); } catch {} return 'error: ' + e.message; }
   return 'skip';
 }
 

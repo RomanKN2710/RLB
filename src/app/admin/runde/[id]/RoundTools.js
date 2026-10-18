@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBidTextAction, applyBidTextAction, previewLineupTextAction, applyLineupTextAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBlogAction, applyBlogAction, importKickerHtmlAction, unlockResultsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -79,9 +79,6 @@ export function Results({ roundId, managerId, managerName, rows: init, totals })
 }
 
 
-export function Goals({ roundId }) { const { msg, pending, run } = useRun();
-  return <div className="row" style={{ marginTop: 8 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importGoalsAction(roundId))}>Tore aus OpenLigaDB übernehmen</button><span className="mini">Läuft nach der Deadline auch automatisch beim Sync; vom Admin geänderte Tore werden nicht überschrieben.</span><M msg={msg} /></div>; }
-
 const STATUS = { startelf: ['Startelf', 'ok'], eingewechselt: ['eingewechselt', 'ok'], bank: ['Bank, nicht eingesetzt', 'grey'], nicht_im_kader: ['nicht im Spieltagskader', 'grey'], nicht_gefunden: ['Name prüfen', 'bad'], spiel_fehlt: ['Spiel fehlt', 'bad'], verein_unbekannt: ['Verein?', 'bad'] };
 export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run } = useRun(); const [h1, setH1] = useState(''); const [h3, setH3] = useState(''); const [unlock, setUnlock] = useState(false); const [showAll, setShowAll] = useState(false);
   const c = lastLog?.counts || {}; const cov = lastLog?.coverage || []; const problems = cov.filter(x => ['nicht_gefunden', 'spiel_fehlt', 'verein_unbekannt', 'nicht_im_kader'].includes(x.status));
@@ -116,40 +113,33 @@ export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run 
       })}>In den Eingang legen und importieren</button></div></details>
   </div>); }
 
-/* Gebote aus dem Blog (weitergeleitete Gebots-Mails): einfuegen, Vorschau, als verdeckte Gebote speichern. */
-export function BidPaste({ roundId }) { const { msg, pending, run } = useRun(); const [text, setText] = useState(''); const [prev, setPrev] = useState(null);
+
+/* Blog in einem Rutsch: Text einfuegen, Vorschau fuer Aufstellungen und Gebote, alles Zulaessige uebernehmen (auch ins Archiv). */
+export function BlogPaste({ roundId, log }) { const { msg, pending, run } = useRun(); const [text, setText] = useState(''); const [prev, setPrev] = useState(null);
+  const L = prev?.lineups, G = prev?.bids; const canApply = prev && (L?.blocks.some(x => x.ok && !x.gleich) || G?.blocks.some(x => x.ok && !x.resolved));
   return (<div className="stack" style={{ marginTop: 8 }}>
-    <p className="mini">Die Gebots-Posts aus dem Blog (weitergeleitete Mails) hier einfügen – gern zusammen mit den Aufstellungs-Posts, die werden ignoriert. Verstanden werden Gebote in Reihenfolge («Biete für max. 3 Spieler», «19.- für Doué», «M Dinkci, Bremen CHF 2.00», «Mensah, Köln, V, 3 und entlasse Lerma»), Entlassungen je Gebot («Dafür entlasse ich») oder als Liste («entlasse in folgender Reihenfolge») und Eventualaufträge («wechsle ich für Suzuki ein»). Ohne Angabe gilt: so viele Käufe, wie Entlassungen genannt sind. Beim Auswerten sind die Gebote eines Managers Alternativen in dieser Reihenfolge – hat er sein Limit erreicht, fallen die weiteren weg und die Spieler gehen an die Nächsten.</p>
-    <textarea rows={8} placeholder={'Fwd: Fw: Gebot René R6\n…\nIch biete in folgender Reihenfolge für:\nM Dinkci, Bremen CHF 2.00\n…'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
-    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewBidTextAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
-      <button className="sm komm" disabled={pending || !prev || !prev.blocks.some(x => x.ok && !x.resolved)} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyBidTextAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Zulässige Gebote speichern (verdeckt)</button><M msg={msg} /></div>
-    {prev && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Gebote in Reihenfolge</th><th className="l">Entlassungen</th><th className="l">Prüfung</th><th className="l">Bisher</th></tr></thead><tbody>
-      {prev.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b><div className="mini">{x.title}</div><div className="mini muted">max. {x.maxWins} Kauf/Käufe · Budget {x.budget}</div></td>
-        <td className="l small">{x.bids.map(b => <div key={b.priority}>{b.priority}. {b.pos || '?'} <b>{b.player_name}</b> {b.club || '?'} · CHF {b.price}{b.release && <span className="mini"> · entlässt {b.release}</span>}{b.swapOut && <span className="mini"> · rein für {b.swapOut}</span>}{b.pool && <span className="mini muted"> · Pool: {b.pool}</span>}{b.poolNote && <span className="mini delta down"> · {b.poolNote}</span>}</div>)}{x.notes.map(n => <div key={n} className="mini muted">{n}</div>)}{x.unmatched.length > 0 && <div className="mini muted">nicht zugeordnet: {x.unmatched.join(', ')}</div>}</td>
+    <textarea rows={7} placeholder={'Blog öffnen, alles markieren (Strg+A), kopieren, hier einfügen – Aufstellungen und Gebote zusammen.'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
+    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewBlogAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
+      <button className="sm komm" disabled={pending || !canApply} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyBlogAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Alles Zulässige übernehmen</button><M msg={msg} /></div>
+    {prev?.lineups?.warnung && <div className="err"><b>Gebote zuerst auswerten.</b> {prev.lineups.warnung}</div>}
+    {L && <><div className="eyebrow" style={{ marginTop: 6 }}>Aufstellungen</div><div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Erkannt (Blog)</th><th className="l">Prüfung</th><th className="l">Bisher in der App</th></tr></thead><tbody>
+      {L.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b>{x.art && x.art !== 'voll' && <span className="pill open" style={{ marginLeft: 6 }}>{x.art === 'vorrunde' ? 'wie Vorrunde' : 'nur Wechsel'}</span>}<div className="mini">{x.title}</div>{x.notes?.map(n => <div key={n} className={`mini ${/^(Nur Wechsel|Keine Wechsel)|keine Wechsel|gelesen$|so stimmt/.test(n) ? 'muted' : 'delta down'}`}>{n}</div>)}{x.unmatched?.length > 0 && <div className="mini muted">nicht zugeordnet: {x.unmatched.join(', ')}</div>}</td>
+        <td className="l small">{x.found.map(f => `${f.pos} ${f.name}${f.note ? ' (' + f.note + ')' : ''}`).join(', ')} <span className="mini">({x.found.length})</span></td>
+        <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td>
+        <td className="l small"><div className="mini">{x.bisher}</div>{x.gleich ? <span className="pill ok">identisch</span> : x.diff?.length ? <div>{x.selbst && x.ok && <span className="pill open">Blog überschreibt App</span>} <span className="mini">{x.diff.join(', ')}</span></div> : null}</td></tr>)}
+      {L.ohnePost?.length > 0 && <tr><td className="l muted" colSpan={4}>Ohne Post – es bleibt, was in der App steht: {L.ohnePost.join('; ')}</td></tr>}
+      {L.unclear?.length > 0 && <tr><td className="l muted" colSpan={4}>Nicht zuordenbar: {L.unclear.join('; ')}</td></tr>}
+      {L.skipped?.length > 0 && <tr><td className="l muted" colSpan={4}>Übersprungen: {L.skipped.join('; ')}</td></tr>}
+    </tbody></table></div></>}
+    {G && <><div className="eyebrow" style={{ marginTop: 6 }}>Gebote</div>{G.blocks.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Gebote in Reihenfolge</th><th className="l">Entlassungen</th><th className="l">Prüfung</th><th className="l">Bisher</th></tr></thead><tbody>
+      {G.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b><div className="mini">{x.title}</div><div className="mini muted">max. {x.maxWins} Kauf/Käufe · Budget {x.budget}</div></td>
+        <td className="l small">{x.bids.map(b => <div key={b.priority}>{b.priority}. {b.pos || '?'} <b>{b.player_name}</b> {b.club || '?'} · CHF {b.price}{b.release && <span className="mini"> · entlässt {b.release}</span>}{b.swapOut && <span className="mini"> · rein für {b.swapOut}</span>}{b.pool && <span className="mini muted"> · Pool: {b.pool}</span>}{b.poolNote && <span className="mini delta down"> · {b.poolNote}</span>}</div>)}{x.notes.map(n => <div key={n} className="mini muted">{n}</div>)}</td>
         <td className="l small">{x.releases.length ? x.releases.join(', ') : <span className="mini">je Gebot</span>}</td>
         <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td>
         <td className="l mini">{x.bisher}{x.resolved && <div className="pill grey">aufgelöst – nicht änderbar</div>}</td></tr>)}
-      {prev.unclear?.length > 0 && <tr><td className="l muted" colSpan={5}>Unklar: {prev.unclear.join('; ')}</td></tr>}
-      {prev.skipped?.length > 0 && <tr><td className="l muted" colSpan={5}>Übersprungen: {prev.skipped.join('; ')}</td></tr>}
-    </tbody></table></div>}
+      {G.unclear?.length > 0 && <tr><td className="l muted" colSpan={5}>Unklar: {G.unclear.join('; ')}</td></tr>}
+    </tbody></table></div> : <div className="mini">keine Gebots-Posts im Text</div>}</>}
+    {log?.runs?.length > 0 && <details><summary className="mini">Bisherige Übernahmen ({log.runs.length})</summary>{log.runs.slice().reverse().map((r, i) => <div key={i} className="mini" style={{ borderTop: '1px solid var(--line)', padding: '4px 0' }}><b>{new Date(r.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}</b> · {r.by} · {r.n} übernommen<ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>{(r.log || []).map((l, j) => <li key={j}>{l}</li>)}</ul></div>)}</details>}
   </div>); }
 
-/* Aufstellungen aus dem Blog: Text in einem Rutsch einfuegen, Vorschau pruefen, uebernehmen. */
-export function LineupPaste({ roundId }) { const { msg, pending, run } = useRun(); const [text, setText] = useState(''); const [prev, setPrev] = useState(null);
-  return (<div className="stack" style={{ marginTop: 8 }}>
-    <p className="mini">Blog öffnen, alles markieren (Strg+A), kopieren und hier einfügen – so wie es ist. Die Posts werden an «Eingestellt von …» getrennt und nach Zeit geordnet; der Manager wird am Titel erkannt («Roman Runde 3», «Arbi R3», «Mark 3»), sonst am Betreff, am Absender (auch Mail-Adresse) oder an der Unterschrift – nicht am Blog-Konto MARKADONA, das für alle postet. Verstanden werden volle Aufstellungen (Nummern, Positionen auch «V/M», Vereine, Tabellen, kleine Tippfehler) <b>und reine Wechsel</b>: «X für Y», «X anstelle Y», «X f Y, Z f W», «Y raus, X rein», «Einwechslung: X / Auswechslung: Y», «Y → X», «Keine Wechsel». <b>Die Elf-Liste zählt:</b> stehen 11 Spieler im Post, gilt diese Liste, die Wechselzeilen darunter erklären nur. Fehlt bei einem Spieler mit Zusatzposition die Positionsangabe (Beier als M), wird sie so gesetzt, dass die Zahl je Position stimmt. Reine Wechsel werden auf die Aufstellung der Vorrunde angewendet, ein späteres «Update» auf den früheren Post. Gewonnene Gebote mit Eventualauftrag werden eingerechnet. Gebots-Posts, Posts für andere Runden und Posts vor der Vorrunden-Deadline werden übersprungen. Die Vorschau zeigt daneben, was schon in der App steht – <b>im Zweifel gilt der Blog</b>.</p>
-    <textarea rows={8} placeholder={'Roman\nFlekken\nDavies, Chabot, Anton\n…\n\nMike:\nNicolas\n…'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
-    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewLineupTextAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
-      <button className="sm komm" disabled={pending || !prev || !prev.blocks.some(x => x.ok)} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyLineupTextAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Zulässige Aufstellungen übernehmen</button><M msg={msg} /></div>
-    {prev?.warnung && <div className="err"><b>Gebote zuerst auswerten.</b> {prev.warnung}</div>}
-    {prev && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Erkannt (Blog)</th><th className="l">Nicht zugeordnet</th><th className="l">Prüfung</th><th className="l">Bisher in der App</th></tr></thead><tbody>
-      {prev.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b>{x.art && x.art !== 'voll' && <span className="pill open" style={{ marginLeft: 6 }}>{x.art === 'vorrunde' ? 'wie Vorrunde' : 'nur Wechsel'}</span>}<div className="mini">{x.title}</div><div className="mini muted">Kader für diese Runde: {x.kaderN} Spieler</div>{x.kaderSpaeter?.length > 0 && <div className="mini delta down">erst später gültig: {x.kaderSpaeter.join(', ')}</div>}{x.notes?.map(n => <div key={n} className={`mini ${/^(Nur Wechsel|Keine Wechsel)|keine Wechsel|gelesen$/.test(n) ? 'muted' : 'delta down'}`}>{n}</div>)}</td>
-        <td className="l small">{x.found.map(f => `${f.pos} ${f.name}${f.note ? ' (' + f.note + ')' : ''}`).join(', ')} <span className="mini">({x.found.length})</span></td>
-        <td className="l small muted">{x.unmatched.join(', ') || '–'}</td>
-        <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td>
-        <td className="l small"><div className="mini">{x.bisher}</div>{x.gleich ? <span className="pill ok">identisch mit Blog</span> : x.diff?.length ? <div>{x.selbst && x.ok && <span className="pill open">Blog überschreibt App</span>} <span className="mini">{x.diff.join(', ')}</span></div> : null}</td></tr>)}
-      {prev.ohnePost?.length > 0 && <tr><td className="l muted" colSpan={5}>Ohne Post im Text – es bleibt, was in der App steht: {prev.ohnePost.join('; ')}</td></tr>}
-      {prev.unclear?.length > 0 && <tr><td className="l muted" colSpan={5}>Nicht zuordenbar: {prev.unclear.join('; ')}</td></tr>}
-      {prev.skipped?.length > 0 && <tr><td className="l muted" colSpan={5}>Übersprungen: {prev.skipped.join('; ')}</td></tr>}
-    </tbody></table></div>}
-  </div>); }
+

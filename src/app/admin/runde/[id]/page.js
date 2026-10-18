@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { q } from '@/lib/db';
 import { fmtDt } from '@/components/ui';
-import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker, LineupPaste as RLineupPaste, BidPaste as RBidPaste } from './RoundTools';
+import { Header as RHeader, Bids as RBids, Results as RResults, Kicker as RKicker, BlogPaste as RBlogPaste } from './RoundTools';
 import { getSetting } from '@/lib/db';
 import { status as inboxStatus } from '@/lib/kicker-inbox';
 import { roundCheck } from '@/lib/rundencheck';
@@ -17,38 +17,50 @@ export default async function AdminRunde({ params }) {
   const matches = await q('select m.*, c1.id as c1, c2.id as c2 from matches m left join clubs c1 on c1.oldb_team_id=m.team1 left join clubs c2 on c2.oldb_team_id=m.team2 where m.round_id=$1 order by m.kickoff', [round.id]);
   const bids = await q('select b.*, m.name as manager_name, p.name as release_name, s.name as swap_name from bids b join managers m on m.id=b.manager_id left join players p on p.id=b.release_player_id left join players s on s.id=b.swap_out_player_id where b.round_id=$1 order by b.price desc', [round.id]);
   const kickerLog = await getSetting(`kicker_import_${round.id}`);
-  const pasteLog = await getSetting(`lineup_paste_${round.id}`);
+  const pasteLog = await getSetting(`lineup_paste_${round.id}`); const bidLog = await getSetting(`bid_paste_${round.id}`);
+  const blogLog = { runs: [...(pasteLog?.runs || []).map(r => ({ ...r, art: 'Aufstellungen' })), ...(bidLog?.runs || []).map(r => ({ ...r, art: 'Gebote' }))].sort((a, b2) => (a.at < b2.at ? -1 : 1)) };
   const inbox = await inboxStatus(round.matchday).catch(() => null);
   const check = await roundCheck(round, b, d);
   const dlLocal = round.deadline ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(round.deadline)).replace(' ', 'T') : '';
+  const step = (n, title, sub, state) => <div className="row between" style={{ alignItems: 'baseline' }}><h3 style={{ margin: 0 }}><span className="stepno">{n}</span>{title}</h3>{state}</div>;
+  const nBids = bids.length, nSealed = bids.filter(x => x.status === 'sealed').length;
+  const lineupsSaved = Object.keys(d.lineups).length;
+  const impOk = kickerLog && kickerLog.games >= 9 && kickerLog.elf && !(kickerLog.errors || []).length;
   return (<>
-    <div className="adminbox"><h3>Admin · {round.label}</h3>
-      <div className="kv"><b>Deadline</b><span>{fmtDt(round.deadline)} {round.deadline_manual ? '(manuell)' : '(aus Spielplan)'}</span><b>Status</b><span>{round.status}{passed ? ' · Deadline vorbei' : ' · offen'}</span><b>Spiele</b><span>{matches.filter(m => m.finished).length}/{matches.length} beendet</span></div>
-      <RHeader round={{ id: round.id, label: round.label, status: round.status, tdr: round.tdr || [], sdt: round.sdt || '', deadlineLocal: dlLocal, bidsResolved: round.bids_resolved }} managers={b.managers.map(m => ({ id: m.id, name: m.name }))} corrections={d.corrections.map(k => ({ id: k.id, manager: b.managerName[k.manager_id], text: k.text, delta: k.delta }))} />
+    <div className="card"><div className="row between"><div><div className="eyebrow">Admin · Auswertung</div><h2 style={{ margin: 0 }}>{round.label}</h2></div>
+      <div className="small">Deadline <b>{fmtDt(round.deadline)}</b> · {round.status === 'final' ? <span className="pill ok">final</span> : passed ? <span className="pill bad">auszuwerten</span> : <span className="pill open">offen</span>} · Spiele {matches.filter(m => m.finished).length}/{matches.length}</div></div>
+      <div className="steps">
+        <span className={lineupsSaved >= b.managers.length ? 'done' : ''}>1 Blog {lineupsSaved}/{b.managers.length} Aufst. · {nBids} Gebote</span>
+        <span className={impOk ? 'done' : ''}>2 kicker {inbox?.n || 0}/9{inbox?.elf ? ' + Elf' : ''}{kickerLog ? ' · importiert' : ''}</span>
+        <span className={round.bids_resolved ? 'done' : nBids ? '' : 'skip'}>3 Gebote {round.bids_resolved ? 'aufgelöst' : nSealed ? nSealed + ' offen' : 'keine'}</span>
+        <span className={round.status === 'final' ? 'done' : ''}>4 Abschluss {round.status === 'final' ? 'final' : check.problems.length ? check.problems.length + ' Problem(e)' : 'bereit'}</span></div>
     </div>
-    <div className={`card ${check.ok ? '' : ''}`} style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Rundencheck</div>
-      <h3 style={{ margin: '4px 0' }}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Keine Probleme'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</h3>
-      {check.problems.length > 0 && <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{check.problems.map((x, i) => <li key={i} className="delta down">{x.text}</li>)}</ul>}
+
+    <div className="card"><div className="eyebrow">Schritt 1</div>{step(1, 'Blog einfügen', null, <span className="mini">Aufstellungen und Gebote zusammen</span>)}
+      <p className="mini">Blog öffnen (auch die Handy-Ansicht), alles markieren, kopieren, einfügen. Die Vorschau zeigt je Manager, was erkannt wurde und was sich gegenüber der App ändert – im Zweifel gilt der Blog. Gebote werden verdeckt gespeichert und in Schritt 3 aufgelöst; die Posts landen im <a href="/archiv">Archiv</a>.</p>
+      <RBlogPaste roundId={round.id} log={blogLog} /></div>
+
+    <div className="card"><div className="eyebrow">Schritt 2</div>{step(2, 'kicker-Seiten importieren', null, <span className="mini">nach den Spielen</span>)}
+      <p className="mini">Die neun Seiten «Aufstellung» und die «Elf des Tages» vom Handy senden (Skript) oder unten als Quelltext einfügen, dann importieren. Jeder aufgestellte Spieler muss danach «Startelf», «eingewechselt» oder «Bank» sein.</p>
+      <RKicker roundId={round.id} lastLog={kickerLog} inbox={inbox ? JSON.parse(JSON.stringify(inbox)) : null} /></div>
+
+    <div className="card"><div className="eyebrow">Schritt 3</div>{step(3, `Gebote auflösen (${bids.length})`, null, round.bids_resolved ? <span className="pill ok">aufgelöst</span> : nSealed ? <span className="pill open">{nSealed} verdeckt</span> : <span className="mini">keine Gebote</span>)}
+      {bids.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Nr.</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventual für</th><th className="l">Status</th></tr></thead><tbody>{bids.map(x => <tr key={x.id}><td className="l">{x.manager_name}</td><td>{x.priority || 1}{x.max_wins > 1 ? <span className="mini"> / max. {x.max_wins}</span> : ''}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{x.price}</td><td className="l">{x.release_name || <span className="mini">aus Liste</span>}</td><td className="l">{x.swap_name || '–'}</td><td className="l">{x.status === 'sealed' ? <span className="pill grey">verdeckt</span> : x.status === 'won' ? <span className="pill ok">Zuschlag</span> : x.status === 'invalid' ? <span className="pill bad">ungültig</span> : <span className="pill grey">kein Zuschlag</span>} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : null}
+      <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} /></div>
+
+    <div className="card" style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Schritt 4</div>{step(4, 'Prüfen und abschliessen', null, <span className={`pill ${check.problems.length ? 'bad' : check.warnings.length ? 'open' : 'ok'}`}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Rundencheck ok'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</span>)}
+      {check.problems.length > 0 && <ul style={{ margin: '6px 0', paddingLeft: 18 }}>{check.problems.map((x, i) => <li key={i} className="delta down">{x.text}</li>)}</ul>}
       {check.warnings.length > 0 && <ul className="small" style={{ margin: '4px 0', paddingLeft: 18 }}>{check.warnings.map((x, i) => <li key={i}>{x.text}</li>)}</ul>}
       {check.infos.length > 0 && <div className="mini">{check.infos.map(x => x.text).join(' · ')}</div>}
-      <p className="mini">Geprüft: Aufstellungen (11 Spieler, Positionen, Spielberechtigung), Kadergrösse und Verträge, Spiele, kicker-Import und Vollständigkeit, Elf des Tages (11 Namen und Spieler des Tages in der Datenbank, Punkte bei den Aufgestellten), Gebote.</p></div>
-    <div className="grid2">
-      <div className="card"><h3>Spiele &amp; Vereinsergebnisse</h3><table><tbody>{matches.map(m => { const c1 = d.clubRes[m.c1], c2 = d.clubRes[m.c2]; return <tr key={m.id}><td className="l">{fmtDt(m.kickoff)}</td><td className="l">{m.c1} – {m.c2}</td><td>{m.finished ? `${m.goals1}:${m.goals2}` : '–'}</td><td className="l mini">{c1 ? `${m.c1} ${c1.pts}P${c1.cs ? ' zu null' : ''} · ${m.c2} ${c2.pts}P${c2.cs ? ' zu null' : ''}` : ''}</td></tr>; })}</tbody></table><p className="mini">Punkte 3/1/0 und Zu-null werden aus den OpenLigaDB-Resultaten abgeleitet. Fehlt ein Resultat, Sync auslösen (Admin-Übersicht).</p>
-        <div className="eyebrow">Torschützen (OpenLigaDB)</div><div className="small">{matches.flatMap(m => (m.goals || []).map((g, i) => <span key={m.id + '-' + i} className={g.ownGoal ? 'muted' : ''}>{g.name}{g.ownGoal ? ' (ET)' : ''}{g.penalty ? ' (E)' : ''} {g.minute}&#39;</span>)).reduce((acc, el, i) => acc.concat(i ? [', ', el] : [el]), [])}</div>
-        <RGoals roundId={round.id} /></div>
-      <div className="card"><h3>Gebote ({bids.length})</h3>{bids.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventual für</th><th className="l">Status</th></tr></thead><tbody>{bids.map(x => <tr key={x.id}><td className="l">{x.manager_name}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{x.price}</td><td className="l">{x.release_name}</td><td className="l">{x.swap_name || '–'}</td><td className="l">{x.status} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : <div className="mini">keine Gebote</div>}
-        <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} />
-      <h3 style={{ marginTop: 12 }}>Gebote aus dem Blog einfügen</h3><RBidPaste roundId={round.id} /></div>
-    </div>
-    <div className="adminbox"><h3>Aufstellungen aus dem Blog einfügen</h3><p className="mini">Für Manager, die ihre Aufstellung im Blog statt in der App abgeben. Der Admin darf auch nach der Deadline speichern; hat ein Manager schon in der App gespeichert, zeigt die Vorschau den Unterschied, und der Blog hat Vorrang. Unzulässige Aufstellungen (Ziff. 5.1) werden nicht übernommen, dann gilt die Vorrunde.</p><RLineupPaste roundId={round.id} />
-      {pasteLog?.runs?.length > 0 && <details style={{ marginTop: 8 }}><summary className="mini">Bisherige Übernahmen aus dem Blog ({pasteLog.runs.length})</summary>
-        {pasteLog.runs.slice().reverse().map((r, i) => <div key={i} className="mini" style={{ borderTop: '1px solid var(--line)', padding: '4px 0' }}><b>{fmtDt(r.at)}</b> · {r.by} · {r.n} übernommen<ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>{(r.log || []).map((l, j) => <li key={j}>{l}</li>)}</ul></div>)}</details>}</div>
-    <div className="adminbox"><h3>kicker-Seiten importieren</h3><p className="mini">Grundlage sind die Quelltexte der kicker-Seiten «Aufstellung» (Startelf, Reservebank, Wechsel, Tore, Vorlagen, Karten) je Spiel und «Elf des Tages» je Spieltag, gesendet vom Handy oder hier eingefügt. Der Bericht zeigt für jeden aufgestellten Spieler, ob er auf der Seite gefunden wurde; «nicht auf der Seite» mit Hinweis heisst Namensabgleich prüfen. Vorlagen bei Eigentoren werden nicht gezählt, aber im Protokoll genannt.</p><RKicker roundId={round.id} lastLog={kickerLog} inbox={inbox ? JSON.parse(JSON.stringify(inbox)) : null} /></div>
-    <div className="card"><div className="eyebrow">Resultate (kicker)</div><h2>Aufstellungen &amp; Spielerwerte</h2><p className="mini">Einsatz, Assists, Tore, Karten (Gelb 1, Gelb-Rot 2, Rot 3, Rot mit Gelb 4) und Team der Runde kommen aus kicker; Tore zusätzlich aus OpenLigaDB. Manuelle Änderungen sperren die Zeile gegen den Import. Punkte und Shutouts werden berechnet.</p>
-      {!passed && <div className="note">Deadline noch nicht vorbei: Aufstellungen können sich noch ändern. Fehlende Aufstellungen werden nach der Deadline automatisch aus der Vorrunde übernommen.</div>}
-      <p className="row" style={{ marginTop: 6 }}><span className="mini">Aufstellung bearbeiten (nur Admin, auch nach der Deadline):</span>
-        {b.managers.map(m => <a key={m.id} className="btn sm sec" href={`/aufstellung?m=${m.id}&r=${round.number}`}>{m.name}</a>)}</p>
+      <RHeader round={{ id: round.id, label: round.label, status: round.status, tdr: round.tdr || [], sdt: round.sdt || '', deadlineLocal: dlLocal, bidsResolved: round.bids_resolved }} managers={b.managers.map(m => ({ id: m.id, name: m.name }))} corrections={d.corrections.map(k => ({ id: k.id, manager: b.managerName[k.manager_id], text: k.text, delta: k.delta }))} /></div>
+
+    <details className="card"><summary><b>Aufstellungen &amp; Spielerwerte</b> <span className="mini">Einsatz, Assists, Tore, Karten, Team der Runde je Spieler – nur zum Nachsehen und für Korrekturen</span></summary>
+      {!passed && <div className="note" style={{ marginTop: 8 }}>Deadline noch nicht vorbei: Aufstellungen können sich noch ändern. Fehlende werden nach der Deadline automatisch aus der Vorrunde übernommen.</div>}
+      <p className="row" style={{ marginTop: 8 }}><span className="mini">Aufstellung bearbeiten:</span>{b.managers.map(m => <a key={m.id} className="btn sm sec" href={`/aufstellung?m=${m.id}&r=${round.number}`}>{m.name}</a>)}</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(540px, 1fr))', gap: 14 }}>{b.managers.map(m => { const lu = d.lineups[m.id]; const rows = lu ? Object.entries(lu.entries).map(([pid, e]) => { const p = b.players[pid]; const r = d.results[pid] || {}; return { pid, name: p?.name || pid, club: p?.club, pos: e.pos, clubpts: d.clubRes[p?.club]?.pts, cs: d.clubRes[p?.club]?.cs, start: r.start || 0, assist: r.assist || 0, tore: r.tore || 0, karten: r.karten || 0, tdr: r.tdr || 0, kpos: r.kpos || null, locked: !!r.locked }; }) : [];
-        return <RResults key={m.id} roundId={round.id} managerId={m.id} managerName={m.name} rows={rows} totals={d.totals[m.id]} />; })}</div></div>
+        return <RResults key={m.id} roundId={round.id} managerId={m.id} managerName={m.name} rows={rows} totals={d.totals[m.id]} />; })}</div></details>
+    <details className="card"><summary><b>Spiele &amp; Vereinsergebnisse</b> <span className="mini">{matches.filter(m => m.finished).length}/{matches.length} beendet · Punkte 3/1/0 und Zu-null aus OpenLigaDB</span></summary>
+      <table style={{ marginTop: 8 }}><tbody>{matches.map(m => { const c1 = d.clubRes[m.c1], c2 = d.clubRes[m.c2]; return <tr key={m.id}><td className="l">{fmtDt(m.kickoff)}</td><td className="l">{m.c1} – {m.c2}</td><td>{m.finished ? `${m.goals1}:${m.goals2}` : '–'}</td><td className="l mini">{c1 ? `${m.c1} ${c1.pts}P${c1.cs ? ' zu null' : ''} · ${m.c2} ${c2.pts}P${c2.cs ? ' zu null' : ''}` : ''}</td></tr>; })}</tbody></table>
+      <p className="mini">Fehlt ein Resultat: Sync in der Admin-Übersicht unter «Werkzeuge».</p></details>
   </>);
 }

@@ -37,7 +37,8 @@ export function parseBlogText(text, { defaultDate = null } = {}) {
     const line = raw.trim();
     const dm = line.match(/^(?:[A-Za-zäöü]+,\s*)?(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4})$/) || (m => m && [m[0], m[2], m[1], m[3]])(line.match(/^(?:[A-Za-zäöü]+,\s*)?([A-Za-zäöü]+)\s+(\d{1,2}),\s*(\d{4})$/));
     if (dm && MONTHS[dm[2].toLowerCase()]) { curDate = `${dm[3]}-${String(MONTHS[dm[2].toLowerCase()]).padStart(2, '0')}-${String(dm[1]).padStart(2, '0')}`; continue; }
-    const em = line.match(/^Eingestellt von\s+(.+?)\s+um\s+(\d{1,2}):(\d{2})/i);
+    // Fusszeile: «Eingestellt von X um HH:MM» (Desktop) oder «X um HH:MM» (Handy-Ansicht)
+    const em = line.match(/^Eingestellt von\s+(.+?)\s+um\s+(\d{1,2}):(\d{2})/i) || line.match(/^(\p{L}[\p{L}\s.'-]{0,40}?)\s+um\s+(\d{1,2}):(\d{2})\s*$/u);
     if (em) {
       const lines = buf.map(x => x.replace(/\s+$/, '')); while (lines.length && !lines[0].trim()) lines.shift(); while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
       if (lines.length) { const title = lines[0].trim(); const body = lines.slice(1).join('\n').replace(/^\n+/, '').trim();
@@ -47,6 +48,9 @@ export function parseBlogText(text, { defaultDate = null } = {}) {
     if (/^(Keine Kommentare|\d+ Kommentare?|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|In Facebook freigeben|Auf Pinterest teilen)/i.test(line)) continue;
     buf.push(raw);
   }
+  // Text endet mitten im letzten Post (ohne Fusszeile): trotzdem als Post ablegen
+  const rest = buf.map(x => x.replace(/\s+$/, '')); while (rest.length && !rest[0].trim()) rest.shift(); while (rest.length && !rest[rest.length - 1].trim()) rest.pop();
+  if (rest.length >= 2) posts.push({ title: rest[0].trim(), author: null, posted_at: curDate ? `${curDate}T23:59:00+02:00` : null, body: rest.slice(1).join('\n').replace(/^\n+/, '').trim() });
   return posts;
 }
 

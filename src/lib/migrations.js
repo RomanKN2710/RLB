@@ -11,6 +11,9 @@ import { applyArbiST4 } from './korrektur-arbi-st4';
 import statsSeed from '../../db/seed/kicker-stats-st1-3.json';
 import ewigeSeed from '../../db/seed/ewige-rangliste.json';
 import * as HOF from './halloffame';
+import * as Blog from './blog-import';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export const STEPS = [
   { key: 'korrektur_20260915', title: 'Datenkorrektur 15.09.2026 (Excel/kicker-Abgleich Spieltag 1–3)', run: applyKorrektur20260915 },
@@ -30,6 +33,12 @@ export const STEPS = [
     else if (lu.entries[beier.id].pos === 'M') log.push('Spieltag 5: Beier stand schon auf M');
     else { const e = { ...lu.entries, [beier.id]: { pos: 'M' } }; await q('update lineups set entries=$3, updated_at=now() where round_id=$1 and manager_id=$2', [r5.id, roman.id, JSON.stringify(e)]); log.push(`Spieltag 5: Beier von ${lu.entries[beier.id].pos} auf M gesetzt`); }
     await setSetting('beier_m_st5', { at: new Date().toISOString(), log }); await audit(userId, 'beier_m_st5', { log }); return { log }; } },
+  { key: 'blog_st6_20261018', title: 'Spieltag 6: Aufstellungen und Gebote aus dem Blog vom 16.10.2026 übernommen (Posts bis 21:54)', run: async userId => {
+    const r6 = await one("select * from rounds where type='regulaer' and matchday=6"); if (!r6) throw new Error('Spieltag 6 fehlt');
+    const text = fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'blog-2026-10-16.txt'), 'utf8');
+    const r = await Blog.applyBlog({ id: userId, name: 'Admin', email: 'admin' }, r6.id, text);
+    const log = [`Archiv: ${r.archiv.neu} neue Posts`, ...r.bids.log, ...r.lineups.log];
+    await setSetting('blog_st6_20261018', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

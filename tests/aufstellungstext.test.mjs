@@ -116,6 +116,10 @@ describe('Manager erkennen', () => {
     assert.equal(res.unclear.length, 1, 'Post ohne erkennbaren Manager wird gemeldet');
     assert.deepEqual(block(res, 'René').unmatched, [], 'Mail-Kopfzeilen erzeugen keine «nicht zugeordnet»-Einträge');
   });
+  test('letzter Post ohne Fusszeile (Text endet mitten im Post) zählt', () => {
+    const res = parse(blogger([post('Mike Runde 5', 'Wechsel: Stiller für El Mala')]) + '\nMark 5\nFührich f Veerman\n', { roundNumbers: [50, 5], baseOf: base4 });
+    assert.deepEqual(res.blocks.map(b => b.name).sort(), ['Mark', 'Mike']); assert.ok(block(res, 'Mark').ok);
+  });
   test('Chat-Text ohne Blog-Fusszeilen', () => {
     const res = parse('Arbi:\nKramaric für Lemperle\n\nMike\nkeine Änderungen\n\nRoman\nRieder raus, Karl rein', { roundNumbers: [50, 5], baseOf: base4 });
     assert.deepEqual(res.blocks.map(b => b.name + ':' + b.ok), ['Arbi:true', 'Mike:true', 'Roman:true']);

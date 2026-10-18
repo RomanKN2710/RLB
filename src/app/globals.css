@@ -157,3 +157,8 @@ details.bidform[open]>summary{background:var(--accent-soft)}
   .hof-badges{display:grid;gap:6px}.hof-badge{border-radius:8px;display:flex;flex-wrap:wrap}
 }
 .rlist .rk .delta{display:block;margin-left:0;line-height:1}.rlist .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rlist summary>span:nth-child(2){min-width:0}
+
+/* Admin: Schritte */
+.stepno{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:700 13px "IBM Plex Sans",sans-serif;margin-right:8px;vertical-align:middle}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.steps span{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--muted)}
+.steps span.done{border-color:var(--accent);background:var(--accent-soft);color:var(--good)}.steps span.skip{opacity:.6}

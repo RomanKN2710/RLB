@@ -80,6 +80,7 @@ export function splitBlocks(lines, managers, kaderOf) {
       const e = line.match(ENDE); if (e) { if (cur.some(Boolean)) blocks.push({ lines: cur, author: e[1].trim(), at: curDate ? zurich(curDate, e[2], e[3]) : null, time: `${e[2].padStart(2, '0')}:${e[3]}` }); cur = []; }
       else if (!UI.test(line)) cur.push(line);
     }
+    if (cur.some(Boolean)) blocks.push({ lines: cur, author: null, at: null, time: null });   // letzter Post ohne Fusszeile (Text endet mitten im Post)
     const out = blocks.map(bl => {
       const nonEmpty = bl.lines.filter(Boolean);
       // Manager bestimmen. Das Blog-Konto (MARKADONA) postet die gemailten Aufstellungen aller Manager, der Verfasser
