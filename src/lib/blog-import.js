@@ -153,7 +153,8 @@ export async function applyBidPaste(u, roundId, text) {
   await audit(u.id, 'bid_paste', { roundId, n, log });
   return { n, log, msg: `Gebote von ${n} Manager(n) übernommen · ` + log.join(' · ') };
 }
-async function resolve(round, b, bids) {
+/** Gebote einer Runde aufloesen (Vorschau und Zuteilen nutzen dieselbe Rechnung). */
+export async function resolveRoundBids(round, b, bids) {
   const budgets = {}; for (const m of b.managerIds) budgets[m] = await D.budgetLeft(m);
   const prevRound = await one('select * from rounds where number < $1 order by number desc limit 1', [round.number]);
   const prevReleases = prevRound ? await q("select * from transfers where type='entlassung' and round_id=$1", [prevRound.id]) : [];

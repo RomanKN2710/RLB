@@ -240,12 +240,12 @@ export const deleteCorrectionAction = wrap(async (id) => { await requireAdmin();
 
 /* ---------- Admin: Gebote auflösen (Ziff. 7) ---------- */
 export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); await BlogImport.ensureBidColumns(); const round = await D.roundById(roundId); const b = await D.base();
-  const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await resolve(round, b, bids); return ok('Vorschau', { list: list.map(x => ({ ...x, manager_name: b.managerName[x.manager_id], release_name: (b.players[x.release_player_id] || {}).name || null, swap_name: (b.players[x.swap_out_player_id] || {}).name || null })) }); });
+  const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await BlogImport.resolveRoundBids(round, b, bids); return ok('Vorschau', { list: list.map(x => ({ ...x, manager_name: b.managerName[x.manager_id], release_name: (b.players[x.release_player_id] || {}).name || null, swap_name: (b.players[x.swap_out_player_id] || {}).name || null })) }); });
 export const previewBidTextAction = wrap(async (roundId, text) => { await requireAdmin(); const { parsed } = await BlogImport.parseBidPaste(roundId, text);
   return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
 
 export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (round.bids_resolved) return fail('Bereits aufgelöst'); const b = await D.base();
-  await BlogImport.ensureBidColumns(); const bids = await q("select * from bids where round_id=$1 order by manager_id, priority", [roundId]); const list = await resolve(round, b, bids);
+  await BlogImport.ensureBidColumns(); const bids = await q("select * from bids where round_id=$1 order by manager_id, priority", [roundId]); const list = await BlogImport.resolveRoundBids(round, b, bids);
   const usedRel = new Set();
   await tx(async x => {
     for (const bid of list) {
