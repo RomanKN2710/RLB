@@ -30,25 +30,23 @@ export default async function AdminRunde({ params }) {
     <div className="card"><div className="row between"><div><div className="eyebrow">Admin · Auswertung</div><h2 style={{ margin: 0 }}>{round.label}</h2></div>
       <div className="small">Deadline <b>{fmtDt(round.deadline)}</b> · {round.status === 'final' ? <span className="pill ok">final</span> : passed ? <span className="pill bad">auszuwerten</span> : <span className="pill open">offen</span>} · Spiele {matches.filter(m => m.finished).length}/{matches.length}</div></div>
       <div className="steps">
-        <span className={lineupsSaved >= b.managers.length ? 'done' : ''}>1 Blog {lineupsSaved}/{b.managers.length} Aufst. · {nBids} Gebote</span>
+        <span className={lineupsSaved >= b.managers.length && (round.bids_resolved || !nBids) ? 'done' : ''}>1 Aufstellungen {lineupsSaved}/{b.managers.length} · Gebote {round.bids_resolved ? 'aufgelöst' : nSealed ? nSealed + ' verdeckt' : nBids ? nBids : 'keine'}</span>
         <span className={impOk ? 'done' : ''}>2 kicker {inbox?.n || 0}/9{inbox?.elf ? ' + Elf' : ''}{kickerLog ? ' · importiert' : ''}</span>
-        <span className={round.bids_resolved ? 'done' : nBids ? '' : 'skip'}>3 Gebote {round.bids_resolved ? 'aufgelöst' : nSealed ? nSealed + ' offen' : 'keine'}</span>
-        <span className={round.status === 'final' ? 'done' : ''}>4 Abschluss {round.status === 'final' ? 'final' : check.problems.length ? check.problems.length + ' Problem(e)' : 'bereit'}</span></div>
+        <span className={round.status === 'final' ? 'done' : ''}>3 Abschluss {round.status === 'final' ? 'final' : check.problems.length ? check.problems.length + ' Problem(e)' : 'bereit'}</span></div>
     </div>
 
-    <div className="card"><div className="eyebrow">Schritt 1</div>{step(1, 'Blog einfügen', null, <span className="mini">Aufstellungen und Gebote zusammen</span>)}
-      <p className="mini">Blog öffnen (auch die Handy-Ansicht), alles markieren, kopieren, einfügen. Die Vorschau zeigt je Manager, was erkannt wurde und was sich gegenüber der App ändert – im Zweifel gilt der Blog. Gebote werden verdeckt gespeichert und in Schritt 3 aufgelöst; die Posts landen im <a href="/archiv">Archiv</a>.</p>
-      <RBlogPaste roundId={round.id} log={blogLog} /></div>
-
-    <div className="card"><div className="eyebrow">Schritt 2</div>{step(2, 'kicker-Seiten importieren', null, <span className="mini">nach den Spielen</span>)}
-      <p className="mini">Die neun Seiten «Aufstellung» und die «Elf des Tages» vom Handy senden (Skript) oder unten als Quelltext einfügen, dann importieren. Jeder aufgestellte Spieler muss danach «Startelf», «eingewechselt» oder «Bank» sein.</p>
-      <RKicker roundId={round.id} lastLog={kickerLog} inbox={inbox ? JSON.parse(JSON.stringify(inbox)) : null} /></div>
-
-    <div className="card"><div className="eyebrow">Schritt 3</div>{step(3, `Gebote auflösen (${bids.length})`, null, round.bids_resolved ? <span className="pill ok">aufgelöst</span> : nSealed ? <span className="pill open">{nSealed} verdeckt</span> : <span className="mini">keine Gebote</span>)}
+    <div className="card"><div className="eyebrow">Schritt 1</div>{step(1, 'Aufstellungen und Gebote', null, <span className="mini">aus der App oder vom Blog – wenn beides da ist, gilt der Blog</span>)}
+      <p className="mini">Was Manager in der App eingeben, ist schon da. Den Blog einfügen (alles markieren, kopieren, auch die Handy-Ansicht): die Vorschau zeigt je Manager, was erkannt wurde und was sich gegenüber der App ändert. Danach nach der Deadline die Gebote auflösen – das bucht Käufe und Entlassungen, passt die Kader an und setzt Eventualaufträge in die Aufstellungen. Fehlende Aufstellungen gelten wie in der Vorrunde.</p>
+      <RBlogPaste roundId={round.id} log={blogLog} />
+      <div className="row between" style={{ marginTop: 14 }}><h3 style={{ margin: 0 }}>Gebote auflösen ({bids.length})</h3>{round.bids_resolved ? <span className="pill ok">aufgelöst</span> : nSealed ? <span className="pill open">{nSealed} verdeckt</span> : <span className="mini">keine Gebote</span>}</div>
       {bids.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Nr.</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventual für</th><th className="l">Status</th></tr></thead><tbody>{bids.map(x => <tr key={x.id}><td className="l">{x.manager_name}</td><td>{x.priority || 1}{x.max_wins > 1 ? <span className="mini"> / max. {x.max_wins}</span> : ''}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{x.price}</td><td className="l">{x.release_name || <span className="mini">aus Liste</span>}</td><td className="l">{x.swap_name || '–'}</td><td className="l">{x.status === 'sealed' ? <span className="pill grey">verdeckt</span> : x.status === 'won' ? <span className="pill ok">Zuschlag</span> : x.status === 'invalid' ? <span className="pill bad">ungültig</span> : <span className="pill grey">kein Zuschlag</span>} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : null}
       <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} /></div>
 
-    <div className="card" style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Schritt 4</div>{step(4, 'Prüfen und abschliessen', null, <span className={`pill ${check.problems.length ? 'bad' : check.warnings.length ? 'open' : 'ok'}`}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Rundencheck ok'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</span>)}
+    <div className="card"><div className="eyebrow">Schritt 2</div>{step(2, 'kicker-Daten übernehmen', null, <span className="mini">nach den Spielen – per Skript oder von Hand</span>)}
+      <p className="mini">Die neun Seiten «Aufstellung» und die «Elf des Tages» vom Handy senden (Skript) oder unten als Quelltext einfügen, dann importieren. Einsätze, Assists, Tore, Karten, Team der Runde und Spieler des Tages kommen von dort; Punkte und Zu-null aus den Resultaten. Jeder aufgestellte Spieler muss danach «Startelf», «eingewechselt» oder «Bank» sein.</p>
+      <RKicker roundId={round.id} lastLog={kickerLog} inbox={inbox ? JSON.parse(JSON.stringify(inbox)) : null} /></div>
+
+    <div className="card" style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Schritt 3</div>{step(3, 'Auswerten und abschliessen', null, <span className={`pill ${check.problems.length ? 'bad' : check.warnings.length ? 'open' : 'ok'}`}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Rundencheck ok'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</span>)}
       {check.problems.length > 0 && <ul style={{ margin: '6px 0', paddingLeft: 18 }}>{check.problems.map((x, i) => <li key={i} className="delta down">{x.text}</li>)}</ul>}
       {check.warnings.length > 0 && <ul className="small" style={{ margin: '4px 0', paddingLeft: 18 }}>{check.warnings.map((x, i) => <li key={i}>{x.text}</li>)}</ul>}
       {check.infos.length > 0 && <div className="mini">{check.infos.map(x => x.text).join(' · ')}</div>}

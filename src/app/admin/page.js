@@ -38,7 +38,7 @@ export default async function Admin() {
   const blogUrl = process.env.BLOG_URL || 'https://rotisseryleaguebundesliga.blogspot.com';
   return (<>
     <div className="card"><div className="eyebrow">Admin</div><h2>Spieltage auswerten</h2>
-      <div className="steps" style={{ marginTop: 4, marginBottom: 8 }}><span>1 <a href={blogUrl} target="_blank" rel="noreferrer">Blog</a> einfügen (Aufstellungen + Gebote)</span><span>2 kicker-Seiten senden und importieren</span><span>3 Gebote auflösen</span><span>4 Rundencheck, abschliessen</span></div>
+      <div className="steps" style={{ marginTop: 4, marginBottom: 8 }}><span>1 Aufstellungen und Gebote (App oder <a href={blogUrl} target="_blank" rel="noreferrer">Blog</a>; Blog gilt), Gebote auflösen</span><span>2 kicker-Daten per Skript oder von Hand</span><span>3 Auswerten und abschliessen</span></div>
       <div className="tbl"><table><thead><tr><th className="l">Spieltag</th><th className="l">Deadline</th><th className="l">Status</th><th>Aufst.</th><th>Gebote</th><th className="l">kicker</th><th className="l">Check</th><th className="l"></th></tr></thead><tbody>
         {show.map(r => { const passed = r.deadline && new Date(r.deadline).getTime() < now; const isOpen = open && open.id === r.id;
           const ib = inboxRaw.find(x => x.matchday === r.matchday && r.type === 'regulaer'); const imp = importOf(r); const c = imp?.counts || {}; const bad = (c.nicht_gefunden || 0) + (c.spiel_fehlt || 0) + (c.verein_unbekannt || 0) + (imp?.errors?.length || 0);
