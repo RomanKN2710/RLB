@@ -24,3 +24,24 @@ describe('posProblems', () => {
     const out = posProblems(e, P); assert.ok(out.some(x => /Zu wenige Spieler: 7/.test(x))); assert.ok(out.some(x => /s1: als M aufgestellt/.test(x))); assert.equal(posCheck(e, P).ok, false);
   });
 });
+
+import { resolveBids } from '../src/lib/rules.js';
+describe('resolveBids mit Reihenfolge und Limit', () => {
+  const players = { 'r-x': { id: 'r-x', manager_id: 1, status: 'active' }, 'd-y': { id: 'd-y', manager_id: 2, status: 'active' }, 'd-z': { id: 'd-z', manager_id: 2, status: 'active' } };
+  const ctx = { players, budgetLeft: () => 50, managerName: m => 'M' + m, tiebreak: [1, 2], prevReleases: [] };
+  const bid = (id, manager_id, player_name, price, priority, extra = {}) => ({ id, manager_id, player_name, club: 'Bremen', pos: 'M', price, priority, max_wins: 1, release_player_id: null, release_order: manager_id === 1 ? ['r-x'] : ['d-y', 'd-z'], ...extra });
+  test('Alternativen: erster Zuschlag genügt, zweites Gebot fällt weg und geht an den Nächsten', () => {
+    const out = resolveBids([bid(1, 1, 'Dinkci', 2, 1), bid(2, 1, 'Maina', 2, 2), bid(3, 2, 'Maina', 2, 1)], ctx);
+    assert.equal(out.find(b => b.id === 1).status, 'won'); assert.equal(out.find(b => b.id === 2).status, 'lost'); assert.match(out.find(b => b.id === 2).reason, /Limit/);
+    assert.equal(out.find(b => b.id === 3).status, 'won', 'Maina geht an Manager 2, weil Manager 1 sein Limit erreicht hat');
+  });
+  test('überboten beim ersten Gebot: zweite Wahl zählt', () => {
+    const out = resolveBids([bid(1, 1, 'Dinkci', 2, 1), bid(2, 1, 'Maina', 2, 2), bid(3, 2, 'Dinkci', 5, 1)], ctx);
+    assert.equal(out.find(b => b.id === 1).status, 'lost'); assert.equal(out.find(b => b.id === 2).status, 'won'); assert.equal(out.find(b => b.id === 3).status, 'won');
+  });
+  test('Limit 2: zwei Zuschläge, Entlassung aus der Liste gilt als vorhanden', () => {
+    const out = resolveBids([bid(1, 2, 'A', 3, 1, { max_wins: 2 }), bid(2, 2, 'B', 3, 2, { max_wins: 2 }), bid(3, 2, 'C', 3, 3, { max_wins: 2 })], ctx);
+    assert.deepEqual(out.map(b => b.status), ['won', 'won', 'lost']);
+  });
+  test('ohne Entlassung ungültig', () => { const out = resolveBids([bid(1, 1, 'Dinkci', 2, 1, { release_order: [] })], ctx); assert.equal(out[0].status, 'invalid'); });
+});

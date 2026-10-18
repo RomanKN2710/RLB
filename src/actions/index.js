@@ -8,6 +8,7 @@ import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines, importGoals } from '@/lib/oldb';
 import { importPages, playerMatches, ensureColumns as ensureKickerColumns } from '@/lib/kicker';
 import { parseLineupText } from '@/lib/aufstellungstext';
+import { parseBidText } from '@/lib/gebotetext';
 import * as Blog from '@/lib/blog-archiv';
 import { waitUntil } from '@vercel/functions';
 import { createReport as berichtCreate } from '@/lib/bericht';
@@ -160,8 +161,8 @@ export const submitBidAction = wrap(async (prev, fd) => {
   const rel = await one('select * from players where id=$1', [bid.release]); if (!rel || rel.manager_id !== managerId || rel.status !== 'active') return fail('Zu entlassender Spieler fehlt (Kader bleibt 22, Ziff. 7.1)');
   const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1) and ($2 = '' or p.club is null or p.club=$2)", [bid.player_name, bid.club]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
   if (bid.swap) { const lu = (await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId])) || (await D.prevLineup(open, managerId)); if (!lu || !lu.entries[bid.swap]) return fail('Eventualauftrag: der zu ersetzende Spieler steht nicht in deiner Aufstellung'); }
-  await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now())
-    on conflict(round_id,manager_id) do update set player_name=excluded.player_name, club=excluded.club, pos=excluded.pos, price=excluded.price, release_player_id=excluded.release_player_id, swap_out_player_id=excluded.swap_out_player_id, status='sealed', reason=null, created_at=now()`,
+  await ensureBidColumns(); await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]);
+  await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,source) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),1,1,'app')`,
     [open.id, managerId, bid.player_name, bid.club || null, bid.pos, bid.price, bid.release, bid.swap || null]);
   await audit(u.id, 'bid', { roundId: open.id, managerId }); rev();
   return ok('Gebot verdeckt gespeichert');
@@ -312,8 +313,65 @@ export const addCorrectionAction = wrap(async (roundId, managerId, text, delta) 
 export const deleteCorrectionAction = wrap(async (id) => { await requireAdmin(); await q('delete from corrections where id=$1', [id]); rev(); return ok('Gelöscht'); });
 
 /* ---------- Admin: Gebote auflösen (Ziff. 7) ---------- */
-export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); const round = await D.roundById(roundId); const b = await D.base();
-  const bids = await q('select * from bids where round_id=$1', [roundId]); const list = await resolve(round, b, bids); return ok('Vorschau', { list }); });
+export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); await ensureBidColumns(); const round = await D.roundById(roundId); const b = await D.base();
+  const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await resolve(round, b, bids); return ok('Vorschau', { list: list.map(x => ({ ...x, manager_name: b.managerName[x.manager_id], release_name: (b.players[x.release_player_id] || {}).name || null, swap_name: (b.players[x.swap_out_player_id] || {}).name || null })) }); });
+/** Gebote-Tabelle um Reihenfolge, Limit und Entlassungsliste erweitern (einmalig, idempotent). */
+let bidColsReady = false;
+async function ensureBidColumns() { if (bidColsReady) return;
+  await q("alter table bids add column if not exists priority int not null default 1"); await q("alter table bids add column if not exists max_wins int not null default 1");
+  await q("alter table bids add column if not exists release_order text[] not null default '{}'"); await q("alter table bids add column if not exists source text");
+  await q("alter table bids drop constraint if exists bids_round_id_manager_id_key"); await q("create unique index if not exists bids_round_manager_priority on bids(round_id, manager_id, priority)"); bidColsReady = true; }
+/* ---------- Admin: Gebote aus eingefuegtem Text (Blog: weitergeleitete Gebots-Mails) ---------- */
+async function parseBidPaste(roundId, text) {
+  await ensureBidColumns(); const round = await D.roundById(roundId); if (!round) throw new Error('Runde?'); const b = await D.base();
+  const kaders = {}; for (const m of b.managers) kaders[m.id] = (await D.kader(m.id, round.number)).map(p => ({ ...p, alias: [] }));
+  const parsed = parseBidText(text, b.managers.map(m => ({ id: m.id, name: m.name })), id => kaders[id], { roundNumbers: [round.number, round.matchday].filter(Boolean) });
+  // Verein und Position aus dem Spielerpool ergaenzen, Budget und Ziff. 7.3 pruefen
+  const pool = await D.freeAgents(b); const { playerMatches } = await import('@/lib/kicker');
+  const prevRound = await one('select * from rounds where number < $1 order by number desc limit 1', [round.number]);
+  const prevRel = prevRound ? await q("select * from transfers where type='entlassung' and round_id=$1", [prevRound.id]) : [];
+  for (const x of parsed.blocks) {
+    const budget = await D.budgetLeft(x.managerId); x.budget = budget;
+    for (const bid of x.bids) {
+      const hitsAll = pool.filter(p => (!bid.club || p.club === bid.club) && (playerMatches(p.slug, p.name, bid.player_name) || R.norm(p.name) === R.norm(bid.player_name) || (p.first && R.norm(p.first + ' ' + p.name) === R.norm(bid.player_name))));
+      const hits = hitsAll.filter((p, i) => hitsAll.findIndex(x => x.name === p.name && x.club === p.club) === i);   // doppelte Pool-Eintraege (gleicher Name und Verein) zaehlen einmal
+      const hit = hits.length === 1 ? hits[0] : hits.filter(p => p.club === bid.club).length === 1 ? hits.find(p => p.club === bid.club) : null;
+      if (hit) { bid.poolName = hit.name; bid.club = bid.club || hit.club; bid.pos = bid.pos || hit.pos; bid.taken = hit.taken; bid.pool = `${hit.positions} ${hit.name}, ${hit.club}`; }
+      else bid.poolNote = hits.length > 1 ? `mehrere im Pool: ${hits.map(p => p.name + ' (' + p.club + ')').join(', ')}` : 'nicht im Pool (noch kein Einsatz oder Schreibweise prüfen)';
+      if (bid.taken) x.problems.push(`${bid.player_name} steht schon in einem RLB-Kader`);
+      if (!bid.club) x.problems.push(`${bid.player_name}: Verein unbekannt`); if (!bid.pos) x.problems.push(`${bid.player_name}: Position unbekannt`);
+      if (!Number.isInteger(bid.price) || bid.price < R.MIN_BID) x.problems.push(`${bid.player_name}: Gebot ${bid.price} unter Mindestgebot ${R.MIN_BID}`);
+      if (bid.price > budget) x.problems.push(`${bid.player_name}: Gebot ${bid.price} über Kaufbudget ${budget} (7.4)`);
+      const pr = prevRel.find(t => R.norm(t.player_name) === R.norm(bid.player_name));
+      if (pr && pr.manager_id === x.managerId) x.problems.push(`${bid.player_name}: in der Vorrunde selbst entlassen, erst nächste Runde (7.3)`);
+      else if (pr && bid.price < Number(pr.price)) x.problems.push(`${bid.player_name}: Mindestgebot ${Number(pr.price)} = alter Wert (7.3)`);
+    }
+    x.ok = x.problems.length === 0;
+    const cur = await q("select * from bids where round_id=$1 and manager_id=$2 order by priority", [round.id, x.managerId]);
+    x.bisher = cur.length ? cur.map(c => `${c.priority}. ${c.pos} ${c.player_name} ${c.price}${c.status !== 'sealed' ? ' (' + c.status + ')' : ''}`).join(', ') : 'noch kein Gebot';
+    x.resolved = cur.some(c => c.status !== 'sealed');
+  }
+  return { round, b, parsed };
+}
+export const previewBidTextAction = wrap(async (roundId, text) => { await requireAdmin(); const { parsed } = await parseBidPaste(roundId, text);
+  return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
+export const applyBidTextAction = wrap(async (roundId, text) => { const u = await requireAdmin(); const { round, parsed } = await parseBidPaste(roundId, text);
+  if (round.bids_resolved) return fail('Gebote dieser Runde sind schon aufgelöst');
+  const log = []; let n = 0;
+  for (const x of parsed.blocks) {
+    if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})`); continue; }
+    if (x.resolved) { log.push(`${x.name}: Gebote schon aufgelöst, nicht geändert`); continue; }
+    await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [round.id, x.managerId]);
+    const order = x.releases.map(p => p.id);
+    for (const bd of x.bids) await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,source) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,'blog')`,
+      [round.id, x.managerId, bd.poolName || bd.player_name, bd.club, bd.pos, bd.price, bd.release?.id || null, bd.swapOut?.id || null, bd.priority, x.maxWins, order]);
+    n++; log.push(`${x.name}: ${x.bids.length} Gebot(e) gespeichert (max. ${x.maxWins}): ${x.bids.map(bd => `${bd.priority}. ${bd.pos} ${bd.poolName || bd.player_name} ${bd.price}${bd.release ? ' −' + bd.release.name : ''}${bd.swapOut ? ' ⇄' + bd.swapOut.name : ''}`).join(', ')}${order.length ? ' · Entlassungen: ' + x.releases.map(p => p.name).join(', ') : ''}`);
+  }
+  if (parsed.unclear.length) log.push('Unklar: ' + parsed.unclear.join('; '));
+  const prevLog = (await getSetting(`bid_paste_${roundId}`)) || { runs: [] };
+  await setSetting(`bid_paste_${roundId}`, { runs: [...(prevLog.runs || []).slice(-9), { at: new Date().toISOString(), by: u.name || u.email, n, log }] });
+  await audit(u.id, 'bid_paste', { roundId, n, log }); rev();
+  return ok(`Gebote von ${n} Manager(n) übernommen · ` + log.join(' · ')); });
 async function resolve(round, b, bids) {
   const budgets = {}; for (const m of b.managerIds) budgets[m] = await D.budgetLeft(m);
   const prevRound = await one('select * from rounds where number < $1 order by number desc limit 1', [round.number]);
@@ -322,12 +380,16 @@ async function resolve(round, b, bids) {
   return R.resolveBids(bids.map(x => ({ ...x, price: Number(x.price) })), { players: b.players, budgetLeft: m => budgets[m], managerName: m => b.managerName[m], tiebreak, prevReleases });
 }
 export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (round.bids_resolved) return fail('Bereits aufgelöst'); const b = await D.base();
-  const bids = await q("select * from bids where round_id=$1", [roundId]); const list = await resolve(round, b, bids);
+  await ensureBidColumns(); const bids = await q("select * from bids where round_id=$1 order by manager_id, priority", [roundId]); const list = await resolve(round, b, bids);
+  const usedRel = new Set();
   await tx(async x => {
     for (const bid of list) {
       await x.q('update bids set status=$1, reason=$2 where id=$3', [bid.status, bid.reason || null, bid.id]);
       if (bid.status !== 'won') continue;
-      const m = bid.manager_id, rel = b.players[bid.release_player_id];
+      // Entlassung: je Gebot genannt, sonst die naechste freie aus der Reihenfolge-Liste des Managers
+      const m = bid.manager_id; let relId = bid.release_player_id; if (!relId) relId = (bid.release_order || []).find(pid => !usedRel.has(pid) && b.players[pid] && b.players[pid].status === 'active' && b.players[pid].manager_id === m) || null;
+      if (relId) { usedRel.add(relId); if (!bid.release_player_id) await x.q('update bids set release_player_id=$1 where id=$2', [relId, bid.id]); }
+      const rel = b.players[relId];
       const id = `${b.managerName[m]}-${bid.player_name}-${round.number}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
       const contract = bid.price >= R.CONTRACT_MIN ? '1J' : null;
       // Positionen aus dem Spielerpool: Grundposition laut kicker-Kader, Zusatzpositionen aus Startaufstellungen dieser Saison (Ziff. 5.2)

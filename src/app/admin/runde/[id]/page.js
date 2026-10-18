@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { q } from '@/lib/db';
 import { fmtDt } from '@/components/ui';
-import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker, LineupPaste as RLineupPaste } from './RoundTools';
+import { Header as RHeader, Bids as RBids, Results as RResults, Goals as RGoals, Kicker as RKicker, LineupPaste as RLineupPaste, BidPaste as RBidPaste } from './RoundTools';
 import { getSetting } from '@/lib/db';
 import { status as inboxStatus } from '@/lib/kicker-inbox';
 import { roundCheck } from '@/lib/rundencheck';
@@ -37,7 +37,8 @@ export default async function AdminRunde({ params }) {
         <div className="eyebrow">Torschützen (OpenLigaDB)</div><div className="small">{matches.flatMap(m => (m.goals || []).map((g, i) => <span key={m.id + '-' + i} className={g.ownGoal ? 'muted' : ''}>{g.name}{g.ownGoal ? ' (ET)' : ''}{g.penalty ? ' (E)' : ''} {g.minute}&#39;</span>)).reduce((acc, el, i) => acc.concat(i ? [', ', el] : [el]), [])}</div>
         <RGoals roundId={round.id} /></div>
       <div className="card"><h3>Gebote ({bids.length})</h3>{bids.length ? <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventual für</th><th className="l">Status</th></tr></thead><tbody>{bids.map(x => <tr key={x.id}><td className="l">{x.manager_name}</td><td className="l">{x.pos} {x.player_name} <span className="mini">{x.club}</span></td><td>{x.price}</td><td className="l">{x.release_name}</td><td className="l">{x.swap_name || '–'}</td><td className="l">{x.status} <span className="mini">{x.reason}</span></td></tr>)}</tbody></table></div> : <div className="mini">keine Gebote</div>}
-        <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} /></div>
+        <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} />
+      <h3 style={{ marginTop: 12 }}>Gebote aus dem Blog einfügen</h3><RBidPaste roundId={round.id} /></div>
     </div>
     <div className="adminbox"><h3>Aufstellungen aus dem Blog einfügen</h3><p className="mini">Für Manager, die ihre Aufstellung im Blog statt in der App abgeben. Der Admin darf auch nach der Deadline speichern; hat ein Manager schon in der App gespeichert, zeigt die Vorschau den Unterschied, und der Blog hat Vorrang. Unzulässige Aufstellungen (Ziff. 5.1) werden nicht übernommen, dann gilt die Vorrunde.</p><RLineupPaste roundId={round.id} />
       {pasteLog?.runs?.length > 0 && <details style={{ marginTop: 8 }}><summary className="mini">Bisherige Übernahmen aus dem Blog ({pasteLog.runs.length})</summary>

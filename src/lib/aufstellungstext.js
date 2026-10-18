@@ -6,15 +6,15 @@ import { norm, positionsOf, posProblems, fitPositions } from './rules.js';
 
 const POSMAP = { t: 'T', tw: 'T', tor: 'T', torwart: 'T', goalie: 'T', v: 'V', iv: 'V', av: 'V', lv: 'V', rv: 'V', abw: 'V', abwehr: 'V', verteidiger: 'V', verteidigung: 'V', m: 'M', mf: 'M', zm: 'M', dm: 'M', om: 'M', lm: 'M', rm: 'M', mittelfeld: 'M', s: 'S', st: 'S', sturm: 'S', stuermer: 'S', sturmer: 'S', a: 'S', angriff: 'S', la: 'S', ra: 'S' };
 // Vereinsworte, die hinter dem Spielernamen stehen koennen ("Kim Bayern München", "Moore Köln")
-const CLUBWORDS = new Set(['bayern', 'muenchen', 'munchen', 'union', 'berlin', 'hsv', 'hamburg', 'hamburger', 'frankfurt', 'eintracht', 'dortmund', 'borussia', 'bvb', 'leipzig', 'rb', 'bremen', 'werder', 'stuttgart', 'vfb', 'freiburg', 'augsburg', 'koeln', 'koln', 'hoffenheim', 'tsg', 'leverkusen', 'bayer', 'mainz', 'elversberg', 'paderborn', 'schalke', 'gladbach', 'moenchengladbach', 'monchengladbach', 'fc', 'sc', 'sv', 'fsv', 'vfl', 'fca']);
+export const CLUBWORDS = new Set(['bayern', 'muenchen', 'munchen', 'union', 'berlin', 'hsv', 'hamburg', 'hamburger', 'frankfurt', 'eintracht', 'dortmund', 'borussia', 'bvb', 'leipzig', 'rb', 'bremen', 'werder', 'stuttgart', 'vfb', 'freiburg', 'augsburg', 'koeln', 'koln', 'hoffenheim', 'tsg', 'leverkusen', 'bayer', 'mainz', 'elversberg', 'paderborn', 'schalke', 'gladbach', 'moenchengladbach', 'monchengladbach', 'fc', 'sc', 'sv', 'fsv', 'vfl', 'fca']);
 // Fuellwoerter in Wechselzeilen ("X kommt rein für Y", "Y wird ausgewechselt")
 const FILLER = new Set(['kommt', 'kommen', 'rein', 'raus', 'wird', 'werden', 'ersetzt', 'eingewechselt', 'ausgewechselt', 'spielt', 'wechsle', 'wechsel', 'tausche', 'tausch', 'neu']);
-const words = s => String(s || '').split(/[^\p{L}\p{N}.'-]+/u).filter(Boolean);
+export const words = s => String(s || '').split(/[^\p{L}\p{N}.'-]+/u).filter(Boolean);
 /** Positionsangabe "V/M" -> ['V','M'] */
-const posList = s => String(s || '').split(/[\/|,]/).map(x => POSMAP[norm(x)]).filter(Boolean);
+export const posList = s => String(s || '').split(/[\/|,]/).map(x => POSMAP[norm(x)]).filter(Boolean);
 
 /** Einen Schnipsel ("V: Anton", "3 V/M Caci Mainz", "Anton (M)", "El Aynaoui (M, Leipzig)") in {pos:[...], name} zerlegen. */
-function chunkOf(raw, clubWords) {
+export function chunkOf(raw, clubWords) {
   let s = raw.replace(/^[\s\-–•*·>#]+/, '').replace(/^\d+[.)]?\s+/, '').trim(); let pos = [];
   const suf = s.match(/\(\s*([A-Za-zÄÖÜäöü\/]{1,12})\b[^)]*\)\s*$/); if (suf && posList(suf[1]).length) { pos = posList(suf[1]); s = s.slice(0, suf.index).trim(); }
   else s = s.replace(/\([^)]*\)/g, ' ').trim();
@@ -44,12 +44,13 @@ export function findPlayer(name, kader) {
 }
 
 const NOISE = /^(hi|hallo|hoi|salut|public|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|januar|februar|maerz|märz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|aufstellung|auswechslung|einwechslung|runde|spieltag|wechsel|system|update|sollte|erhalte|falls/i;
-const SIG = /^(freundliche gr|viele gr|liebe gr|vielen dank|besten dank|danke|gruss|grüss|gruess|merci|lg\b|mfg|vg\b|this e-?mail|---|uploaded image|eingestellt von)/i;
+export const SIG = /^(freundliche gr|viele gr|liebe gr|vielen dank|besten dank|danke|gruss|grüss|gruess|merci|lg\b|mfg|vg\b|this e-?mail|---|uploaded image|eingestellt von)/i;
 const UI = /^(Keine Kommentare|\d+ Kommentare?|Kommentar veröffentlichen|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|Auf Twitter teilen|In Facebook freigeben|Auf Pinterest teilen|Labels?:|Neuerer Post|Älterer Post|Startseite|Abonnieren|Posts? kommentieren|Share|Teilen)\b/i;
-const ENDE = /^Eingestellt von\s+(.+?)\s+um\s+(\d{1,2}):(\d{2})/i;
+const ENDE = /^(?:Eingestellt von\s+)?(\p{L}[\p{L}\s.'-]{0,40}?)\s+um\s+(\d{1,2}):(\d{2})\s*$/iu;
 // Spitznamen und buergerliche Namen, wie sie im Blog vorkommen (Blog-Konto MARKADONA postet fuer alle: kein Rueckschluss)
-const NICK = { rofe: 'Röfe', rolf: 'Röfe', stauffer: 'Röfe', daniel: 'Dani', allenspach: 'Dani', patrick: 'Pädi', duss: 'Pädi', fehlmann: 'Mark', lenz: 'David', knipprath: 'Roman', berisha: 'Arbi', berishaa: 'Arbi', peter: 'René' };
+const NICK = { rofe: 'Röfe', rolf: 'Röfe', stauffer: 'Röfe', daniel: 'Dani', allenspach: 'Dani', patrick: 'Pädi', duss: 'Pädi', fehlmann: 'Mark', lenz: 'David', knipprath: 'Roman', berisha: 'Arbi', berishaa: 'Arbi', bance: 'Arbi', aristide: 'Arbi', peter: 'René' };
 const MONTHS = { januar: 1, january: 1, februar: 2, february: 2, maerz: 3, marz: 3, march: 3, april: 4, mai: 5, may: 5, juni: 6, june: 6, juli: 7, july: 7, august: 8, september: 9, oktober: 10, october: 10, november: 11, dezember: 12, december: 12 };
+export { dateLine };
 /** Datumszeile des Blogs ("Freitag, 18. September 2026" oder "Friday, September 18, 2026") -> "2026-09-18" */
 function dateLine(l) {
   const de = l.match(/^(?:\p{L}+,\s*)?(\d{1,2})\.\s*(\p{L}+)\s+(\d{4})$/u), en = l.match(/^(?:\p{L}+,\s*)?(\p{L}+)\s+(\d{1,2}),\s*(\d{4})$/u);
@@ -66,7 +67,7 @@ function zurich(date, hh, mm) {
 /** Text in Posts/Bloecke teilen: Blog-Posts enden mit "Eingestellt von … um …" (Blog: neuester Post oben);
     sonst gilt jede kurze Zeile mit Managernamen als Blockanfang (Chat/Mail: Reihenfolge wie geschrieben).
     Liefert die Bloecke in zeitlicher Reihenfolge (aeltester zuerst), damit ein «Update» den frueheren Post ergaenzt. */
-function splitBlocks(lines, managers, kaderOf) {
+export function splitBlocks(lines, managers, kaderOf) {
   const mgrByNorm = {}; managers.forEach(m => { mgrByNorm[norm(m.name)] = m; });
   const byName = n => mgrByNorm[norm(n)] || (NICK[norm(n)] && mgrByNorm[norm(NICK[norm(n)])]) || null;
   // Namen auch aus Mail-Adressen lesen (rene.peter@…, mike_buehler@…): nur Buchstabenfolgen zaehlen

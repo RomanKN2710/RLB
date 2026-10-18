@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewLineupTextAction, applyLineupTextAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
+import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBidTextAction, applyBidTextAction, previewLineupTextAction, applyLineupTextAction, importKickerHtmlAction, unlockResultsAction, importGoalsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, saveResultsAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -62,7 +62,7 @@ export function Bids({ roundId, resolved, passed }) {
   const { msg, pending, run } = useRun(); const [preview, setPreview] = useState(null);
   return (<div className="stack" style={{ marginTop: 8 }}>
     {resolved ? <span className="pill ok">Gebote aufgelöst und veröffentlicht</span> : <div className="row"><button className="sm sec" disabled={pending} onClick={() => run(async () => { const r = await previewBidsAction(roundId); if (r.ok) setPreview(r.list); return r; })}>Vorschau Auflösung</button>{preview && <button className="sm komm" disabled={pending} onClick={() => run(() => applyBidsAction(roundId))}>Zuteilen &amp; veröffentlichen</button>}{!passed && <span className="mini">Deadline noch nicht vorbei.</span>}<M msg={msg} /></div>}
-    {preview && <table><tbody>{preview.map(b => <tr key={b.id}><td className="l">{b.manager_id}</td><td className="l">{b.player_name}</td><td>{b.price}</td><td className="l">{b.status} <span className="mini">{b.reason}</span></td></tr>)}</tbody></table>}
+    {preview && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th>Nr.</th><th className="l">Spieler</th><th>CHF</th><th className="l">Entlässt</th><th className="l">Eventualauftrag</th><th className="l">Ergebnis</th></tr></thead><tbody>{preview.map(b => <tr key={b.id}><td className="l">{b.manager_name || b.manager_id}</td><td>{b.priority || 1}{b.max_wins > 1 ? <span className="mini"> / max. {b.max_wins}</span> : ''}</td><td className="l">{b.pos} {b.player_name} <span className="mini">{b.club}</span></td><td>{b.price}</td><td className="l">{b.release_name || <span className="mini">aus Liste</span>}</td><td className="l">{b.swap_name || ''}</td><td className="l"><span className={`pill ${b.status === 'won' ? 'ok' : b.status === 'invalid' ? 'bad' : 'grey'}`}>{b.status === 'won' ? 'Zuschlag' : b.status === 'invalid' ? 'ungültig' : 'kein Zuschlag'}</span> <span className="mini">{b.reason}</span></td></tr>)}</tbody></table></div>}
     <p className="mini">Zuteilen bucht Kauf, Entlassung (zählt ab dieser Runde nicht mehr), Vertragspflicht ab 20 und setzt Eventualaufträge in die Aufstellung (gratis). Regelwerk 7.1: Bekanntgabe nach der Runde; technisch jederzeit nach der Deadline möglich.</p>
   </div>);
 }
@@ -114,6 +114,24 @@ export function Kicker({ roundId, lastLog, inbox }) { const { msg, pending, run 
         if (bytes > 3.5e6) return { ok: false, msg: `Auch ausgedünnt noch ${(bytes / 1e6).toFixed(1)} MB – bitte in zwei Durchgängen einfügen.` };
         const r = await importKickerHtmlAction(roundId, teile, eleven, unlock); if (r.ok) { setH1(''); setH3(''); } return r;
       })}>In den Eingang legen und importieren</button></div></details>
+  </div>); }
+
+/* Gebote aus dem Blog (weitergeleitete Gebots-Mails): einfuegen, Vorschau, als verdeckte Gebote speichern. */
+export function BidPaste({ roundId }) { const { msg, pending, run } = useRun(); const [text, setText] = useState(''); const [prev, setPrev] = useState(null);
+  return (<div className="stack" style={{ marginTop: 8 }}>
+    <p className="mini">Die Gebots-Posts aus dem Blog (weitergeleitete Mails) hier einfügen – gern zusammen mit den Aufstellungs-Posts, die werden ignoriert. Verstanden werden Gebote in Reihenfolge («Biete für max. 3 Spieler», «19.- für Doué», «M Dinkci, Bremen CHF 2.00», «Mensah, Köln, V, 3 und entlasse Lerma»), Entlassungen je Gebot («Dafür entlasse ich») oder als Liste («entlasse in folgender Reihenfolge») und Eventualaufträge («wechsle ich für Suzuki ein»). Ohne Angabe gilt: so viele Käufe, wie Entlassungen genannt sind. Beim Auswerten sind die Gebote eines Managers Alternativen in dieser Reihenfolge – hat er sein Limit erreicht, fallen die weiteren weg und die Spieler gehen an die Nächsten.</p>
+    <textarea rows={8} placeholder={'Fwd: Fw: Gebot René R6\n…\nIch biete in folgender Reihenfolge für:\nM Dinkci, Bremen CHF 2.00\n…'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
+    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewBidTextAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
+      <button className="sm komm" disabled={pending || !prev || !prev.blocks.some(x => x.ok && !x.resolved)} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyBidTextAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Zulässige Gebote speichern (verdeckt)</button><M msg={msg} /></div>
+    {prev && <div className="tbl"><table><thead><tr><th className="l">Manager</th><th className="l">Gebote in Reihenfolge</th><th className="l">Entlassungen</th><th className="l">Prüfung</th><th className="l">Bisher</th></tr></thead><tbody>
+      {prev.blocks.map(x => <tr key={x.managerId}><td className="l"><b>{x.name}</b><div className="mini">{x.title}</div><div className="mini muted">max. {x.maxWins} Kauf/Käufe · Budget {x.budget}</div></td>
+        <td className="l small">{x.bids.map(b => <div key={b.priority}>{b.priority}. {b.pos || '?'} <b>{b.player_name}</b> {b.club || '?'} · CHF {b.price}{b.release && <span className="mini"> · entlässt {b.release}</span>}{b.swapOut && <span className="mini"> · rein für {b.swapOut}</span>}{b.pool && <span className="mini muted"> · Pool: {b.pool}</span>}{b.poolNote && <span className="mini delta down"> · {b.poolNote}</span>}</div>)}{x.notes.map(n => <div key={n} className="mini muted">{n}</div>)}{x.unmatched.length > 0 && <div className="mini muted">nicht zugeordnet: {x.unmatched.join(', ')}</div>}</td>
+        <td className="l small">{x.releases.length ? x.releases.join(', ') : <span className="mini">je Gebot</span>}</td>
+        <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td>
+        <td className="l mini">{x.bisher}{x.resolved && <div className="pill grey">aufgelöst – nicht änderbar</div>}</td></tr>)}
+      {prev.unclear?.length > 0 && <tr><td className="l muted" colSpan={5}>Unklar: {prev.unclear.join('; ')}</td></tr>}
+      {prev.skipped?.length > 0 && <tr><td className="l muted" colSpan={5}>Übersprungen: {prev.skipped.join('; ')}</td></tr>}
+    </tbody></table></div>}
   </div>); }
 
 /* Aufstellungen aus dem Blog: Text in einem Rutsch einfuegen, Vorschau pruefen, uebernehmen. */

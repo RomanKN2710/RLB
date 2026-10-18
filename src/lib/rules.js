@@ -141,11 +141,13 @@ export function standings(managerIds, roundsData) {
  * bids: [{manager_id, player_name, price, release_player_id, ...}], ctx: {players, budgetLeft(m), tiebreak: [managerId worst..best], prevReleases: [{manager_id, player_name, price}], kaderCount(m)}
  */
 export function resolveBids(bids, ctx) {
-  const list = bids.map(b => ({ ...b }));
+  const list = bids.map(b => ({ ...b, priority: Number(b.priority) || 1, max_wins: Number(b.max_wins) || 1 }));
+  const okRelease = pid => { const rel = ctx.players[pid]; return rel && rel.status === 'active'; };
   for (const b of list) {
-    const rel = ctx.players[b.release_player_id];
     if (b.price < MIN_BID) { b.status = 'invalid'; b.reason = `Mindestgebot ${MIN_BID}`; continue; }
-    if (!rel || rel.manager_id !== b.manager_id || rel.status !== 'active') { b.status = 'invalid'; b.reason = 'Entlassung fehlt oder ungültig (Kader 22)'; continue; }
+    // Entlassung: je Gebot genannt oder als Reihenfolge-Liste des Managers (wird beim Zuteilen der Reihe nach vergeben)
+    const relOk = b.release_player_id ? okRelease(b.release_player_id) && ctx.players[b.release_player_id].manager_id === b.manager_id : (b.release_order || []).some(pid => okRelease(pid) && ctx.players[pid].manager_id === b.manager_id);
+    if (!relOk) { b.status = 'invalid'; b.reason = 'Entlassung fehlt oder ungültig (Kader 22)'; continue; }
     if (b.price > ctx.budgetLeft(b.manager_id)) { b.status = 'invalid'; b.reason = `Budget ${ctx.budgetLeft(b.manager_id)} reicht nicht (7.4)`; continue; }
     const own = Object.values(ctx.players).find(p => p.status === 'active' && norm(p.name) === norm(b.player_name) && (!b.club || !p.club || p.club === b.club));
     if (own) { b.status = 'invalid'; b.reason = `Spieler bereits im Kader von ${ctx.managerName(own.manager_id)}`; continue; }
@@ -155,15 +157,24 @@ export function resolveBids(bids, ctx) {
       if (b.price < Number(pr.price)) { b.status = 'invalid'; b.reason = `Mindestgebot ${pr.price} = alter Wert (7.3)`; continue; }
     }
   }
-  const groups = {};
-  // Gleicher Spieler = gleicher Verein und gleicher Name; Teilnamen («El Mala» / «Said El Mala») gelten als derselbe Spieler
-  const keyOf = b => `${b.club || ''}|${norm(b.player_name)}`;
-  for (const b of list) { if (b.status === 'invalid') continue; const k = Object.keys(groups).find(g => { const [c, n] = g.split('|'); const nb = norm(b.player_name); return c === (b.club || '') && (n === nb || n.endsWith(nb) || nb.endsWith(n)); }) || keyOf(b); (groups[k] ||= []).push(b); }
-  const order = ctx.tiebreak;
-  for (const g of Object.values(groups)) {
-    g.sort((a, b) => b.price - a.price || order.indexOf(a.manager_id) - order.indexOf(b.manager_id));
-    g[0].status = 'won'; g[0].reason = g.length > 1 && g[1].price === g[0].price ? 'Gleichstand, schlechterer Tabellenplatz' : '';
-    g.slice(1).forEach(b => { b.status = 'lost'; b.reason = b.price === g[0].price ? 'Gleichstand, besserer Tabellenplatz' : 'überboten'; });
+  const order = ctx.tiebreak; const withdrawn = new Set();
+  // Gleicher Spieler = gleicher Verein und gleicher Name; Teilnamen («El Mala» / «Said El Mala») gelten als derselbe Spieler.
+  // Gebote eines Managers sind Alternativen in Reihenfolge: hat er sein Limit (max_wins) erreicht, fallen seine weiteren
+  // Gebote weg und die Spieler werden neu vergeben – so lange, bis sich nichts mehr aendert.
+  for (let iter = 0; iter < 20; iter++) {
+    const groups = {}; const keyOf = b => `${b.club || ''}|${norm(b.player_name)}`;
+    for (const b of list) { if (b.status === 'invalid' || withdrawn.has(b)) continue; const k = Object.keys(groups).find(g => { const [c, n] = g.split('|'); const nb = norm(b.player_name); return c === (b.club || '') && (n === nb || n.endsWith(nb) || nb.endsWith(n)); }) || keyOf(b); (groups[k] = groups[k] || []).push(b); }
+    for (const g of Object.values(groups)) {
+      g.sort((a, b) => b.price - a.price || order.indexOf(a.manager_id) - order.indexOf(b.manager_id));
+      g[0].status = 'won'; g[0].reason = g.length > 1 && g[1].price === g[0].price ? 'Gleichstand, schlechterer Tabellenplatz' : '';
+      g.slice(1).forEach(b => { b.status = 'lost'; b.reason = b.price === g[0].price ? 'Gleichstand, besserer Tabellenplatz' : 'überboten'; });
+    }
+    let changed = false;
+    for (const m of new Set(list.map(b => b.manager_id))) {
+      const mine = list.filter(b => b.manager_id === m && b.status !== 'invalid' && !withdrawn.has(b)).sort((a, b) => a.priority - b.priority); let wins = 0;
+      for (const b of mine) { if (wins >= b.max_wins) { withdrawn.add(b); b.status = 'lost'; b.reason = `Limit erreicht: ${b.max_wins} Zuschlag${b.max_wins > 1 ? 'e' : ''} aus früheren Geboten`; changed = true; continue; } if (b.status === 'won') wins++; }
+    }
+    if (!changed) break;
   }
   return list;
 }

@@ -125,7 +125,11 @@ create table if not exists bids (
   status text not null default 'sealed' check (status in ('sealed','won','lost','invalid')),
   reason text,
   created_at timestamptz not null default now(),
-  unique (round_id, manager_id)
+  priority int not null default 1,                 -- Reihenfolge der Gebote eines Managers (1 = erste Wahl)
+  max_wins int not null default 1,                 -- so viele Spieler will der Manager hoechstens (Ziff. 7.1: je Kauf eine Entlassung)
+  release_order text[] not null default '{}',      -- Entlassungen in Reihenfolge, wenn nicht je Gebot genannt
+  source text,                                     -- 'app' (Formular) oder 'blog' (Admin aus der Gebots-Mail)
+  unique (round_id, manager_id, priority)
 );
 
 create table if not exists trades (
