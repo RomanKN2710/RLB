@@ -49,6 +49,9 @@ export const STEPS = [
     else if (r6.status === 'final') { log.push('Spieltag 6 ist abgeschlossen – bitte von Hand prüfen'); }
     else { const u = await Blog.undoBids(userId, r6.id); log.push('Zurückgesetzt: ' + u.log.join(' · ')); const a = await Blog.applyBids(userId, r6.id); log.push('Neu aufgelöst: ' + a.log.join(' · ')); }
     await setSetting('st6_brackelmann_david', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'blog_dubletten_20261019', title: 'Blog-Archiv: Dubletten entfernt (gleicher Post, unterschiedlich langer Mail-Text), Kennung auf Titel/Zeit/Autor umgestellt', run: async () => {
+    const Archiv = await import('./blog-archiv'); const r = await Archiv.rehashAndDedupe(); const log = [`${r.removed} Dublette(n) entfernt`, ...r.log];
+    await setSetting('blog_dubletten_20261019', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

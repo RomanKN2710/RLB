@@ -24,6 +24,8 @@ export async function POST(req) {
   const stand = `Eingang ${r.status.n}/9 Spiele${r.status.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'}`;
   // Direkt importieren: die Werte stehen sofort in der Datenbank, der Admin muss nichts mehr anklicken
   if (sp.get('noimport')) return new NextResponse(`${head} gespeichert · ${stand}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
+  const { one } = await import('@/lib/db'); const rd = await one("select status from rounds where type='regulaer' and matchday=$1", [r.matchday]);
+  if (rd && rd.status === 'final') return new NextResponse(`${head} gespeichert · ${stand} · Spieltag ${r.matchday} ist abgeschlossen, nicht importiert – falls gewollt in der App «Eingang erneut importieren»`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
   try { const u = await getUser(); const imp = await importInbox(r.matchday, { userId: u ? u.id : null, auto: true });
     const probs = imp.errors.length ? ` · ${imp.errors.length} Problem(e): ${imp.errors.slice(0, 2).join(' · ')}${imp.errors.length > 2 ? ' …' : ''}` : '';
     return new NextResponse(`${head} ✓ importiert · ${stand} · ${importSummary(imp).join(', ')}${probs}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }

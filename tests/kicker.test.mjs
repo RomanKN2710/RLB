@@ -71,3 +71,10 @@ describe('parseElfDesTages auf echten kicker-Seiten (Quelltexte aus dem Eingang)
     const r = parseElfDesTages(page(4)); assert.equal(r.elf.length, 0); assert.equal(r.sdt, null); assert.equal(r.diag.how, 'unveroeffentlicht');
   });
 });
+
+describe('Elf des Tages Spieltag 6 (echte Handy-Seite kicker.ch, og:url ohne Spieltag, Links auf alle Spieltage)', () => {
+  const html = fs.readFileSync(new URL('./fixtures/kicker-elf-des-tages-st6.html', import.meta.url), 'utf8');
+  test('Spieltag aus dem Titel, nicht aus den Links im Text', () => { const c = classify(html, ''); assert.equal(c.kind, 'elf'); assert.equal(c.matchday, 6); assert.equal(c.matchdaySource, 'title'); });
+  test('Adresse vom Sender geht vor', () => { assert.equal(classify(html, 'https://www.kicker.ch/bundesliga/elf-des-tages/2026-27/6').matchday, 6); });
+  test('11 Spieler, Spieler des Tages Luis Diaz', () => { const e = parseElfDesTages(html); assert.equal(e.elf.length, 11); assert.equal(e.sdt?.name, 'Luis Diaz'); assert.ok(e.elf.some(p => p.name === 'Kane') && e.elf.some(p => p.name === 'Karius')); });
+});

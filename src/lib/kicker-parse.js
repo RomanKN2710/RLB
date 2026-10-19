@@ -18,12 +18,16 @@ export function classify(html, hintUrl = '') {
   const h = String(html || ''); const title = decode(((h.match(/<title>([^<]*)<\/title>/i) || [])[1] || '').trim());
   const h1 = decode(((h.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '').replace(/<[^>]+>/g, '').trim());
   // Elf des Tages: an der Adresse (auch in canonical/og:url), am Titel oder an der Ueberschrift
-  const elfMd = (hintUrl.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/) || h.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/) || hintUrl.match(/elf-des-tages[^"'\s]*?[/=](\d{1,2})(?:[/?#]|$)/) || [])[1];
-  const isElf = !!elfMd || /elf-des-tages/i.test(hintUrl) || /Elf des Tages/i.test(title) || /Elf des Tages/i.test(h1) || (/elf-des-tages/.test(h) && !/kick__lineup__teamrow/.test(h) && /Spieler des Tages/i.test(h));
+  // Spieltag der Elf: aus der Adresse (vom Sender oder canonical/og:url mit Nummer), sonst aus Titel/Ueberschrift «6. Spieltag».
+  // Nie aus beliebigen Links im Seitentext: die Seite verlinkt die Elf aller Spieltage (1–34).
+  const canon = ((h.match(/rel="canonical" href="([^"]*)"/) || h.match(/property="og:url" content="([^"]*)"/) || [])[1] || '');
+  const elfMd = (hintUrl.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/) || canon.match(/elf-des-tages\/\d{4}-\d{2}\/(\d+)/) || hintUrl.match(/elf-des-tages[^"'\s]*?[/=](\d{1,2})(?:[/?#]|$)/) || [])[1];
+  const isElf = !!elfMd || /elf-des-tages/i.test(hintUrl) || /elf-des-tages/i.test(canon) || /Elf des Tages/i.test(title) || /Elf des Tages/i.test(h1) || (/elf-des-tages/.test(h) && !/kick__lineup__teamrow/.test(h) && /Spieler des Tages/i.test(h));
   // Spieltag: Tracking-Kennung "…_bundesliga_2026-27_3", sonst JSON "spieltag":3, sonst Brotkrumen/Titel "3. Spieltag"
   const md = (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || h.match(/(\d{1,2})\.\s*Spieltag/) || title.match(/(\d{1,2})\.\s*Spieltag/) || [])[1];
-  if (isElf) { const tmd = (title.match(/(\d{1,2})\.\s*Spieltag/) || h1.match(/(\d{1,2})\.\s*Spieltag/) || h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || [])[1];
-    return { kind: 'elf', matchday: elfMd ? Number(elfMd) : tmd ? Number(tmd) : null, matchdaySource: elfMd ? 'url' : tmd ? 'page' : null, id: 'elf', title: title || h1 || 'Elf des Tages' }; }
+  if (isElf) { const tmd = (title.match(/(\d{1,2})\.\s*Spieltag/) || h1.match(/(\d{1,2})\.\s*Spieltag/) || [])[1];
+    const pmd = tmd ? null : (h.match(/bundesliga_\d{4}-\d{2}_(\d+)/) || h.match(/"spieltag"\s*:\s*"?(\d+)/i) || [])[1];   // Tracking-Kennung der Seite selbst (kein Link)
+    return { kind: 'elf', matchday: elfMd ? Number(elfMd) : tmd ? Number(tmd) : pmd ? Number(pmd) : null, matchdaySource: elfMd ? 'url' : tmd ? 'title' : pmd ? 'page' : null, id: 'elf', title: title || h1 || 'Elf des Tages' }; }
   const hasLineup = /kick__lineup__teamrow/.test(h);
   const id = (h.match(/rel="canonical" href="[^"]*?-(\d+)\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)?"?/) || h.match(/\/([0-9]{6,})\/aufstellung/) || h.match(/-(\d{6,})\/(?:aufstellung|spielbericht|schema|analyse|spielinfo|ticker)\b/) || hintUrl.match(/-(\d+)\/\w*\/?$/) || [])[1];
   const teams = [...h.matchAll(/kick__lineup__teamrow__teamname[^>]*>\s*([^<]+?)\s*</g)].map(m => decode(m[1])).slice(0, 2);

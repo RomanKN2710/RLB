@@ -21,7 +21,7 @@ export async function savePage(html, opts = {}) {
   let parsedElf = null; let paarung = null;
   if (c.kind === 'unknown') throw new Error(`Keine Aufstellungsseite: «${c.title}» – bei kicker den Reiter «Aufstellung» öffnen, nicht Spielbericht/Ticker`);
   if (c.kind === 'elf') { parsedElf = parseElfDesTages(html);
-    if (!opts.matchday && c.matchdaySource !== 'url') { const pend = await one("select matchday from rounds where type='regulaer' and status='open' and deadline is not null and deadline <= now() order by number desc limit 1");
+    if (!opts.matchday && !c.matchdaySource) { const pend = await one("select matchday from rounds where type='regulaer' and status='open' and deadline is not null and deadline <= now() order by number desc limit 1");
       const last = await one("select matchday from kicker_pages where kind='match' order by at desc limit 1"); md = (pend && pend.matchday) || (last && last.matchday) || md; } }
   else {
     // Aufstellungsseite: Spieltag verbindlich aus der Paarung im Spielplan; Zahlen aus dem Seitentext nur als Rueckfall

@@ -79,7 +79,17 @@ export function classify(p, managers, rounds) {
   return { kind, manager_id: manager ? manager.id : null, round_number: round ? round.number : null };
 }
 
-export const hashOf = p => createHash('sha1').update(`${p.title}\n${p.posted_at || ''}\n${p.body}`).digest('hex');
+/** Kennung eines Posts: Titel, Zeitpunkt und Autor. Der Text selbst zaehlt nicht – derselbe Post kommt je nach Ansicht
+    (Handy, Desktop, gekuerzter Mail-Disclaimer) mit anderem Text an und wuerde sonst doppelt im Archiv landen. */
+export const hashOf = p => createHash('sha1').update(`${String(p.title || '').trim()}\n${p.posted_at ? new Date(p.posted_at).toISOString().slice(0, 16) : ''}\n${String(p.author || '').trim().toLowerCase()}`).digest('hex');
+/** Archiv auf die aktuelle Kennung umstellen und Dubletten entfernen (der laengere Text bleibt). */
+export async function rehashAndDedupe() {
+  await ensureTable(); const rows = await q('select * from blog_posts order by length(body) desc, id'); const seen = new Map(); const log = []; let removed = 0;
+  for (const r of rows) { const h = hashOf(r); const keep = seen.get(h);
+    if (keep) { await q('delete from blog_posts where id=$1', [r.id]); removed++; log.push(`«${r.title}» (${r.posted_at ? new Date(r.posted_at).toISOString().slice(0, 16) : '?'}): Dublette #${r.id} entfernt, #${keep} bleibt`); continue; }
+    seen.set(h, r.id); if (r.hash !== h) await q('update blog_posts set hash=$1 where id=$2', [h, r.id]); }
+  return { removed, log };
+}
 
 /** Einträge einspielen (idempotent über hash). Gibt {neu, vorhanden, log} zurück. */
 export async function importPosts(posts, managers, rounds, source = 'paste') {
@@ -87,9 +97,10 @@ export async function importPosts(posts, managers, rounds, source = 'paste') {
   for (const p of posts) {
     if (!p.title || !p.body) continue;
     const c = classify(p, managers, rounds); const h = hashOf(p);
-    const r = await q(`insert into blog_posts(posted_at,author,title,body,kind,manager_id,round_number,source,hash) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(hash) do nothing returning id`,
+    // Gleicher Post mit laengerem Text (z. B. vollstaendiger Mail-Disclaimer): Text ergaenzen, sonst nichts
+    const r = await q(`insert into blog_posts(posted_at,author,title,body,kind,manager_id,round_number,source,hash) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(hash) do update set body=case when length(excluded.body) > length(blog_posts.body) then excluded.body else blog_posts.body end returning (xmax = 0) as inserted`,
       [p.posted_at || null, p.author || null, p.title, p.body, c.kind, c.manager_id, c.round_number, source, h]);
-    if (r.length) { neu++; log.push(`${p.posted_at ? p.posted_at.slice(0, 10) : '?'} «${p.title}» → ${c.kind}${c.manager_id ? ', ' + managers.find(m => m.id === c.manager_id).name : ''}${c.round_number ? ', Runde ' + c.round_number : ''}`); } else vorhanden++;
+    if (r.length && r[0].inserted) { neu++; log.push(`${p.posted_at ? p.posted_at.slice(0, 10) : '?'} «${p.title}» → ${c.kind}${c.manager_id ? ', ' + managers.find(m => m.id === c.manager_id).name : ''}${c.round_number ? ', Runde ' + c.round_number : ''}`); } else vorhanden++;
   }
   return { neu, vorhanden, log };
 }
