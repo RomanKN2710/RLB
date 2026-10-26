@@ -36,7 +36,9 @@ export default async function Hilfe() {
   const u = await getUser(); if (!u || u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>;
   const open = await D.openRound();
   return (<>
-    <div className="card"><div className="eyebrow"><Link href="/admin">Admin</Link> · Hilfe</div><h2>So wertest du einen Spieltag aus</h2>
+    <div className="card"><div className="row between" style={{ alignItems: 'baseline' }}><div><div className="eyebrow"><Link href="/admin">Admin</Link> · Hilfe</div><h2 style={{ margin: 0 }}>So wertest du einen Spieltag aus</h2></div>
+        <a className="btn sm" href="/api/handbuch">Handbuch herunterladen (PDF)</a></div>
+      <p className="mini">Das Handbuch zeigt alle Schritte mit Bildern aus der App (20 Folien). Diese Seite ist die Kurzfassung.</p>
       <p className="small">Alles passiert auf der Seite der Runde: Admin › Zeile des Spieltags › «Auswerten». Die drei Schritte stehen dort untereinander. {open ? <>Offen ist gerade <b>{open.label}</b>, Deadline {fmtDt(open.deadline)}.</> : null}</p>
       <ol className="small" style={{ paddingLeft: 20 }}>{SCHRITTE.map(([t, x]) => <li key={t} style={{ marginBottom: 8 }}><b>{t}.</b> {x}</li>)}</ol>
       <p className="mini">Die App rechnet nach dem Regelwerk: Blog gilt vor der App, Gleichstand bei Geboten gewinnt der schlechtere Tabellenplatz, Eventualaufträge sind gratis, Spieler mit mehreren Positionen werden so eingesetzt, dass die Elf zulässig ist. Das Regelwerk steht unter <Link href="/regeln">Regeln</Link>.</p></div>

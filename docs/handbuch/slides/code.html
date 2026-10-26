@@ -1,0 +1,26 @@
+<section id="code" style="background:#16351F;color:#F2F4F0;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#E2B65C">Weiterentwicklung</p>
+<h2 style="font-family:'Barlow Condensed', 'Arial Narrow', sans-serif;font-size:64px;font-weight:700;line-height:1.05;color:#F2F4F0">Die App selbst ändern</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:12px;background:#1F4A2C;border-radius:16px;padding:32px">
+<h3 style="font-family:'Barlow Condensed', 'Arial Narrow', sans-serif;font-size:40px;font-weight:700;line-height:1.1;color:#E2B65C">Wo der Code liegt</h3>
+<p style="font-size:26px;line-height:1.4;color:#E6EFE8">GitHub-Repository «romankn2710/rlb». Jede Änderung auf «main» ist nach etwa zwei Minuten live (Vercel).</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#1F4A2C;border-radius:16px;padding:32px">
+<h3 style="font-family:'Barlow Condensed', 'Arial Narrow', sans-serif;font-size:40px;font-weight:700;line-height:1.1;color:#E2B65C">Wie man ändert</h3>
+<p style="font-size:26px;line-height:1.4;color:#E6EFE8">In Claude Code (claude.ai/code) eine Sitzung mit dem Repository starten und auf Deutsch beschreiben, was anders werden soll.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#1F4A2C;border-radius:16px;padding:32px">
+<h3 style="font-family:'Barlow Condensed', 'Arial Narrow', sans-serif;font-size:40px;font-weight:700;line-height:1.1;color:#E2B65C">Zugang</h3>
+<p style="font-size:26px;line-height:1.4;color:#E6EFE8">Zugriff auf das GitHub-Repository und das Vercel-Projekt. Beides vergibt Roman.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#1F4A2C;border-radius:16px;padding:32px">
+<h3 style="font-family:'Barlow Condensed', 'Arial Narrow', sans-serif;font-size:40px;font-weight:700;line-height:1.1;color:#E2B65C">Drei Regeln</h3>
+<p style="font-size:26px;line-height:1.4;color:#E6EFE8">Schlüssel nur in Vercel, nie in einen Chat. Datenkorrekturen als einmalige Schritte. Erst testen, dann veröffentlichen.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#A9C2B0">RLB-Admin-Handbuch · 19</p>
+<aside>Für den normalen Spielbetrieb braucht niemand Zugriff auf den Code. Wer etwas an der App ändern will, braucht ein GitHub-Konto mit Zugriff auf das Repository. Datenkorrekturen in der Produktion laufen als einmalige Schritte in der Datei src/lib/migrations.js; sie werden beim nächsten Öffnen der Admin-Seite eingespielt und protokolliert. Die Tests laufen mit «npm test» und automatisch bei GitHub.</aside>
+</section>

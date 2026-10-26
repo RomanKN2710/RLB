@@ -1,0 +1,20 @@
+{
+  "v": 4,
+  "createdOnFiles": { "v": 1, "at": "2026-10-26T07:40:02Z" },
+  "lists": "css",
+  "title": "RLB Admin-Handbuch",
+  "order": ["cover", "ueberblick", "adminseite", "rundenseite", "s1-blog", "s1-gebote", "s1-zuteilen", "automatik", "handy", "s2-senden", "s2-hand", "s3-abschluss", "werte", "fehler", "fehler2", "selten", "manager", "hilfe", "code", "checkliste"],
+  "sections": {
+    "s1": { "description": "Einstieg: was ein Admin tut und wo alles liegt", "start": "cover" },
+    "s2": { "description": "Schritt 1: Aufstellungen und Gebote aus dem Blog übernehmen und Gebote zuteilen", "start": "s1-blog" },
+    "s3": { "description": "Schritt 2: kicker-Daten per Handy oder von Hand", "start": "handy" },
+    "s4": { "description": "Schritt 3: prüfen, korrigieren und abschliessen", "start": "s3-abschluss" },
+    "s5": { "description": "Wenn etwas hakt, seltene Aufgaben und die Sicht der Manager", "start": "fehler" },
+    "s6": { "description": "Hilfe, Weiterentwicklung und Checkliste", "start": "hilfe" }
+  },
+  "faces": {
+    "barlow-condensed": { "family": "Barlow Condensed", "href": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" },
+    "ibm-plex-sans": { "family": "IBM Plex Sans", "href": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" }
+  },
+  "designSystems": []
+}
