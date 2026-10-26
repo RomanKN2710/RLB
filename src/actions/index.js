@@ -51,9 +51,9 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   if (!admin) { const open = await D.openRound(); if (!open || open.id !== round.id) return fail('Diese Aufstellung ist nicht mehr offen (Deadline 90 Min. vor Anpfiff, Ziff. 5.1)'); }
   const b = await D.base();
   const clean = {}; for (const [pid, e] of Object.entries(entries || {})) { const p = b.players[pid]; if (!p || p.manager_id !== managerId || p.status !== 'active' || !R.playerValid(p, round.number)) return fail(`Spieler ${pid} nicht im Kader`);
-    const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2)`); clean[pid] = { pos }; }
+    const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p, round.number).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2${R.positionFrom(p, pos) ? ', ' + pos + ' gilt erst ab Runde ' + R.positionFrom(p, pos) / 10 : ''})`); clean[pid] = { pos }; }
   // Spieler mit mehreren Positionen: immer die Position, mit der die Elf regelkonform ist
-  const fit = R.fitPositions(clean, b.players); const umgestellt = [];
+  const fit = R.fitPositions(clean, b.players, new Set(), round.number); const umgestellt = [];
   if (fit) for (const [pid, pos] of Object.entries(fit.changes)) { umgestellt.push(`${b.players[pid].name} als ${pos}`); clean[pid] = { pos }; }
   const probleme = R.posProblems(clean, b.players); if (probleme.length) return fail(`Unzulässige Aufstellung (Ziff. 5.1): ${probleme.join('; ')}`);
   await BlogImport.writeLineup(u, roundId, managerId, clean); rev();
@@ -137,7 +137,7 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
       for (const [m, out, inn] of [[t.from_manager, t.give, t.get_], [t.to_manager, t.get_, t.give]]) {
         const lu = await x.one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, m]); if (!lu) continue;
         let e = { ...lu.entries }; const free = (lu.free_in || []).slice();
-        out.forEach((id, i) => { const np = P[inn[i]]; if (!np) return; const sw = R.swapIn(e, id, np, P); if (sw) { e = sw.entries; free.push(np.id); } });
+        out.forEach((id, i) => { const np = P[inn[i]]; if (!np) return; const sw = R.swapIn(e, id, np, P, open.number); if (sw) { e = sw.entries; free.push(np.id); } });
         await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, open.id, m]); } }
     await x.q("update trades set status='done', done_at=now(), round_id=$2 where id=$1", [tradeId, roundId]);
   });
@@ -196,14 +196,11 @@ export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const 
   await q("update rounds set tdr=$1, sdt=$2, label=coalesce(nullif($3,''),label) where id=$4", [names, sdt || null, label || '', roundId]);
   await audit(a.id, 'round_tdr_manual', { roundId, n: tdrPids.size, sdt: sdtPid }); rev();
   return ok(`Team der Runde: ${tdrPids.size} von ${names.length} Namen in Aufstellungen${sdtPid ? ', Spieler des Tages +1' : ''}, ${written} TdR-Werte geändert.${notes.length ? ' ' + notes.join(' · ') : ''}`); });
-export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin(); await q('update rounds set status=$1 where id=$2', [final ? 'final' : 'open', roundId]); await audit(a.id, 'round_status', { roundId, final });
-  // Ziff. 4.3.4: Jugendspieler verlieren den Status, wenn sie in eine gültige (gewertete) Aufstellung berufen wurden
-  if (final) await q("update players set jugend=false where jugend and id in (select jsonb_object_keys(entries) from lineups where round_id=$1)", [roundId]);
-  rev();
-  if (!final) return ok('Runde wieder geöffnet');
+export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin();
+  if (!final) { await q("update rounds set status='open' where id=$1", [roundId]); await audit(a.id, 'round_status', { roundId, final }); rev(); return ok('Runde wieder geöffnet'); }
+  await BlogImport.finalizeRound(a.id, roundId); rev();
   // Spieltagsbericht entsteht im Hintergrund (eigene Funktion mit längerer Laufzeit)
-  const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'http://127.0.0.1:' + (process.env.PORT || 3000));
-  if (process.env.CRON_SECRET) waitUntil(fetch(`${base}/api/bericht?round_id=${roundId}&key=${process.env.CRON_SECRET}`, { method: 'POST' }).catch(e => console.error('Bericht', e.message)));
+  const rep = BlogImport.triggerReport(roundId); if (rep) waitUntil(rep);
   return ok('Runde abgeschlossen. Der Spieltagsbericht wird jetzt erstellt (Seite «Bericht»).'); });
 export const berichtAction = wrap(async (roundId, opts = {}) => { await requireAdmin(); try { const log = await berichtCreate(roundId, opts); revalidatePath('/bericht'); return ok(log.join(' · ')); } catch (e) { revalidatePath('/bericht'); return fail(e.message); } });
 export const splitNachtragAction = wrap(async (matchId) => { const a = await requireAdmin();

@@ -12,7 +12,10 @@ export const KADER_SIZE = 22;           // Ziff. 7.1
 export const BBQ_PER_MANAGER = 20;      // Ziff. 9
 export const PAYOUT = [[1, 40], [2, 25], [3, 15], [4, 10]];
 
-export const positionsOf = p => [p.base_pos, ...(p.extra_pos || [])];
+/** Erlaubte Positionen eines Spielers; mit Rundennummer nur die Zusatzpositionen, die ab dieser Runde gelten
+    (Ziff. 5.2: Erwerb gilt ab der Folgerunde; extra_pos_from = {M: 20}). Ohne Datum gilt die Position immer. */
+export const positionsOf = (p, rn) => [p.base_pos, ...(p.extra_pos || []).filter(x => !rn || !(p.extra_pos_from && p.extra_pos_from[x]) || Number(p.extra_pos_from[x]) <= Number(rn))];
+export const positionFrom = (p, x) => (p.extra_pos_from && p.extra_pos_from[x]) ? Number(p.extra_pos_from[x]) : null;
 export const isDef = pos => pos === 'T' || pos === 'V';
 export const playerValid = (p, roundNumber) => (p.valid_from ?? 1) <= roundNumber && (p.valid_to == null || roundNumber <= p.valid_to);
 export const value = p => Number(p.price) || 0;
@@ -45,11 +48,11 @@ export function entryValues(player, pos, result, clubRes) {
 /** Spieler mit mehreren Positionen (Ziff. 5.2) so einsetzen, dass die Positionsregel stimmt. Liefert null, wenn die
     Aufstellung schon passt oder keine Umstellung hilft, sonst {changes: {pid: pos}} mit möglichst wenigen Änderungen.
     fixed: Spieler, deren Position ausdrücklich gewählt wurde (werden nur umgestellt, wenn es nicht anders geht). */
-export function fitPositions(entries, players, fixed = new Set()) {
+export function fitPositions(entries, players, fixed = new Set(), rn = null) {
   const ids = Object.keys(entries); if (!ids.length) return null;
   if (!posCheck(entries, players).bad.length) return null;
   const posOf = pid => entries[pid].pos || players[pid]?.base_pos;
-  const flex = ids.filter(pid => players[pid] && positionsOf(players[pid]).length > 1).slice(0, 8); if (!flex.length) return null;
+  const flex = ids.filter(pid => players[pid] && positionsOf(players[pid], rn).length > 1).slice(0, 8); if (!flex.length) return null;
   let best = null;
   const go = (k, cost, changes) => {
     if (best && cost >= best.cost) return;
@@ -58,7 +61,7 @@ export function fitPositions(entries, players, fixed = new Set()) {
     const pid = flex[k];
     // Umstellen kostet 1, ausdruecklich gewaehlte Positionen 3; wer Torwart/Verteidiger verlaesst, zaehlt etwas mehr
     // (Shutouts gibt es nur fuer T/V, Ziff. 8.3) – bei gleich vielen Aenderungen bleibt die Abwehr stehen
-    for (const pos of positionsOf(players[pid])) { const same = pos === posOf(pid); if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : (fixed.has(pid) ? 3 : 1) + (/^[TV]$/.test(posOf(pid)) && !/^[TV]$/.test(pos) ? 0.5 : 0)), changes); delete changes[pid]; }
+    for (const pos of positionsOf(players[pid], rn)) { const same = pos === posOf(pid); if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : (fixed.has(pid) ? 3 : 1) + (/^[TV]$/.test(posOf(pid)) && !/^[TV]$/.test(pos) ? 0.5 : 0)), changes); delete changes[pid]; }
   };
   go(0, 0, {});
   return best && Object.keys(best.changes).length ? { changes: best.changes } : null;
@@ -68,17 +71,17 @@ export function fitPositions(entries, players, fixed = new Set()) {
     Passt die Position nicht zu np, kommt er auf seine Grundposition und andere Spieler mit Zusatzposition werden
     umgestellt, bis die Positionsregel stimmt. Geht es nicht auf, bleibt er trotzdem drin (der Auftrag ist verbindlich,
     der Rundencheck meldet die Aufstellung). Liefert null, wenn outId nicht aufgestellt ist oder np schon drinsteht. */
-export function swapIn(entries, outId, np, players) {
+export function swapIn(entries, outId, np, players, rn = null) {
   if (!entries[outId] || entries[np.id]) return null;
-  const pos = entries[outId].pos; const allowed = positionsOf(np);
+  const pos = entries[outId].pos; const allowed = positionsOf(np, rn);
   const e = { ...entries }; delete e[outId]; e[np.id] = { pos: allowed.includes(pos) ? pos : np.base_pos };
-  const P = { ...players, [np.id]: np }; const fit = fitPositions(e, P); const changes = fit ? fit.changes : {};
+  const P = { ...players, [np.id]: np }; const fit = fitPositions(e, P, new Set(), rn); const changes = fit ? fit.changes : {};
   for (const [pid, p2] of Object.entries(changes)) e[pid] = { pos: p2 };
-  return { entries: e, ok: !posCheck(e, P).bad.length, changes };
+  return { entries: e, ok: !posCheck(e, P, rn).bad.length, changes };
 }
 
 /** Positionsregel prüfen. entries: {pid: {pos}} */
-export function posCheck(entries, players) {
+export function posCheck(entries, players, rn = null) {
   const cnt = { T: 0, V: 0, M: 0, S: 0 };
   for (const [pid, e] of Object.entries(entries)) { const pos = e.pos || (players[pid] && players[pid].base_pos); if (cnt[pos] !== undefined) cnt[pos]++; }
   const bad = Object.entries(POSRULE).filter(([k, [lo, hi]]) => cnt[k] < lo || cnt[k] > hi).map(([k]) => k);
@@ -88,13 +91,13 @@ export function posCheck(entries, players) {
 
 export const POSNAME = { T: 'Torwart', V: 'Verteidiger', M: 'Mittelfeld', S: 'Sturm' };
 /** Verstösse gegen Ziff. 5.1 als lesbare Sätze (leer = zulässig). Für Editor und Server gleich. */
-export function posProblems(entries, players) {
-  const { cnt, bad, n } = posCheck(entries, players); const out = [];
+export function posProblems(entries, players, rn = null) {
+  const { cnt, bad, n } = posCheck(entries, players, rn); const out = [];
   if (n < 11) out.push(`Zu wenige Spieler: ${n} statt 11 (${11 - n === 1 ? 'es fehlt 1' : `es fehlen ${11 - n}`})`);
   if (n > 11) out.push(`Zu viele Spieler: ${n} statt 11 (${n - 11} zu viel)`);
   for (const k of bad) { const [lo, hi] = POSRULE[k]; out.push(`${POSNAME[k]}: ${cnt[k]} aufgestellt, erlaubt ${lo === hi ? `genau ${lo}` : `${lo} bis ${hi}`}`); }
   // Positionsfähigkeit (Ziff. 5.2): nur Grundposition oder erworbene Zusatzpositionen
-  for (const [pid, e] of Object.entries(entries)) { const p = players[pid]; if (p && p.base_pos && !positionsOf(p).includes(e.pos)) out.push(`${p.name}: als ${e.pos} aufgestellt, hat nur ${positionsOf(p).join('/')}`); }
+  for (const [pid, e] of Object.entries(entries)) { const p = players[pid]; if (p && p.base_pos && !positionsOf(p, rn).includes(e.pos)) { const ab = positionFrom(p, e.pos); out.push(`${p.name}: als ${e.pos} aufgestellt, hat nur ${positionsOf(p, rn).join('/')}${ab && (p.extra_pos || []).includes(e.pos) ? ` (${e.pos} gilt erst ab Runde ${ab / 10})` : ''}`); } }
   return out;
 }
 

@@ -94,7 +94,9 @@ export function matchStats(parsed, opts = {}) {
 
 /* ---------- Zuordnung kicker-Spieler → RLB-Spieler ---------- */
 let colReady = false;
-export async function ensureColumns() { if (colReady) return; await q('alter table players add column if not exists kicker_slug text'); colReady = true; }
+export async function ensureColumns() { if (colReady) return; await q('alter table players add column if not exists kicker_slug text'); await q("alter table players add column if not exists extra_pos_from jsonb not null default '{}'"); colReady = true; }
+/** Nummer der Runde nach der gegebenen (Positionserwerb gilt ab der Folgerunde, Ziff. 5.2). */
+export async function nextRoundNumber(number) { const r = await one('select min(number) as n from rounds where number > $1', [number]); return (r && r.n) || number + 10; }
 
 /** Ähnlichkeit für Hinweise ("meinten Sie …"): Levenshtein auf dem gefalteten Nachnamen. */
 function lev(a, b) { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]); for (let j = 1; j <= n; j++) d[0][j] = j;
@@ -264,10 +266,12 @@ export async function acquirePositions(starters, b, round) {
     // Ziff. 5.2: "Im Zweifelsfall wird kein Positionserwerb gewaehrt." Zweifelsfall: Aussenverteidiger in einer Dreierkette als M gefuehrt.
     const doubt = s.formation && /^3-/.test(s.formation) && p.base_pos === 'V' && s.kpos === 'M';
     if (doubt) { log.push(`${p.name}: Startelf als M in Formation ${s.formation} – Zweifelsfall (Aussenverteidiger in Dreierkette), Zusatzposition M nicht automatisch gewährt (Ziff. 5.2); bei Bedarf im Kader von Hand +M`); continue; }
-    await q('update players set extra_pos = array_append(extra_pos, $1) where id=$2 and not ($1 = any(extra_pos))', [s.kpos, p.id]); p.extra_pos = [...(p.extra_pos || []), s.kpos]; if (b.players[p.id]) b.players[p.id].extra_pos = p.extra_pos;
+    const ab = await nextRoundNumber(round.number);
+    await q('update players set extra_pos = array_append(extra_pos, $1), extra_pos_from = coalesce(extra_pos_from, \'{}\'::jsonb) || jsonb_build_object($1::text, $3::int) where id=$2 and not ($1 = any(extra_pos))', [s.kpos, p.id, ab]);
+    p.extra_pos = [...(p.extra_pos || []), s.kpos]; p.extra_pos_from = { ...(p.extra_pos_from || {}), [s.kpos]: ab }; if (b.players[p.id]) { b.players[p.id].extra_pos = p.extra_pos; b.players[p.id].extra_pos_from = p.extra_pos_from; }
     const ex = await q("select 1 from transfers where type='position' and manager_id=$1 and player_name=$2 and note like $3", [p.manager_id, p.name, `Zusatzposition ${s.kpos}%`]);
     if (!ex.length) await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'position',$3,0,$4)", [round.id, p.manager_id, p.name, `Zusatzposition ${s.kpos} erworben (kicker-Startelf ${round.label}, Ziff. 5.2) – ab Folgerunde ${p.base_pos}/${[...new Set(p.extra_pos)].join('/')}`]);
-    log.push(`${p.name}: Zusatzposition ${s.kpos} (Startelf laut kicker, ${round.label})`);
+    log.push(`${p.name}: Zusatzposition ${s.kpos} (Startelf laut kicker, ${round.label}) – gilt ab Runde ${ab / 10}`);
   }
   return log;
 }

@@ -29,8 +29,8 @@ export async function parseLineupPaste(roundId, text) {
   const round = await D.roundById(roundId); if (!round) throw new Error('Runde?'); const b = await D.base();
   const kaders = {}; const pool = await q('select slug, name, club from bl_players');
   for (const m of b.managers) kaders[m.id] = (await D.kader(m.id, round.number)).map(p => {
-    // voller kicker-Name als Alias ("Miguel" -> miguel-gutierrez), damit auch der Nachname im Blog passt
-    const bl = pool.filter(x => x.club === p.club && playerMatches(x.slug, x.name, p.name)); return { ...p, alias: bl.length === 1 ? bl[0].slug.split('-').filter(t => !/^\d+$/.test(t)) : [] }; });
+    // voller kicker-Name als Alias ("Miguel" -> miguel-gutierrez), damit auch der Nachname im Blog passt; Zusatzpositionen nur, soweit sie in dieser Runde schon gelten
+    const bl = pool.filter(x => x.club === p.club && playerMatches(x.slug, x.name, p.name)); return { ...p, extra_pos: R.positionsOf(p, round.number).slice(1), alias: bl.length === 1 ? bl[0].slug.split('-').filter(t => !/^\d+$/.test(t)) : [] }; });
   // Basis fuer reine Wechsel-Posts ("Kramaric für Lemperle", "Keine Wechsel"): die Aufstellung der Vorrunde
   const bases = {}; for (const m of b.managers) bases[m.id] = await D.prevLineup(round, m.id);
   // Spieler, die nicht mehr im Kader sind (entlassen, abgegeben), aber in der Vorrunde oder im Post noch auftauchen
@@ -207,7 +207,7 @@ export async function applyBids(userId, roundId) {
       const lu = await materializeLineup(x, round, m, b);
       if (lu) { let e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false; const marks = [];
         if (bid.swap_out_player_id) {
-          const out = b.players[bid.swap_out_player_id]; const sw = R.swapIn(e, bid.swap_out_player_id, np, b.players);
+          const out = b.players[bid.swap_out_player_id]; const sw = R.swapIn(e, bid.swap_out_player_id, np, b.players, round.number);
           if (sw) { e = sw.entries; ch = true; marks.push(`eingewechselt für ${out?.name || '?'}` + (Object.keys(sw.changes).length ? ' (' + Object.entries(sw.changes).map(([pid, p2]) => `${b.players[pid]?.name || pid} als ${p2}`).join(', ') + ')' : '') + (sw.ok ? '' : ' – Aufstellung prüfen, Positionsregel verletzt')); }
           else if (e[id]) marks.push('steht schon in der Aufstellung');
           else marks.push(`Eventualauftrag nicht ausführbar: ${out?.name || '?'} steht nicht in der Aufstellung`);
@@ -245,7 +245,7 @@ export async function undoBids(userId, roundId) {
         else { // keine Sicherung (Zuteilung aus einer aelteren Version): Neuen raus, Ersetzten zurueck auf eine passende Position
           const e = { ...lu.entries }; const free = (lu.free_in || []).filter(p => p !== id);
           if (e[id]) { const pos = e[id].pos; delete e[id]; const out = bid.swap_out_player_id && b.players[bid.swap_out_player_id];
-            if (out && !e[out.id]) { e[out.id] = { pos: R.positionsOf(out).includes(pos) ? pos : out.base_pos }; const fit = R.fitPositions(e, b.players); if (fit) for (const [pid, p2] of Object.entries(fit.changes)) e[pid] = { pos: p2 }; } }
+            if (out && !e[out.id]) { e[out.id] = { pos: R.positionsOf(out, round.number).includes(pos) ? pos : out.base_pos }; const fit = R.fitPositions(e, b.players, new Set(), round.number); if (fit) for (const [pid, p2] of Object.entries(fit.changes)) e[pid] = { pos: p2 }; } }
           await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, round.id, m]); note += ', Aufstellung zurückgebaut (ohne Sicherung)'; } }
       log.push(note);
     }
@@ -255,6 +255,19 @@ export async function undoBids(userId, roundId) {
   });
   await audit(userId, 'bids_undone', { roundId, log });
   return { log };
+}
+
+/** Runde abschliessen (Ziff. 4.3.4: Jugendspieler in gewerteten Aufstellungen verlieren den Status). Bericht separat. */
+export async function finalizeRound(userId, roundId) {
+  await q("update rounds set status='final' where id=$1", [roundId]);
+  await q("update players set jugend=false where jugend and id in (select jsonb_object_keys(entries) from lineups where round_id=$1)", [roundId]);
+  await audit(userId, 'round_status', { roundId, final: true });
+}
+/** Spieltagsbericht im Hintergrund anstossen (eigene Funktion mit laengerer Laufzeit). */
+export function triggerReport(roundId) {
+  const base = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'http://127.0.0.1:' + (process.env.PORT || 3000));
+  if (!process.env.CRON_SECRET) return null;
+  return fetch(`${base}/api/bericht?round_id=${roundId}&key=${process.env.CRON_SECRET}`, { method: 'POST' }).catch(e => console.error('Bericht', e.message));
 }
 
 /** Vorschau: Aufstellungen und Gebote aus demselben Text. */

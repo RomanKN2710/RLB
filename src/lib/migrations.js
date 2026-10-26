@@ -62,6 +62,28 @@ export const STEPS = [
     try { const { importInbox, importSummary } = await import('./kicker'); const imp = await importInbox(7, { userId, auto: true }); log.push('kicker neu eingelesen: ' + importSummary(imp).join(', ') + (imp.errors.length ? ' · Probleme: ' + imp.errors.join(' · ') : '')); }
     catch (e) { log.push('kicker nicht neu eingelesen: ' + e.message); }
     await setSetting('blog_st7_20261026', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'zusatzpositionen_datiert_20261026', title: 'Zusatzpositionen datiert: jede gilt ab der Folgerunde des Erwerbs (Ziff. 5.2), Rundencheck und Aufstellung prüfen das', run: async () => {
+    const { ensureColumns, nextRoundNumber } = await import('./kicker'); await ensureColumns(); const log = []; let n = 0;
+    const players = await q("select * from players where coalesce(array_length(extra_pos, 1), 0) > 0"); const rounds = await q('select id, number from rounds'); const numOf = id => (rounds.find(r => r.id === id) || {}).number;
+    for (const p of players) { const from = { ...(p.extra_pos_from || {}) }; let ch = false;
+      for (const pos of p.extra_pos) { if (from[pos]) continue;
+        const tr = await one("select * from transfers where type='position' and manager_id=$1 and player_name=$2 and note like $3 order by created_at limit 1", [p.manager_id, p.name, `Zusatzposition ${pos}%`]);
+        const ab = tr && tr.note.match(/ab Spieltag (\d+)/) ? Number(tr.note.match(/ab Spieltag (\d+)/)[1]) * 10 : tr && numOf(tr.round_id) ? await nextRoundNumber(numOf(tr.round_id)) : 10;   // ohne Buchung: seit Saisonbeginn
+        // Abgeschlossene, mit dem Excel abgeglichene Runden bleiben gueltig: wurde die Position dort schon genutzt, gilt sie ab dieser Runde
+        const used = await one("select min(r.number) as n from lineups l join rounds r on r.id=l.round_id where r.status='final' and l.manager_id=$1 and l.entries->$2->>'pos' = $3", [p.manager_id, p.id, pos]);
+        const eff = used && used.n && Number(used.n) < ab ? Number(used.n) : ab;
+        from[pos] = eff; ch = true; log.push(`${p.name} (${p.manager_id}): ${pos} ab Runde ${eff / 10}${tr ? '' : ' (keine Buchung gefunden, seit Saisonbeginn)'}${eff !== ab ? ` – laut Buchung erst ab Runde ${ab / 10}, in der abgeschlossenen Runde ${eff / 10} aber schon so gewertet (Excel-Abgleich), bleibt` : ''}`); }
+      if (ch) { await q('update players set extra_pos_from=$1 where id=$2', [JSON.stringify(from), p.id]); n++; } }
+    log.unshift(`${n} Spieler datiert`); await setSetting('zusatzpositionen_datiert_20261026', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'st7_abschluss_20261026', title: 'Spieltag 7 abgeschlossen (Entscheid Roman 26.10.2026): Gebote zugeteilt, kicker-Werte neu eingelesen, Rundencheck, Runde final', run: async userId => {
+    const r7 = await one("select * from rounds where type='regulaer' and matchday=7"); if (!r7) throw new Error('Spieltag 7 fehlt'); const log = [];
+    if (r7.status === 'final') { log.push('Spieltag 7 war schon abgeschlossen'); await setSetting('st7_abschluss_20261026', { at: new Date().toISOString(), log }); return { log }; }
+    if (!r7.bids_resolved) { const a = await Blog.applyBids(userId, r7.id); log.push('Gebote zugeteilt: ' + a.log.join(' · ')); } else log.push('Gebote waren schon zugeteilt');
+    const { importInbox, importSummary } = await import('./kicker'); const imp = await importInbox(7, { userId, auto: true }); log.push('kicker neu eingelesen: ' + importSummary(imp).join(', ') + (imp.errors.length ? ' · Probleme: ' + imp.errors.join(' · ') : ''));
+    const { roundCheck } = await import('./rundencheck'); const D = await import('./data'); const b = await D.base(); const round = await one('select * from rounds where id=$1', [r7.id]); const c = await roundCheck(round, b, await D.roundData(round, b));
+    if (c.problems.length || imp.errors.length) { log.push('NICHT abgeschlossen – Rundencheck: ' + c.problems.map(x => x.text).join(' · ')); }
+    else { await Blog.finalizeRound(userId, r7.id); log.push('Runde abgeschlossen' + (c.warnings.length ? ' · Hinweise: ' + c.warnings.map(x => x.text).join(' · ') : '')); const rep = Blog.triggerReport(r7.id); if (rep) log.push('Spieltagsbericht angestossen'); }
+    await setSetting('st7_abschluss_20261026', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

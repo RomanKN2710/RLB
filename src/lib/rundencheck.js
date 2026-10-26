@@ -17,7 +17,7 @@ export async function roundCheck(round, b, d) {
   for (const m of b.managers) {
     const lu = d.lineups[m.id];
     if (!lu) { if (passed) add('bad', `${m.name}: keine Aufstellung`); continue; }   // vor der Deadline gilt die Vorrunden-Aufstellung (Ziff. 5.1)
-    const probs = R.posProblems(lu.entries, b.players); probs.forEach(p => add('bad', `${m.name}: Aufstellung – ${p}`));
+    const probs = R.posProblems(lu.entries, b.players, round.number); probs.forEach(p => add('bad', `${m.name}: Aufstellung – ${p}`));
     for (const pid of Object.keys(lu.entries)) { const p = b.players[pid]; if (!p) { add('bad', `${m.name}: unbekannter Spieler ${pid} in der Aufstellung`); continue; }
       if (p.manager_id !== m.id) { if (round.status !== 'final') add('bad', `${m.name}: ${p.name} gehört ${b.managerName[p.manager_id] || '?'}`); }   // abgeschlossene Runden: Besitz hat sich durch Trades seither geändert
       else if (!R.playerValid(p, round.number)) add('bad', `${m.name}: ${p.name} ist in dieser Runde nicht spielberechtigt (gültig ${p.valid_from}–${p.valid_to ?? '∞'})`);

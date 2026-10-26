@@ -37,6 +37,7 @@ create table if not exists players (
   club text,                                 -- Vereinsname; Ersatzspieler dürfen aus anderen Ligen stammen (4.3.2)
   base_pos char(1) not null check (base_pos in ('T','V','M','S')),
   extra_pos text[] not null default '{}',   -- erworbene Zusatzpositionen (Ziff. 5.2)
+  extra_pos_from jsonb not null default '{}',   -- Zusatzposition gilt ab Runde {M: 20} (Ziff. 5.2: Folgerunde)
   price numeric(6,1) not null default 0,     -- Wert (Draftpreis / Kaufpreis)
   slot text not null default 'bank' check (slot in ('stamm','bank')),
   source text not null default 'draft' check (source in ('draft','kauf','trade')),

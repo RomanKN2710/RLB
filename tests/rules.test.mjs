@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { fitPositions, posProblems, posCheck, swapIn } from '../src/lib/rules.js';
+import { fitPositions, posProblems, posCheck, swapIn, positionsOf } from '../src/lib/rules.js';
 
 const P = {}; const mk = (id, base, extra = []) => { P[id] = { id, name: id, base_pos: base, extra_pos: extra }; return id; };
 const lineup = ids => Object.fromEntries(ids.map(([id, pos]) => [id, { pos }]));
@@ -82,4 +82,19 @@ describe('resolveBids: Gleichstand geht an den schlechteren Tabellenplatz (Ziff.
   const run = tiebreak => resolveBids([mk(1, 2, 'a-x'), mk(2, 10, 'd-y')], { players, budgetLeft: () => 50, managerName: m => 'M' + m, tiebreak, prevReleases: [] });
   test('Reihenfolge schlechtester zuerst: David (10.) vor Arbi (9.) gewinnt', () => { const out = run([10, 2, 8, 3]); assert.equal(out.find(b => b.manager_id === 10).status, 'won'); assert.equal(out.find(b => b.manager_id === 2).status, 'lost'); assert.match(out.find(b => b.manager_id === 2).reason, /besserer Tabellenplatz/); });
   test('umgekehrte Tabelle: Arbi gewinnt', () => { const out = run([2, 10]); assert.equal(out.find(b => b.manager_id === 2).status, 'won'); });
+});
+
+describe('Zusatzpositionen gelten ab der Folgerunde (Ziff. 5.2)', () => {
+  const beier = { id: 'beier', name: 'Beier', base_pos: 'S', extra_pos: ['M'], extra_pos_from: { M: 20 } };
+  test('positionsOf mit Runde', () => { assert.deepEqual(positionsOf(beier), ['S', 'M']); assert.deepEqual(positionsOf(beier, 10), ['S']); assert.deepEqual(positionsOf(beier, 20), ['S', 'M']); assert.deepEqual(positionsOf({ ...beier, extra_pos_from: {} }, 10), ['S', 'M']); });
+  test('Rundencheck meldet eine zu früh genutzte Zusatzposition', () => {
+    const Q = { beier }; ['t'].forEach(id => Q[id] = { id, base_pos: 'T', extra_pos: [] }); ['v1', 'v2', 'v3', 'v4'].forEach(id => Q[id] = { id, base_pos: 'V', extra_pos: [] }); ['m1', 'm2', 'm3'].forEach(id => Q[id] = { id, base_pos: 'M', extra_pos: [] }); ['s1', 's2'].forEach(id => Q[id] = { id, base_pos: 'S', extra_pos: [] });
+    const e = lineup([['t', 'T'], ['v1', 'V'], ['v2', 'V'], ['v3', 'V'], ['v4', 'V'], ['m1', 'M'], ['m2', 'M'], ['m3', 'M'], ['beier', 'M'], ['s1', 'S'], ['s2', 'S']]);
+    assert.deepEqual(posProblems(e, Q, 20), []); assert.match(posProblems(e, Q, 10)[0], /Beier: als M aufgestellt, hat nur S \(M gilt erst ab Runde 2\)/); assert.deepEqual(posProblems(e, Q), []);
+  });
+  test('fitPositions nutzt nur gültige Zusatzpositionen', () => {
+    const Q = { beier }; ['t'].forEach(id => Q[id] = { id, base_pos: 'T', extra_pos: [] }); ['v1', 'v2', 'v3', 'v4', 'v5'].forEach(id => Q[id] = { id, base_pos: 'V', extra_pos: [] }); ['m1', 'm2'].forEach(id => Q[id] = { id, base_pos: 'M', extra_pos: [] }); ['s1', 's2'].forEach(id => Q[id] = { id, base_pos: 'S', extra_pos: [] });
+    const e = lineup([['t', 'T'], ['v1', 'V'], ['v2', 'V'], ['v3', 'V'], ['v4', 'V'], ['v5', 'V'], ['m1', 'M'], ['m2', 'M'], ['beier', 'S'], ['s1', 'S'], ['s2', 'S']]);
+    assert.deepEqual(fitPositions(e, Q, new Set(), 20), { changes: { beier: 'M' } }); assert.equal(fitPositions(e, Q, new Set(), 10), null);
+  });
 });
