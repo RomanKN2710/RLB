@@ -27,7 +27,7 @@ export default async function AdminRunde({ params }) {
   const lineupsSaved = Object.keys(d.lineups).length;
   const impOk = kickerLog && kickerLog.games >= 9 && kickerLog.elf && !(kickerLog.errors || []).length;
   return (<>
-    <div className="card"><div className="row between"><div><div className="eyebrow">Admin · Auswertung</div><h2 style={{ margin: 0 }}>{round.label}</h2></div>
+    <div className="card"><div className="row between"><div><div className="eyebrow">Admin · Auswertung · <a href="/admin/hilfe">Hilfe</a></div><h2 style={{ margin: 0 }}>{round.label}</h2></div>
       <div className="small">Deadline <b>{fmtDt(round.deadline)}</b> · {round.status === 'final' ? <span className="pill ok">final</span> : passed ? <span className="pill bad">auszuwerten</span> : <span className="pill open">offen</span>} · Spiele {matches.filter(m => m.finished).length}/{matches.length}</div></div>
       <div className="steps">
         <span className={lineupsSaved >= b.managers.length && (round.bids_resolved || !nBids) ? 'done' : ''}>1 Aufstellungen {lineupsSaved}/{b.managers.length} · Gebote {round.bids_resolved ? 'aufgelöst' : nSealed ? nSealed + ' verdeckt' : nBids ? nBids : 'keine'}</span>
@@ -43,7 +43,7 @@ export default async function AdminRunde({ params }) {
       <RBids roundId={round.id} resolved={round.bids_resolved} passed={!!passed} final={round.status === 'final'} /></div>
 
     <div className="card"><div className="eyebrow">Schritt 2</div>{step(2, 'kicker-Daten übernehmen', null, <span className="mini">nach den Spielen – per Skript oder von Hand</span>)}
-      <p className="mini">Die neun Seiten «Aufstellung» und die «Elf des Tages» vom Handy senden (Skript) oder unten als Quelltext einfügen, dann importieren. Einsätze, Assists, Tore, Karten, Team der Runde und Spieler des Tages kommen von dort; Punkte und Zu-null aus den Resultaten. Jeder aufgestellte Spieler muss danach «Startelf», «eingewechselt» oder «Bank» sein.</p>
+      <p className="mini">Die neun Seiten «Aufstellung» und die «Elf des Tages» vom Handy senden (Skript, jede Seite wird sofort importiert) oder unten als Quelltext einfügen. Einsätze, Assists, Tore, Karten, Team der Runde und Spieler des Tages kommen von dort; Punkte und Zu-null aus den Resultaten. Jeder aufgestellte Spieler muss danach «Startelf», «eingewechselt» oder «Bank» sein.</p>
       <RKicker roundId={round.id} lastLog={kickerLog} inbox={inbox ? JSON.parse(JSON.stringify(inbox)) : null} /></div>
 
     <div className="card" style={{ borderLeft: `4px solid ${check.problems.length ? 'var(--bad)' : check.warnings.length ? 'var(--warn)' : 'var(--good)'}` }}><div className="eyebrow">Schritt 3</div>{step(3, 'Auswerten und abschliessen', null, <span className={`pill ${check.problems.length ? 'bad' : check.warnings.length ? 'open' : 'ok'}`}>{check.problems.length ? `${check.problems.length} Problem(e)` : 'Rundencheck ok'}{check.warnings.length ? ` · ${check.warnings.length} Hinweis(e)` : ''}</span>)}
