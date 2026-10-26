@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseElfDesTages, classify } from '../src/lib/kicker-parse.js';
+import { matchStats } from '../src/lib/kicker-parse.js';
 
 const P = [['manuel-neuer', 'fc-bayern-muenchen', 'Neuer'], ['joshua-kimmich', 'fc-bayern-muenchen', 'Kimmich'], ['nico-schlotterbeck', 'borussia-dortmund', 'Schlotterbeck'], ['waldemar-anton', 'borussia-dortmund', 'Anton'], ['alphonso-davies', 'fc-bayern-muenchen', 'Davies'], ['angelo-stiller', 'vfb-stuttgart', 'Stiller'], ['michael-olise', 'fc-bayern-muenchen', 'Olise'], ['florian-wirtz', 'bayer-04-leverkusen', 'Wirtz'], ['jamie-gittens', 'borussia-dortmund', 'Gittens'], ['harry-kane', 'fc-bayern-muenchen', 'Kane'], ['serhou-guirassy', 'borussia-dortmund', 'Guirassy']];
 const link = ([slug, team, name], inner) => `<a href="/${slug}/spieler/bundesliga/${team}" class="kick__lineup-player-card">${inner ?? `<img alt="${name} ${name}"><span class="kick__lineup-player-card__name">${name}</span>`}</a>`;
@@ -77,4 +78,11 @@ describe('Elf des Tages Spieltag 6 (echte Handy-Seite kicker.ch, og:url ohne Spi
   test('Spieltag aus dem Titel, nicht aus den Links im Text', () => { const c = classify(html, ''); assert.equal(c.kind, 'elf'); assert.equal(c.matchday, 6); assert.equal(c.matchdaySource, 'title'); });
   test('Adresse vom Sender geht vor', () => { assert.equal(classify(html, 'https://www.kicker.ch/bundesliga/elf-des-tages/2026-27/6').matchday, 6); });
   test('11 Spieler, Spieler des Tages Luis Diaz', () => { const e = parseElfDesTages(html); assert.equal(e.elf.length, 11); assert.equal(e.sdt?.name, 'Luis Diaz'); assert.ok(e.elf.some(p => p.name === 'Kane') && e.elf.some(p => p.name === 'Karius')); });
+});
+
+describe('Assist bei Eigentor (Entscheid 26.10.2026)', () => {
+  const bischof = { slug: 'tom-bischof', name: 'Bischof', team: 'fc-bayern-muenchen' }, makengo = { slug: 'jordy-makengo', name: 'Makengo', team: 'sc-freiburg' };
+  const parsed = { starters: [{ ...bischof, pos: 'M' }, { ...makengo, pos: 'V' }], bench: [], events: [{ type: 'goal', minute: '82', scorer: bischof, assist: makengo, ownGoal: true, penalty: false }] };
+  test('Vorlage zum Eigentor zählt als Assist, das Eigentor nicht als Tor', () => { const s = matchStats(parsed); assert.equal(s['jordy-makengo'].assist, 1); assert.equal(s['tom-bischof'].tore, 0); assert.match(s['jordy-makengo'].notes[0], /als Assist gezählt/); });
+  test('abschaltbar', () => { assert.equal(matchStats(parsed, { assistOnOwnGoal: false })['jordy-makengo'].assist, 0); });
 });

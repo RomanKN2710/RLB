@@ -86,3 +86,60 @@ export function parseElfDesTages(html) {
   if (sdt) { const inElf = elf.find(p => p.slug && p.slug === sdt.slug); if (inElf && inElf.name) sdt.name = inElf.name; }
   return { elf, sdt, diag };
 }
+
+/* ---------- Parser ---------- */
+/** Aufstellungsseite eines Spiels: Startelf (mit Position aus den Formationszeilen), Reservebank, Wechsel, Tore/Vorlagen, Karten. */
+export function parseMatchPage(html) {
+  const $ = cheerio.load(html);
+  const player = a => ({ slug: slugOfHref($(a).attr('href')), name: $(a).text().trim(), team: teamOfHref($(a).attr('href')).split('/').pop() });
+  const teams = []; const starters = []; const bench = [];
+  $('.kick__lineup__teamrow').each((i, row) => {
+    const teamName = $(row).find('.kick__lineup__teamrow__teamname').text().trim();
+    // Formationszeilen "Torwart - Abwehr - Mittelfeld [- Mittelfeld] - Sturm": daraus die kicker-Position je Spieler (Ziff. 5.2: Spielbericht)
+    const groups = [[]]; $(row).find('p').first().contents().each((_, node) => { if (node.type === 'text') { if (node.data.includes('-')) groups.push([]); } else if (node.name === 'a' && /\/spieler\//.test($(node).attr('href') || '')) groups[groups.length - 1].push(player(node)); });
+    const g = groups.filter(x => x.length); const posOf = gi => g.length <= 1 ? null : gi === 0 ? 'T' : gi === g.length - 1 ? 'S' : gi === 1 ? 'V' : 'M';
+    const links = []; g.forEach((grp, gi) => grp.forEach(pl => links.push({ ...pl, pos: posOf(gi) })));
+    teams.push({ name: teamName, slug: links[0]?.team || '', formation: g.map(x => x.length).slice(1).join('-') }); links.forEach(p => starters.push({ ...p, teamIndex: i }));
+  });
+  // Reservebank: "<h4>Reservebank</h4>" gefolgt von der Spielerliste (je Team)
+  $('h4').each((_, h) => { if (!/Reservebank/i.test($(h).text())) return; $(h).next().find('a[href*="/spieler/"]').each((__, a) => bench.push(player(a))); });
+  const events = [];
+  $('.kick__game-timeline .kick__ticker-event-overlay-box__content').each((_, c) => {
+    const p = $(c).find('p').first(); if (!p.length) return;
+    const header = $(c).prev('.kick__ticker-event-overlay-box__header').text().trim();
+    const minute = (header.match(/(\d+)\.\s*(?:\+\s*(\d+))?/) || [])[1];
+    const lines = p.html().split(/<br\s*\/?>/i).map(x => cheerio.load(x).text().replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const links = p.find('a[href*="/spieler/"]').toArray().map(player);
+    const head = lines[0] || '';
+    if (/^Tor annulliert/i.test(head)) return;
+    if (/^Tor\b/i.test(head)) {
+      const own = lines.some(l => /Eigentor/i.test(l)); const scorer = links[0] || null;
+      const assistIdx = lines.findIndex(l => /^Vorbereitung/i.test(l)); const assist = assistIdx >= 0 ? links[1] || null : null;
+      events.push({ type: 'goal', minute, scorer, assist, ownGoal: own, penalty: lines.some(l => /Elfmeter|Foulelfmeter|Handelfmeter/i.test(l)) });
+    } else if (/^Gelb-Rote Karte/i.test(head)) events.push({ type: 'yellowred', minute, player: links[0] });
+    else if (/^Gelbe Karte/i.test(head)) events.push({ type: 'yellow', minute, player: links[0] });
+    else if (/^Rote Karte/i.test(head)) events.push({ type: 'red', minute, player: links[0] });
+    else if (/^Spielerwechsel/i.test(head)) events.push({ type: 'sub', minute, in: links[0], out: links[1] });
+  });
+  return { teams, starters, bench, events };
+}
+
+/* ---------- Bewertung pro Spieler aus den Spieldaten ---------- */
+/** Pro kicker-Spieler {start, assist, tore, karten, kpos, bench}. start: 1 Startelf, 2 eingewechselt, 0 nur Bank. Karten: Gelb 1, Gelb-Rot 2, Rot 3, Rot nach Gelb 4. */
+export function matchStats(parsed, opts = {}) {
+  const stats = {}; const get = p => { if (!p || !p.slug) return null; return stats[p.slug] ||= { slug: p.slug, name: p.name, team: p.team, start: 0, assist: 0, tore: 0, karten: 0, kpos: null, bench: false, notes: [] }; };
+  parsed.starters.forEach(p => { const s = get(p); s.start = 1; s.kpos = p.pos || null; });
+  (parsed.bench || []).forEach(p => { const s = get(p); if (s.start === 0) s.bench = true; });
+  for (const e of parsed.events) {
+    if (e.type === 'sub') { const s = get(e.in); if (s && s.start === 0) s.start = 2; }
+    else if (e.type === 'goal') {
+      if (!e.ownGoal && e.scorer) get(e.scorer).tore++;
+      // Vorlage zu einem Eigentor zaehlt als Assist (Ziff. 8.4, Entscheid Roman 26.10.2026); assistOnOwnGoal:false schaltet das ab
+      if (e.assist) { const s = get(e.assist); if (e.ownGoal) { const zaehlt = opts.assistOnOwnGoal !== false; if (zaehlt) s.assist++; s.notes.push(`Vorbereitung bei Eigentor (${e.minute}')${zaehlt ? ', als Assist gezählt' : ', nicht gezählt'}`); } else s.assist++; }
+    }
+    else if (e.type === 'yellow') { const s = get(e.player); if (s) s.karten += 1; }
+    else if (e.type === 'yellowred') { const s = get(e.player); if (s) { s.karten = 2; s.notes.push('Gelb-Rot'); } }
+    else if (e.type === 'red') { const s = get(e.player); if (s) { s.karten = s.karten >= 1 ? 4 : 3; s.notes.push(s.karten === 4 ? 'Rot nach Gelb' : 'Rot'); } }
+  }
+  return stats;
+}

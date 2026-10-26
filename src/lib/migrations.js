@@ -84,6 +84,22 @@ export const STEPS = [
     if (c.problems.length || imp.errors.length) { log.push('NICHT abgeschlossen – Rundencheck: ' + c.problems.map(x => x.text).join(' · ')); }
     else { await Blog.finalizeRound(userId, r7.id); log.push('Runde abgeschlossen' + (c.warnings.length ? ' · Hinweise: ' + c.warnings.map(x => x.text).join(' · ') : '')); const rep = Blog.triggerReport(r7.id); if (rep) log.push('Spieltagsbericht angestossen'); }
     await setSetting('st7_abschluss_20261026', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'assist_eigentor_20261026', title: 'Assists bei Eigentoren zählen (Entscheid Roman 26.10.2026): betroffene Spieltage aus dem kicker-Eingang neu eingelesen', run: async userId => {
+    // Nur Spieltage, deren gespeicherte kicker-Seiten eine Vorlage zu einem Eigentor enthalten; Spieltag 1–3 stammen aus dem Excel
+    const K = await import('./kicker'); const Inbox = await import('./kicker-inbox'); const log = [];
+    for (const r of await q("select * from rounds where type='regulaer' order by number")) {
+      const pg = await Inbox.pages(r.matchday).catch(() => ({ matches: [] })); const treffer = [];
+      for (const html of pg.matches || []) { let parsed; try { parsed = K.parseMatchPage(html); } catch (e) { continue; }
+        for (const e of parsed.events || []) if (e.type === 'goal' && e.ownGoal && e.assist) treffer.push(`${e.assist.name} (${e.minute}')`); }
+      if (!treffer.length) continue;
+      const vorher = await q("select player_id, assist from results where round_id=$1", [r.id]);
+      const imp = await K.importInbox(r.matchday, { userId, auto: true });
+      const nachher = await q("select r.player_id, r.assist, p.name from results r join players p on p.id=r.player_id where r.round_id=$1", [r.id]);
+      const geaendert = nachher.filter(n => (vorher.find(v => v.player_id === n.player_id) || {}).assist !== n.assist).map(n => `${n.name} ${(vorher.find(v => v.player_id === n.player_id) || {}).assist ?? '–'} → ${n.assist}`);
+      log.push(`${r.label}: Vorlage zu Eigentor bei ${treffer.join(', ')} · neu eingelesen (${imp.games} Spiele) · ${geaendert.length ? 'geändert: ' + geaendert.join(', ') : 'kein RLB-Spieler betroffen'}${imp.errors.length ? ' · Probleme: ' + imp.errors.join(' · ') : ''}`);
+    }
+    if (!log.length) log.push('Keine Vorlage zu einem Eigentor in den gespeicherten kicker-Seiten');
+    await setSetting('assist_eigentor_20261026', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];
