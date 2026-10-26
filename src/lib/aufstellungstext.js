@@ -35,7 +35,12 @@ export function findPlayer(name, kader) {
   const exact = kader.filter(p => norm(p.name) === n); if (exact.length) return { hits: exact, how: 'exakt' };
   const all = kader.filter(p => { const ts = parts(p); return ts.length && ts.every(t => n.includes(t)); }); if (all.length) return { hits: all, how: 'Name' };
   const chunkParts = words(name).map(norm).filter(t => t.length >= 3);
-  const some = kader.filter(p => parts(p).some(t => chunkParts.includes(t)) || (n.length >= 5 && norm(p.name).includes(n))); if (some.length) return { hits: some, how: 'Namensteil' };
+  // Nachname zuerst: «Fabio Viera» ist Vieira (Nachname mit Tippfehler), nicht Fabio Silva (nur der Vorname passt)
+  const last = chunkParts[chunkParts.length - 1]; const lastOf = p => { const ts = parts(p); return ts[ts.length - 1]; };
+  const surname = last ? kader.filter(p => lastOf(p) === last) : []; if (surname.length) return { hits: surname, how: 'Nachname' };
+  const some = kader.filter(p => parts(p).some(t => chunkParts.includes(t)) || (n.length >= 5 && norm(p.name).includes(n)));
+  if (some.length) { const near = last && last.length >= 5 ? kader.filter(p => { const t = lastOf(p); return t && lev(last, t) <= (Math.min(last.length, t.length) >= 8 || (Math.min(last.length, t.length) >= 6 && last[0] === t[0]) ? 2 : 1); }) : [];
+    return near.length ? { hits: near, how: 'ähnlich' } : { hits: some, how: 'Namensteil' }; }
   // Voller kicker-Name als Alias ("Miguel" heisst bei kicker Miguel Gutierrez): ein Aliasteil (>= 4 Zeichen) trifft
   const alias = kader.filter(p => (p.alias || []).some(t => t.length >= 4 && chunkParts.includes(t))); if (alias.length) return { hits: alias, how: 'kicker-Name' };
   // Tippfehler: ein Namensteil des Schnipsels nahe an einem Namensteil des Spielers (Ulrich/Ullrich, Gregrotisch/Gregoritsch)
@@ -45,12 +50,12 @@ export function findPlayer(name, kader) {
 
 const NOISE = /^(hi|hallo|hoi|salut|public|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|januar|februar|maerz|märz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|aufstellung|auswechslung|einwechslung|runde|spieltag|wechsel|system|update|sollte|erhalte|falls/i;
 export const SIG = /^(freundliche gr|viele gr|liebe gr|vielen dank|besten dank|danke|gruss|grüss|gruess|merci|lg\b|mfg|vg\b|this e-?mail|---|uploaded image|eingestellt von)/i;
-const UI = /^(Keine Kommentare|\d+ Kommentare?|Kommentar veröffentlichen|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|Auf Twitter teilen|In Facebook freigeben|Auf Pinterest teilen|Labels?:|Neuerer Post|Älterer Post|Startseite|Abonnieren|Posts? kommentieren|Share|Teilen)\b/i;
+const UI = /^(?:[‹›«»]+$|(?:Rotissery League Bundesliga|Improving the Bundesliga experience|Web-Version anzeigen|Powered by Blogger|Uploaded Image|Keine Kommentare|\d+ Kommentare?|Kommentar veröffentlichen|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|Auf Twitter teilen|In Facebook freigeben|Auf Pinterest teilen|Labels?:|Neuerer Post|Älterer Post|Startseite|Abonnieren|Posts? kommentieren|Share|Teilen)\b)/i;
 const ENDE = /^(?:Eingestellt von\s+)?(\p{L}[\p{L}\s.'-]{0,40}?)\s+um\s+(\d{1,2}):(\d{2})\s*$/iu;
 // Spitznamen und buergerliche Namen, wie sie im Blog vorkommen (Blog-Konto MARKADONA postet fuer alle: kein Rueckschluss)
 const NICK = { rofe: 'Röfe', rolf: 'Röfe', stauffer: 'Röfe', daniel: 'Dani', allenspach: 'Dani', patrick: 'Pädi', duss: 'Pädi', fehlmann: 'Mark', lenz: 'David', knipprath: 'Roman', berisha: 'Arbi', berishaa: 'Arbi', bance: 'Arbi', aristide: 'Arbi', peter: 'René' };
 const MONTHS = { januar: 1, january: 1, februar: 2, february: 2, maerz: 3, marz: 3, march: 3, april: 4, mai: 5, may: 5, juni: 6, june: 6, juli: 7, july: 7, august: 8, september: 9, oktober: 10, october: 10, november: 11, dezember: 12, december: 12 };
-export { dateLine };
+export { dateLine, zurich };
 /** Datumszeile des Blogs ("Freitag, 18. September 2026" oder "Friday, September 18, 2026") -> "2026-09-18" */
 function dateLine(l) {
   const de = l.match(/^(?:\p{L}+,\s*)?(\d{1,2})\.\s*(\p{L}+)\s+(\d{4})$/u), en = l.match(/^(?:\p{L}+,\s*)?(\p{L}+)\s+(\d{1,2}),\s*(\d{4})$/u);

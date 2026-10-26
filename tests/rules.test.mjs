@@ -6,6 +6,11 @@ const P = {}; const mk = (id, base, extra = []) => { P[id] = { id, name: id, bas
 const lineup = ids => Object.fromEntries(ids.map(([id, pos]) => [id, { pos }]));
 describe('fitPositions', () => {
   const t = mk('t', 'T'), v1 = mk('v1', 'V'), v2 = mk('v2', 'V'), v3 = mk('v3', 'V'), v4 = mk('v4', 'V'), v5 = mk('v5', 'V'), m1 = mk('m1', 'M'), m2 = mk('m2', 'M'), s1 = mk('s1', 'S'), s2 = mk('s2', 'S'), beier = mk('beier', 'S', ['M', 'V']), caci = mk('caci', 'V', ['M']);
+  test('gleich viele Umstellungen möglich: der Stürmer rückt ins Mittelfeld, der Verteidiger bleibt (Shutouts nur für T/V)', () => {
+    const mokwa = mk('mokwa', 'S', ['M']), ryerson = mk('ryerson', 'V', ['M']);
+    const e = lineup([[t, 'T'], [v1, 'V'], [v2, 'V'], [v3, 'V'], [ryerson, 'V'], [v4, 'V'], [m1, 'M'], [m2, 'M'], [s1, 'S'], [s2, 'S'], [mokwa, 'S']]);
+    assert.deepEqual(fitPositions(e, P), { changes: { mokwa: 'M' } });
+  });
   test('zu wenige Mittelfeldspieler: Spieler mit Zusatzposition wechselt', () => {
     const e = lineup([[t, 'T'], [v1, 'V'], [v2, 'V'], [v3, 'V'], [v4, 'V'], [v5, 'V'], [m1, 'M'], [m2, 'M'], [beier, 'S'], [s1, 'S'], [s2, 'S']]);
     const fit = fitPositions(e, P); assert.deepEqual(fit, { changes: { beier: 'M' } });

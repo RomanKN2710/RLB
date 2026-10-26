@@ -4,7 +4,7 @@
    Reihenfolge) und Eventualauftraege ("wechsle ich für Suzuki ein"). Reine Funktionen ohne Datenbank; Entlassung und
    Eventualauftrag werden gegen den Kader des Managers aufgeloest, der Gebotsspieler bleibt Text (Name, Verein, Position). */
 import { norm } from './rules.js';
-import { splitBlocks, findPlayer, words, posList, CLUBWORDS, SIG, dateLine } from './aufstellungstext.js';
+import { splitBlocks, findPlayer, words, posList, CLUBWORDS, SIG, dateLine, zurich } from './aufstellungstext.js';
 
 // Vereinsworte -> Vereins-Kennung der App (norm: Umlaute zusammengezogen)
 const CLUB = { bvb: 'Dortmund', dortmund: 'Dortmund', hsv: 'Hamburg', hamburg: 'Hamburg', hamburger: 'Hamburg', bayern: 'Bayern', munchen: 'Bayern', union: 'Union', berlin: 'Union', frankfurt: 'Frankfurt', eintracht: 'Frankfurt', sge: 'Frankfurt', leipzig: 'Leipzig', rb: 'Leipzig', rbl: 'Leipzig', bremen: 'Bremen', werder: 'Bremen', stuttgart: 'Stuttgart', vfb: 'Stuttgart', freiburg: 'Freiburg', scf: 'Freiburg', augsburg: 'Augsburg', fca: 'Augsburg', koln: 'Köln', hoffenheim: 'Hoffenheim', tsg: 'Hoffenheim', leverkusen: 'Leverkusen', bayer: 'Leverkusen', mainz: 'Mainz', elversberg: 'Elversberg', paderborn: 'Paderborn', schalke: 'Schalke', s04: 'Schalke', gladbach: 'Gladbach', monchengladbach: 'Gladbach' };
@@ -40,7 +40,7 @@ export function playerSpec(raw) {
 
 /** Gebots-Post eines Managers lesen. kader: aktive Spieler des Managers (fuer Entlassung und Eventualauftrag). */
 function readBidPost(lines, kader, title = '') {
-  const bids = [], releases = [], notes = [], unmatched = []; let maxWins = null, mode = 'bid', stop = false; let seg = null, relTarget = null, pendingSwap = null, sinceRelease = 0;   // seg: Gebot, zu dem Folgezeilen gehoeren
+  const bids = [], releases = [], notes = [], unmatched = []; let maxWins = null, mode = 'bid', stop = false, fallback = null; let seg = null, relTarget = null, pendingSwap = null, sinceRelease = 0;   // seg: Gebot, zu dem Folgezeilen gehoeren
   const clean = lines.map(l => l.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()); let titleSeen = false;
   const resolve = (name, quiet) => { const { hits } = findPlayer(name, kader); if (hits.length === 1) return hits[0]; if (hits.length > 1) notes.push(`«${name}» ist mehrdeutig: ${hits.map(h => h.name).join(' oder ')}`); else if (!quiet) unmatched.push(name); return null; };
   const releaseNames = txt => String(txt).replace(/\([^)]*\)/g, ' ').split(/\s*[,;]\s*|\s+(?:und|&|oder)\s+/).map(x => playerSpec(x).name).filter(n => n && norm(n).length >= 3 && !/^(in|der|die|folgender|folgende|reihenfolge|ich|dafur|dafuer|entlasse|entlassen|entlassung)$/i.test(n));
@@ -60,7 +60,7 @@ function readBidPost(lines, kader, title = '') {
     const mm = raw.match(/(?:max\.?|maximal|insgesamt|h[öo]chstens)\s*(\d+|einen|ein|eine|zwei|drei|vier|f[üu]nf)\s*(?:spieler|torh|verteidiger|mittelfeld|st[üu]rmer)/i) || raw.match(/f[üu]r\s+(\d+|einen|ein|zwei|drei)\s+(?:spieler|torh[üu]ter|verteidiger|mittelfeldspieler|st[üu]rmer)\b/i);
     if (mm && maxWins == null) maxWins = Number(mm[1]) || NUMWORD[norm(mm[1])] || null;
     // Saetze mit Preis = Gebot; der Rest der Zeile kann Entlassung und Eventualauftrag enthalten
-    const parts = raw.replace(/\b(?:runde|spieltag|r)\s*\d+\b/gi, ' ').replace(/\b\d+\.\s*spieltag\b/gi, ' ').split(/(?<=[.!])\s+(?=[A-ZÄÖÜ])/);
+    const parts = raw.replace(/\b(?:runde|spieltag|r)\s*\d+\b/gi, ' ').replace(/\b\d+\.\s*spieltag\b/gi, ' ').split(/(?<=\p{L}\p{L}[.!])\s+(?=\p{L})/u);
     let bidLine = null;
     for (const sentence of parts) {
       const inRelease = mode === 'release' && !/^(?:\d+[.)]\s*)?(?:ich\s+)?(?:biete|gebote?)\b/i.test(sentence) && !/^(falls|sollte|wenn)\b/i.test(sentence);
@@ -80,7 +80,12 @@ function readBidPost(lines, kader, title = '') {
       }
       // Eventualauftrag: "Ihn gleich für X einwechseln", "wechsle ich (ihn) für X ein", "direkt einwechseln für X", "der auch direkt T X ersetzt"
       const conditional = /^(falls|wenn|sollte|sofern)\b/i.test(sentence);
-      if (conditional && /\bnicht\b/i.test(sentence)) { notes.push(`Bedingte Aufstellungsänderung, nicht übernommen: «${sentence.trim()}»`); continue; }
+      if (conditional && /\bnicht\b/i.test(sentence)) {
+        // «falls ich ihn nicht erhalte, dann Kramaric für Claude-Maurice einwechseln»: Rueckfall-Wechsel ohne Kauf (kostenpflichtig), nur von Hand
+        const fm = sentence.match(/(?:dann|wird|soll|dafür|dafuer)?\s*(?:[TVMS]\s+)?([\p{L}' -]+?)\s+(?:für|fuer)\s+(?:[TVMS]\s+)?([\p{L}' -]+?)(?=\s*,|\s+(?:ein|einwechseln|einsetzen|einzuwechseln|rein|spielen)\b|\s*[.!;]|\s*$)/iu);
+        const inP = fm && findPlayer(fm[1].replace(/^(?:dann|wird|soll|ich|er|ihn)\s+/i, '').replace(/.*\b(?:dann|soll|wird)\s+/i, ''), kader).hits, outP = fm && findPlayer(fm[2], kader).hits;
+        if (inP && inP.length === 1 && outP && outP.length === 1 && inP[0].id !== outP[0].id) { fallback = { in: inP[0], out: outP[0] }; notes.push(`Bedingter Wechsel, nur wenn das Gebot nicht durchkommt: ${inP[0].name} für ${outP[0].name} – kein Eventualauftrag, kostenpflichtig (50 % von ${inP[0].name}), von Hand in der Aufstellung`); }
+        else notes.push(`Bedingte Aufstellungsänderung, nicht übernommen: «${sentence.trim()}»`); continue; }
       if ((/einwechsel|einsetz|wechsle|wechseln|ersetz|\brein\b/i.test(sentence) || conditional) && /\b(?:für|fuer)\b|ersetzt/i.test(sentence)) {
         const cand = swapOf(sentence, bids.map(b => b.player_name));
         if (cand.length === 1) {
@@ -108,13 +113,20 @@ function readBidPost(lines, kader, title = '') {
   if (maxWins == null) maxWins = perBid === bids.length && bids.length ? bids.length : rel.length ? Math.min(rel.length, bids.length || 1) : 1;
   if (perBid && perBid < bids.length && rel.length) { let k = 0; for (const b of bids) if (!b.release && rel[k]) b.release = rel[k++]; }
   if (bids.length === 1 && !bids[0].release && rel.length === 1) bids[0].release = rel[0];
-  return { bids, releases: rel, maxWins, notes, unmatched: [...new Set(unmatched)] };
+  return { bids, releases: rel, maxWins, notes, unmatched: [...new Set(unmatched)], fallback };
 }
 
 /**
  * Text in Manager-Posts teilen und Gebote lesen. managers: [{id,name}], kaderOf: managerId -> Kader (aktive Spieler).
  * Liefert {blocks: [{managerId, name, title, bids, releases, maxWins, notes, unmatched, problems}], unclear, skipped}
  */
+const fmtAt = d => d ? new Date(d).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+/** «Gesendet: Freitag, 23. Oktober 2026 um 18:08» (weitergeleitete Mail) als Zeitpunkt, Zürcher Zeit. */
+export function sentAt(lines) {
+  for (const l of lines.slice(0, 12)) { const m = String(l || '').match(/^(?:gesendet|sent|date|datum)\s*:\s*(.+)$/i); if (!m) continue;
+    const d = dateLine(m[1].replace(/\s+um\s+\d{1,2}:\d{2}.*$/i, '').replace(/,\s*\d{1,2}:\d{2}.*$/, '')); const t = m[1].match(/(\d{1,2}):(\d{2})/); if (d && t) return zurich(d, t[1], t[2]); }
+  return null;
+}
 export function parseBidText(text, managers, kaderOf, opts = {}) {
   const lines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.replace(/ /g, ' ').trim());
   const raw = splitBlocks(lines, managers, kaderOf);
@@ -126,13 +138,16 @@ export function parseBidText(text, managers, kaderOf, opts = {}) {
     if (!b.manager) { unclear.push(`«${b.title}»: ${b.unclear ? 'mehrere Managernamen (' + b.unclear.join(', ') + ')' : 'kein Managername erkennbar'}`); continue; }
     const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i); const rn = m && Number(m[1] || m[2]);
     if (rn && opts.roundNumbers?.length && !opts.roundNumbers.includes(rn)) { skipped.push(`${b.manager.name}: «${b.title}» – Gebot für Runde ${rn}`); continue; }
+    const sent = sentAt(b.lines); const at = sent || b.at || null;
+    if (at && opts.notBefore && at <= new Date(opts.notBefore)) { skipped.push(`${b.manager.name}: «${b.title}» – vor der Deadline der Vorrunde (${fmtAt(at)})`); continue; }
     const r = readBidPost(b.lines, kaderOf(b.manager.id) || [], b.title);
     if (!r.bids.length) { if (/\d/.test(b.lines.join(' '))) unclear.push(`${b.manager.name}: «${b.title}» – kein Gebot mit Preis erkannt`); continue; }
     const problems = [];
     r.bids.forEach(x => { if (!x.release && !r.releases.length) problems.push(`Gebot ${x.priority} (${x.player_name}): keine Entlassung genannt`); });
     if (r.releases.length && r.releases.length < Math.min(r.maxWins, r.bids.length) && !r.bids.every(x => x.release)) problems.push(`Nur ${r.releases.length} Entlassung(en) für bis zu ${Math.min(r.maxWins, r.bids.length)} Käufe`);
     const prev = out.find(o => o.managerId === b.manager.id);
-    const block = { managerId: b.manager.id, name: b.manager.name, title: b.title, at: b.at || null, ...r, problems, ok: problems.length === 0 };
+    if (at && opts.deadline && at > new Date(opts.deadline)) r.notes.push(`Nach der Deadline ${sent ? 'gesendet' : 'gepostet'} (${fmtAt(at)}, Deadline ${fmtAt(new Date(opts.deadline))}) – Gebot ungültig (Ziff. 7.1), falls die Mail nicht früher im Postfach war`);
+    const block = { managerId: b.manager.id, name: b.manager.name, title: b.title, at, sentAt: sent, postedAt: b.at || null, ...r, problems, ok: problems.length === 0, spaet: !!(at && opts.deadline && at > new Date(opts.deadline)) };
     if (prev) { out[out.indexOf(prev)] = block; block.notes.unshift(`Ersetzt den früheren Post «${prev.title}»`); } else out.push(block);
   }
   return { blocks: out, unclear, skipped };

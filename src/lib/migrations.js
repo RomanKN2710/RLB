@@ -52,6 +52,16 @@ export const STEPS = [
   { key: 'blog_dubletten_20261019', title: 'Blog-Archiv: Dubletten entfernt (gleicher Post, unterschiedlich langer Mail-Text), Kennung auf Titel/Zeit/Autor umgestellt', run: async () => {
     const Archiv = await import('./blog-archiv'); const r = await Archiv.rehashAndDedupe(); const log = [`${r.removed} Dublette(n) entfernt`, ...r.log];
     await setSetting('blog_dubletten_20261019', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'blog_st7_20261026', title: 'Spieltag 7: Blog vom 23.10.2026 mit dem korrigierten Leser übernommen (Danis Elf mit Vieira, Arbis Gebot Potulski mit Entlassung Dallinga und Eventualauftrag), kicker-Werte neu eingelesen', run: async userId => {
+    const r7 = await one("select * from rounds where type='regulaer' and matchday=7"); if (!r7) throw new Error('Spieltag 7 fehlt'); const log = [];
+    if (r7.status === 'final') { log.push('Spieltag 7 ist abgeschlossen – nichts geändert, bitte von Hand prüfen'); await setSetting('blog_st7_20261026', { at: new Date().toISOString(), log }); return { log }; }
+    const text = fs.readFileSync(path.join(process.cwd(), 'db', 'seed', 'blog-2026-10-23.txt'), 'utf8');
+    const r = await Blog.applyBlog({ id: userId, name: 'Admin', email: 'admin' }, r7.id, text);
+    log.push(`Archiv: ${r.archiv.neu} neue Posts`, ...r.bids.log, ...r.lineups.log);
+    // Aufstellungen haben sich geaendert (Dani): kicker-Werte fuer die Runde nochmals aus dem Eingang einlesen
+    try { const { importInbox, importSummary } = await import('./kicker'); const imp = await importInbox(7, { userId, auto: true }); log.push('kicker neu eingelesen: ' + importSummary(imp).join(', ') + (imp.errors.length ? ' · Probleme: ' + imp.errors.join(' · ') : '')); }
+    catch (e) { log.push('kicker nicht neu eingelesen: ' + e.message); }
+    await setSetting('blog_st7_20261026', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

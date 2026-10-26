@@ -56,7 +56,9 @@ export function fitPositions(entries, players, fixed = new Set()) {
     if (k === flex.length) { const cnt = { T: 0, V: 0, M: 0, S: 0 }; ids.forEach(pid => { const pos = changes[pid] || posOf(pid); if (cnt[pos] !== undefined) cnt[pos]++; });
       if (Object.entries(POSRULE).every(([p, [lo, hi]]) => cnt[p] >= lo && cnt[p] <= hi)) best = { cost, changes: { ...changes } }; return; }
     const pid = flex[k];
-    for (const pos of positionsOf(players[pid])) { const same = pos === posOf(pid); if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : fixed.has(pid) ? 3 : 1), changes); delete changes[pid]; }
+    // Umstellen kostet 1, ausdruecklich gewaehlte Positionen 3; wer Torwart/Verteidiger verlaesst, zaehlt etwas mehr
+    // (Shutouts gibt es nur fuer T/V, Ziff. 8.3) – bei gleich vielen Aenderungen bleibt die Abwehr stehen
+    for (const pos of positionsOf(players[pid])) { const same = pos === posOf(pid); if (!same) changes[pid] = pos; go(k + 1, cost + (same ? 0 : (fixed.has(pid) ? 3 : 1) + (/^[TV]$/.test(posOf(pid)) && !/^[TV]$/.test(pos) ? 0.5 : 0)), changes); delete changes[pid]; }
   };
   go(0, 0, {});
   return best && Object.keys(best.changes).length ? { changes: best.changes } : null;

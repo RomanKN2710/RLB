@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBidText, playerSpec } from '../src/lib/gebotetext.js';
+import { parseBidText, playerSpec, sentAt } from '../src/lib/gebotetext.js';
+import fs from 'node:fs';
 import { managers, kader, postsBetween, blogger, post } from './helpers/blog-fixture.mjs';
 
 const kaderOf = id => kader[id];
@@ -54,4 +55,14 @@ describe('Handy-Blog (Fusszeile «Name um HH:MM», Spitzname, Mail-Kopf)', () =>
   test('Arbi über Spitznamen-Fusszeile, alles in einem Satz', () => { const x = block(res, 'Arbi'); assert.equal(bid(x, 0), 'V Brackelmann (Augsburg) 2 -Dallinga >Claude-Maurice'); assert.ok(x.ok); });
   test('René: zwei Alternativen, eine Entlassung, Eventualauftrag für beide', () => { const x = block(res, 'René'); assert.equal(x.maxWins, 1); assert.equal(bid(x, 0), 'M Dinkci (Bremen) 2 >Suzuki'); assert.equal(bid(x, 1), 'M Maina (Köln) 2 >Suzuki'); assert.deepEqual(x.releases.map(p => p.name), ['Onyedika']); assert.ok(x.ok); });
   test('David: Mail mit Anrede und Unterschrift', () => { const x = block(res, 'David'); assert.equal(bid(x, 0), 'V Brackelmann (Augsburg) 2 -Kemlein >El Aynaoui'); assert.ok(x.ok); });
+});
+
+describe('Handy-Blog Runde 7 (23.10.2026): Blog-Kopf, Gebot per Mail nach der Blog-Zeit, kryptischer Satz', () => {
+  const text = fs.readFileSync(new URL('./fixtures/blog-2026-10-23.txt', import.meta.url), 'utf8');
+  const res = parse(text, { roundNumbers: [70, 7], notBefore: '2026-10-16T17:00:00Z', deadline: '2026-10-23T17:00:00Z' });
+  test('nur die Gebote dieser Runde: Pädi und Arbi; die Posts vom 16.10. sind übersprungen', () => { assert.deepEqual(res.blocks.map(b => b.name).sort(), ['Arbi', 'Pädi']); assert.ok(res.skipped.some(s => /^David:/.test(s)) && res.skipped.some(s => /^René:/.test(s)), res.skipped.join(' | ')); assert.deepEqual(res.unclear, []); });
+  test('Pädi: Titel aus dem Post, nicht der Blog-Kopf; «für 2 Spieler», zwei Gebote, zwei Entlassungen in Reihenfolge', () => { const x = block(res, 'Pädi'); assert.equal(x.title, 'Fw: Runde 7 Gebote Pädi'); assert.equal(x.maxWins, 2); assert.equal(bid(x, 0), 'M Weiser (Bremen) 2'); assert.equal(bid(x, 1), 'M Hofmann (Leverkusen) 2'); assert.deepEqual(x.releases.map(p => p.name), ['Querfeld', 'De Cat']); assert.ok(x.ok, x.problems.join('; ')); });
+  test('Pädi: Frist nach der Mail («Gesendet … 18:08»), nicht nach der Blog-Zeit 19:10', () => { const x = block(res, 'Pädi'); assert.equal(x.sentAt.toISOString(), '2026-10-23T16:08:00.000Z'); assert.equal(x.spaet, false); assert.ok(!x.notes.some(n => /Deadline/.test(n))); });
+  test('Arbi: Potulski für 2, Dallinga entlassen, Eventualauftrag für Claude-Maurice; Kramaric-Wechsel nur als Rückfall-Notiz', () => { const x = block(res, 'Arbi'); assert.equal(bid(x, 0), 'V Potulski (Mainz) 2 -Dallinga >Claude-Maurice'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.fallback.in.name, 'Kramaric'); assert.equal(x.fallback.out.name, 'Claude-Maurice'); assert.ok(x.notes.some(n => /Kramaric für Claude-Maurice/.test(n) && /kostenpflichtig/.test(n))); });
+  test('sentAt liest das Mail-Datum', () => { assert.equal(sentAt(['Fw: x', 'Gesendet: Freitag, 23. Oktober 2026 um 18:08', 'Von: a@b.ch']).toISOString(), '2026-10-23T16:08:00.000Z'); assert.equal(sentAt(['nur Text']), null); });
 });

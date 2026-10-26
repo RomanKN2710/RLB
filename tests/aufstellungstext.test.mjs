@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLineupText } from '../src/lib/aufstellungstext.js';
+import { parseLineupText, findPlayer } from '../src/lib/aufstellungstext.js';
+import fs from 'node:fs';
 import { managers, kader, kaderOf, mid, posts, postsBetween, blogger, post } from './helpers/blog-fixture.mjs';
 
 const names = x => x.found.map(f => f.name).sort();
@@ -142,4 +143,15 @@ describe('Manager erkennen', () => {
     const res = parseLineupText(text, managers, kD, { roundNumbers: [60, 6], eventualOf: id => id === david ? [{ inId: brack.id, outId: ayn.id }] : [] });
     const x = block(res, 'David'); assert.ok(x.ok, x.problems.join('; ')); assert.ok(names(x).includes('Brackelmann') && !names(x).includes('El Aynaoui')); assert.equal(pos(x, 'Brackelmann'), 'V'); assert.equal(x.found.filter(f => f.pos === 'V').length, 4);
   });
+});
+
+describe('Handy-Blog Runde 7 (23.10.2026)', () => {
+  const text = fs.readFileSync(new URL('./fixtures/blog-2026-10-23.txt', import.meta.url), 'utf8');
+  const padi = mid('Pädi'), dani = mid('Dani'); const karius = { id: 'padi-karius', name: 'Karius', base_pos: 'T', extra_pos: [], alias: [] }; const maks = { id: 'padi-maksimovic', name: 'Maksimovic', base_pos: 'M', extra_pos: [], alias: [] };
+  const kR = id => id === padi ? [...kader[padi], karius, maks] : kader[id];
+  const res = parseLineupText(text, managers, kR, { roundNumbers: [70, 7], notBefore: '2026-10-16T17:00:00Z', deadline: '2026-10-23T17:00:00Z', baseOf: () => null });
+  test('Blog-Kopf und Pager sind keine Posts; Gebots-Posts werden übersprungen', () => { assert.deepEqual(res.unclear, []); assert.ok(res.skipped.some(s => /Pädi: «Fw: Runde 7 Gebote Pädi».*Gebot/.test(s))); assert.ok(res.skipped.some(s => /Arbi: «Gebot Arbi».*Gebot/.test(s))); });
+  test('Pädi: 4-4-2 mit «anstelle»-Wechseln, 11 Spieler', () => { const x = block(res, 'Pädi'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.found.length, 11); assert.ok(names(x).includes('Prömel') && names(x).includes('Maksimovic') && !names(x).includes('Conté') && !names(x).includes('Nkunku')); });
+  test('Dani: «Fabio Viera HSV» ist Vieira, nicht Fabio Silva – 11 Spieler', () => { const x = block(res, 'Dani'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.found.length, 11); assert.ok(names(x).includes('Vieira') && names(x).includes('Fabio Silva')); });
+  test('findPlayer: Nachname vor Vornamen', () => { assert.deepEqual(findPlayer('Fabio Viera', kader[dani]).hits.map(p => p.name), ['Vieira']); assert.deepEqual(findPlayer('Fabio Silva', kader[dani]).hits.map(p => p.name), ['Fabio Silva']); });
 });
