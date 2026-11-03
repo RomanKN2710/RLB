@@ -215,3 +215,56 @@ create table if not exists squad_log (
 );
 
 alter table bl_players add column if not exists played_pos char(1)[] not null default '{}';
+
+-- Spalten, die bisher erst zur Laufzeit ergaenzt wurden (blog-import.js, kicker.js); hier vollstaendig
+alter table bids add column if not exists note text;                                   -- Hinweis aus dem Gebots-Post (bedingter Wechsel, Frist)
+alter table players add column if not exists kicker_slug text;                         -- Kennung bei kicker, wenn der Name nicht reicht
+alter table players add column if not exists extra_pos_from jsonb not null default '{}'; -- Zusatzposition gilt ab Runde {M: 20} (Ziff. 5.2: Folgerunde)
+
+-- Blog-Archiv: alle Posts des Aufstellungs-Blogs (Aufstellungen, Gebote, Sonstiges), Kennung aus Titel/Zeit/Autor
+create table if not exists blog_posts (
+  id serial primary key,
+  posted_at timestamptz,
+  author text,
+  title text not null,
+  body text not null,
+  kind text not null,                   -- 'aufstellung', 'gebot', 'sonstiges'
+  manager_id int references managers(id),
+  round_number int,
+  source text,                          -- 'paste' (eingefuegt), 'feed'
+  hash text not null unique,
+  created_at timestamptz not null default now()
+);
+
+-- kicker-Eingang: vom Handy gesendete oder eingefuegte Seiten (Aufstellung je Spiel, Elf des Tages), ausgeduennter Quelltext
+create table if not exists kicker_pages (
+  matchday int not null,
+  page_id text not null,                -- kicker-Spielkennung oder 'elf'
+  kind text not null,                   -- 'match' oder 'elf'
+  title text,
+  html text not null,
+  at timestamptz not null default now(),
+  primary key (matchday, page_id)
+);
+
+-- Spieltagsberichte (von Claude geschrieben), je Runde einer
+create table if not exists reports (
+  round_id int primary key references rounds(id),
+  text text,
+  facts jsonb,
+  model text,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  sent_to text[],
+  error text
+);
+
+-- Hall of Fame: Endstaende vergangener Saisons; Gleichstaende moeglich (mehrere Manager je Rang)
+create table if not exists hall_of_fame (
+  season text not null,
+  rank int not null,
+  manager text not null,
+  points numeric(7,2),
+  note text
+);
+create unique index if not exists hall_of_fame_season_manager on hall_of_fame(season, manager);

@@ -58,7 +58,7 @@ export async function generateReportText(facts) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY fehlt in den Umgebungsvariablen');
   const client = new Anthropic();
   const stream = client.messages.stream({
-    model: 'claude-opus-5', max_tokens: 8000, output_config: { effort: 'medium' },
+    model: 'claude-opus-5-5', max_tokens: 8000, output_config: { effort: 'medium' },   // aktuelle Generation (Umstellung 03.11.2026)
     system: SYSTEM,
     messages: [{ role: 'user', content: `Schreib den Bericht zu ${facts.runde}. Daten:\n\n${JSON.stringify(facts)}` }],
   });
