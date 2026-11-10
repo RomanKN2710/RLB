@@ -6,25 +6,30 @@ import { fmtDt, Info } from '@/components/ui';
 import BidForm from './BidForm';
 import FreeList from './FreeList';
 
-export default async function Markt() {
+export default async function Markt({ searchParams }) {
   const u = await requireUser(); const admin = u.role === 'admin';
   const b = await D.base(); const open = await D.openRound(); const pool = await D.freeAgents(b); const free = pool.filter(p => !p.taken);
-  const managerId = u.manager_id;
-  let mine = null, budget = null, kader = [], lineup = null;
+  // Admins können für einen Manager erfassen (Gebot per Mail): ?m=<Manager>
+  const managerId = admin && Number(searchParams?.m) ? Number(searchParams.m) : u.manager_id; const fuerAndere = managerId && managerId !== u.manager_id;
+  let mine = [], budget = null, kader = [], lineup = null;
   if (open && managerId) {
-    mine = (await q('select * from bids where round_id=$1 and manager_id=$2', [open.id, managerId]))[0] || null;
+    mine = await q("select * from bids where round_id=$1 and manager_id=$2 and status='sealed' order by priority", [open.id, managerId]);
     budget = await D.budgetLeft(managerId); kader = await D.kader(managerId, open.number);
     lineup = (await q('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId]))[0] || await D.prevLineup(open, managerId);
   }
-  const submitted = open ? await q('select manager_id from bids where round_id=$1', [open.id]) : [];
+  const submitted = open ? await q('select distinct manager_id from bids where round_id=$1', [open.id]) : [];   // je Manager einmal, auch bei mehreren Geboten
   const published = await q("select b.*, m.name as manager_name, r.label as round_label, r.number as rnum, p.name as release_name from bids b join managers m on m.id=b.manager_id join rounds r on r.id=b.round_id left join players p on p.id=b.release_player_id where b.status<>'sealed' order by r.number desc, b.price desc");
   const releases = await q("select t.*, m.name as manager_name, r.label as round_label, r.number as rnum from transfers t join managers m on m.id=t.manager_id left join rounds r on r.id=t.round_id where t.type='entlassung' order by t.created_at desc limit 20");
   const prevRound = open ? (await q('select * from rounds where number < $1 order by number desc limit 1', [open.number]))[0] : null;
   const tag = s => s === 'won' ? <span className="tag-won">Zuschlag</span> : s === 'invalid' ? <span className="tag-inv">ungültig</span> : <span className="tag-lost">kein Zuschlag</span>;
   return (<>
-    {open && managerId && <div className="card"><div className="eyebrow">Mein Gebot · {open.label} · Deadline {fmtDt(open.deadline)}</div><h2>{mine ? <>Gebot abgegeben <span className="pill ok">verdeckt</span></> : 'Neues Gebot'}</h2>
-      {mine && <div className="kv" style={{ marginBottom: 10 }}><b>Spieler</b><span>{mine.pos} {mine.player_name} ({mine.club})</span><b>Gebot</b><span>CHF {Number(mine.price)}</span><b>Entlassung</b><span>{(kader.find(p => p.id === mine.release_player_id) || {}).name || mine.release_player_id}</span><b>Eventualauftrag</b><span>{mine.swap_out_player_id ? `ja, ersetzt ${(b.players[mine.swap_out_player_id] || {}).name}` : 'nein'}</span></div>}
-      <BidForm pool={free} clubs={b.clubs.map(c => c.id)} kader={kader.map(p => ({ id: p.id, label: `${p.base_pos} ${p.name} (${p.club}, ${Number(p.price)})` }))} lineup={lineup ? Object.keys(lineup.entries).map(pid => ({ id: pid, label: (b.players[pid] || {}).name })) : []} budget={budget} hasBid={!!mine} mine={mine} minBid={R.MIN_BID} />
+    {open && admin && <div className="row" style={{ gap: 4, marginBottom: 8 }}><span className="mini">Gebot erfassen für:</span>{b.managers.map(m => <a key={m.id} className={`btn sm ${m.id === managerId ? '' : 'sec'}`} href={`/markt?m=${m.id}`}>{m.name}</a>)}</div>}
+    {open && managerId && <div className="card"><div className="eyebrow">{fuerAndere ? `Gebote von ${b.managerName[managerId]}` : 'Meine Gebote'} · {open.label} · Deadline {fmtDt(open.deadline)}</div><h2>{mine.length ? <>Gebote abgegeben <span className="pill ok">verdeckt</span></> : 'Neues Gebot'}</h2>
+      {mine.length > 0 && <div className="stack" style={{ marginBottom: 10 }}>{[...new Set(mine.map(x => x.gruppe || 1))].map(gr => { const rows = mine.filter(x => (x.gruppe || 1) === gr); const f = rows[0];
+        const rel = (f.release_order?.length ? f.release_order : [f.release_player_id]).filter(Boolean).map(id => (b.players[id] || {}).name).join(', ');
+        const sw = (f.swap_order?.length ? f.swap_order : [...new Set(rows.map(r => r.swap_out_player_id).filter(Boolean))]).map(id => (b.players[id] || {}).name).join(', ');
+        return <div key={gr} className="small"><b>{mine.some(x => (x.gruppe || 1) > 1) ? `Gebot ${gr}` : 'Gebot'}:</b> höchstens {f.max_wins || 1} aus {rows.map(r => `${r.pos} ${r.player_name} (${r.club}) CHF ${Number(r.price)}`).join(' · ')} — entlässt {rel || '–'}{sw ? ` — gratis für ${sw}` : ''}</div>; })}</div>}
+      <BidForm key={managerId} pool={free} clubs={b.clubs.map(c => c.id)} kader={kader.map(p => ({ id: p.id, label: `${p.base_pos} ${p.name} (${p.club}, ${Number(p.price)})` }))} lineup={lineup ? Object.keys(lineup.entries).map(pid => ({ id: pid, label: `${lineup.entries[pid].pos} ${(b.players[pid] || {}).name}` })) : []} budget={budget} mine={mine.map(x => ({ ...x, price: Number(x.price) }))} minBid={R.MIN_BID} managerId={managerId} managerName={b.managerName[managerId]} isAdminFor={!!fuerAndere} />
     </div>}
     <div className="card"><div className="row between"><div><div className="eyebrow">Transfermarkt</div><h2>{open ? `Gebote für ${open.label}` : 'Keine offene Runde'}</h2></div>
       {open && <div className="small">Gebots-Deadline <b>{fmtDt(open.deadline)}</b></div>}</div>

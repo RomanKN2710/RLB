@@ -24,7 +24,13 @@ export function playerSpec(raw) {
   let s = String(raw || '').replace(/^[\s\-–•*:]+/, '').replace(/^\d+[.)]\s*/, '').trim();
   let pos = null, club = null;
   // Klammern: Position und/oder Verein
-  s = s.replace(/\(([^)]*)\)/g, (_, inner) => { for (const t of inner.split(/[,\/\s]+/).filter(Boolean)) { if (!pos && /^[TVMS]$/i.test(t)) pos = t.toUpperCase(); else if (CLUB[norm(t)]) club = CLUB[norm(t)]; } return ' '; });
+  // Klammern: Position und/oder Verein («(M, BVB)»). Freitext («(kann auch als M eingesetzt werden)») ist ein Hinweis des Managers,
+  // keine Positionsangabe: Zusatzpositionen gibt es nur ueber die kicker-Startelf (Ziff. 5.2)
+  let also = null;
+  s = s.replace(/\(([^)]*)\)/g, (_, inner) => { const toks = inner.split(/[,\/\s]+/).filter(Boolean);
+    const spec = toks.every(t => /^[TVMS]$/i.test(t) || CLUB[norm(t)] || CLUBWORDS.has(norm(t)) || /^(fc|sc|sv|fsv|vfl|tsg|borussia|\d+)$/i.test(t));
+    if (!spec) { const m = inner.match(/\b(?:als|auf)\s+([TVMS])\b/i) || inner.match(/\b([TVMS])\b/); if (m) also = m[1].toUpperCase(); return ' '; }
+    for (const t of toks) { if (!pos && /^[TVMS]$/i.test(t)) pos = t.toUpperCase(); else if (CLUB[norm(t)]) club = CLUB[norm(t)]; } return ' '; });
   const toks = s.split(/[\s,;]+/).filter(Boolean); const rest = [];
   for (const t of toks) {
     const n = norm(t);
@@ -35,7 +41,7 @@ export function playerSpec(raw) {
     rest.push(t);
   }
   const name = rest.join(' ').replace(/[.:;,]+$/, '').trim();
-  return { name, club, pos };
+  return also && also !== pos ? { name, club, pos, also } : { name, club, pos };
 }
 
 /** Gebots-Post eines Managers lesen. kader: aktive Spieler des Managers (fuer Entlassung und Eventualauftrag). */
@@ -60,7 +66,9 @@ function readBidPost(lines, kader, title = '') {
     const mm = raw.match(/(?:max\.?|maximal|insgesamt|h[öo]chstens)\s*(\d+|einen|ein|eine|zwei|drei|vier|f[üu]nf)\s*(?:spieler|torh|verteidiger|mittelfeld|st[üu]rmer)/i) || raw.match(/f[üu]r\s+(\d+|einen|ein|zwei|drei)\s+(?:spieler|torh[üu]ter|verteidiger|mittelfeldspieler|st[üu]rmer)\b/i);
     if (mm && maxWins == null) maxWins = Number(mm[1]) || NUMWORD[norm(mm[1])] || null;
     // Saetze mit Preis = Gebot; der Rest der Zeile kann Entlassung und Eventualauftrag enthalten
-    const parts = raw.replace(/\b(?:runde|spieltag|r)\s*\d+\b/gi, ' ').replace(/\b\d+\.\s*spieltag\b/gi, ' ').split(/(?<=\p{L}\p{L}[.!])\s+(?=\p{L})/u);
+    const parts = raw.replace(/\b(?:runde|spieltag|r)\s*\d+\b/gi, ' ').replace(/\b\d+\.\s*spieltag\b/gi, ' ').split(/(?<=\p{L}\p{L}[.!])\s+(?=\p{L})/u)
+      // «Ich entlasse X und wechsle den neuen Spieler für Y ein»: Entlassung und Eventualauftrag sind zwei Aussagen
+      .flatMap(x => /entlass/i.test(x) ? x.split(/\s+und\s+(?=(?:ich\s+)?(?:wechsle|wechseln|setze|stelle|ihn|den\s+neuen|der\s+neue|diesen)\b)/i) : [x]);
     let bidLine = null;
     for (const sentence of parts) {
       const inRelease = mode === 'release' && !/^(?:\d+[.)]\s*)?(?:ich\s+)?(?:biete|gebote?)\b/i.test(sentence) && !/^(falls|sollte|wenn)\b/i.test(sentence);
@@ -75,6 +83,7 @@ function readBidPost(lines, kader, title = '') {
         if (fm) { const left = playerSpec(fm[1]).name, right = playerSpec(fm[2]).name; if (left && right) { const rp = findPlayer(right, kader).hits; if (rp.length === 1) { relByFuer = rp[0]; desc = fm[1]; } } else if (!left) desc = fm[2]; }
         const spec = playerSpec(desc); if (!spec.name) { notes.push(`Gebotszeile ohne Spielername: «${raw}»`); continue; }
         const bid = { priority: bids.length + 1, player_name: spec.name, club: spec.club, pos: spec.pos, price: pr.price, release: relByFuer, swapOut: pendingSwap, raw: sentence.trim() };
+        if (spec.also) notes.push(`${spec.name}: laut Gebot auch als ${spec.also} einsetzbar – zählt erst, wenn kicker ihn so in der Startelf führt (Ziff. 5.2)`);
         if (relTxt) { const n = releaseNames(relTxt)[0]; const p = n && resolve(n); if (p) bid.release = p; else if (n) notes.push(`Entlassung «${n}» nicht im Kader`); }
         bids.push(bid); seg = bid; bidLine = bid; relTarget = null; sinceRelease++; mode = 'bid'; continue;
       }
@@ -90,7 +99,8 @@ function readBidPost(lines, kader, title = '') {
         const cand = swapOf(sentence, bids.map(b => b.player_name));
         if (cand.length === 1) {
           const named = bids.filter(b => new RegExp('(?<!\\p{L})' + norm(b.player_name).slice(0, 5), 'i').test(norm(sentence)) || words(b.player_name).some(w => w.length >= 4 && new RegExp(w, 'i').test(sentence)));
-          const targets = named.length ? named : (bidLine || seg) && !/^(den|der|die)\s+spieler/i.test(sentence) ? [bidLine || seg] : bids;
+          const generic = /\b(?:den|der|die)\s+(?:neuen?\s+)?spieler\b|\bneuen\s+spieler\b|\bneueinkauf\b/i.test(sentence);
+          const targets = named.length ? named : bidLine ? [bidLine] : generic ? bids.filter(b => !b.swapOut) : seg ? [seg] : bids;
           for (const b of targets) if (!b.swapOut) b.swapOut = cand[0];
           if (!targets.length) pendingSwap = cand[0];
         } else if (cand.length > 1) notes.push(`Eventualauftrag unklar («${sentence.trim()}»): ${cand.map(p => p.name).join(' oder ')}`);
@@ -127,6 +137,21 @@ export function sentAt(lines) {
     const d = dateLine(m[1].replace(/\s+um\s+\d{1,2}:\d{2}.*$/i, '').replace(/,\s*\d{1,2}:\d{2}.*$/, '')); const t = m[1].match(/(\d{1,2}):(\d{2})/); if (d && t) return zurich(d, t[1], t[2]); }
   return null;
 }
+/** Post in Gebotsgruppen teilen: Überschriften «Gebot Nr. 2:», «Gebot 2», «2. Gebot». Liefert [{nr, lines}]; ohne Überschrift eine Gruppe. */
+const GROUP_HEAD = /^\s*(?:(?:\d+\.\s*)?(?:gebot|angebot)\s*(?:nr\.?|nummer|no\.?|#)?\s*(\d+)|(\d+)\.\s*gebot)\s*[:.)\-–]?\s*$/i;
+export function splitGroups(lines) {
+  const segs = [{ nr: null, lines: [] }];
+  for (const l of lines) { const m = String(l || '').match(GROUP_HEAD); if (m) segs.push({ nr: Number(m[1] || m[2]), lines: [] }); else segs[segs.length - 1].lines.push(l); }
+  return segs.filter((sg, i) => i > 0 || segs.length === 1 || sg.lines.some(Boolean));
+}
+/** Gruppen zu einer Gebotsliste zusammenfügen: Reihenfolge über alle Gruppen, jede Zeile kennt ihre Gruppe. */
+function joinGroups(groups) {
+  const bids = [], notes = [], unmatched = [], releases = []; let fallback = null;
+  groups.forEach((g, i) => { for (const x of g.bids) bids.push({ ...x, priority: bids.length + 1, gruppe: i + 1 });
+    notes.push(...g.notes); unmatched.push(...g.unmatched); for (const p of g.releases) if (!releases.some(q => q.id === p.id)) releases.push(p); fallback = fallback || g.fallback; });
+  const out = groups.map((g, i) => ({ gruppe: i + 1, nr: g.nr, maxWins: g.maxWins, releases: g.releases }));
+  return { bids, releases, notes, unmatched: [...new Set(unmatched)], fallback, groups: out, maxWins: groups.length === 1 ? groups[0].maxWins : Math.max(...groups.map(g => g.maxWins)) };
+}
 export function parseBidText(text, managers, kaderOf, opts = {}) {
   const lines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.replace(/ /g, ' ').trim());
   const raw = splitBlocks(lines, managers, kaderOf);
@@ -140,15 +165,34 @@ export function parseBidText(text, managers, kaderOf, opts = {}) {
     if (rn && opts.roundNumbers?.length && !opts.roundNumbers.includes(rn)) { skipped.push(`${b.manager.name}: «${b.title}» – Gebot für Runde ${rn}`); continue; }
     const sent = sentAt(b.lines); const at = sent || b.at || null;
     if (at && opts.notBefore && at <= new Date(opts.notBefore)) { skipped.push(`${b.manager.name}: «${b.title}» – vor der Deadline der Vorrunde (${fmtAt(at)})`); continue; }
-    const r = readBidPost(b.lines, kaderOf(b.manager.id) || [], b.title);
-    if (!r.bids.length) { if (/\d/.test(b.lines.join(' '))) unclear.push(`${b.manager.name}: «${b.title}» – kein Gebot mit Preis erkannt`); continue; }
-    const problems = [];
-    r.bids.forEach(x => { if (!x.release && !r.releases.length) problems.push(`Gebot ${x.priority} (${x.player_name}): keine Entlassung genannt`); });
-    if (r.releases.length && r.releases.length < Math.min(r.maxWins, r.bids.length) && !r.bids.every(x => x.release)) problems.push(`Nur ${r.releases.length} Entlassung(en) für bis zu ${Math.min(r.maxWins, r.bids.length)} Käufe`);
+    // Mehrere nummerierte Gebote in einem Post («Gebot Nr. 1», «Gebot Nr. 2»): je Gruppe eigenes Maximum, eigene Entlassungen
+    // und eigener Eventualauftrag. Ohne Nummern ist der ganze Post eine Gruppe.
+    const kader = kaderOf(b.manager.id) || []; const groups = []; let shared = null;
+    for (const sg of splitGroups(b.lines)) {
+      const r = readBidPost(sg.lines, kader, b.title);
+      if (!r.bids.length) { if (r.releases.length && !shared) shared = r; continue; }   // Vorspann ohne Gebote, z. B. gemeinsame Entlassungsliste
+      groups.push({ nr: sg.nr, ...r });
+    }
+    if (!groups.length) { if (/\d/.test(b.lines.join(' '))) unclear.push(`${b.manager.name}: «${b.title}» – kein Gebot mit Preis erkannt`); continue; }
+    if (shared) for (const g of groups) if (!g.releases.length && !g.bids.some(x => x.release)) { g.releases = shared.releases; if (g.bids.length === 1) g.bids[0].release = shared.releases[0]; }
     const prev = out.find(o => o.managerId === b.manager.id);
+    // Ein späterer Post mit Gebotsnummern ergänzt oder ersetzt nur die gleich nummerierten Gruppen des früheren
+    let merged = groups, mergeNote = null;
+    if (prev && groups.every(g => g.nr != null) && prev.rawGroups.every(g => g.nr != null)) {
+      merged = [...prev.rawGroups.filter(g => !groups.some(n => n.nr === g.nr)), ...groups].sort((a, z) => a.nr - z.nr);
+      mergeNote = `Ergänzt den früheren Post «${prev.title}» (Gebot Nr. ${groups.map(g => g.nr).join(', ')})`;
+    }
+    const r = joinGroups(merged);
+    const problems = [];
+    for (const g of r.groups) { const tag = r.groups.length > 1 ? `Gebot Nr. ${g.nr ?? g.gruppe}: ` : '';
+      const mine = r.bids.filter(x => x.gruppe === g.gruppe);
+      mine.forEach(x => { if (!x.release && !g.releases.length) problems.push(`${tag}Gebot ${x.priority} (${x.player_name}): keine Entlassung genannt`); });
+      if (g.releases.length && g.releases.length < Math.min(g.maxWins, mine.length) && !mine.every(x => x.release)) problems.push(`${tag}Nur ${g.releases.length} Entlassung(en) für bis zu ${Math.min(g.maxWins, mine.length)} Käufe`); }
+    const doppelt = r.groups.flatMap(g => g.releases.map(p => p.id)).filter((id, i, a) => a.indexOf(id) !== i);
+    if (doppelt.length) problems.push(`Derselbe Spieler ist in mehreren Geboten zur Entlassung genannt: ${[...new Set(doppelt)].map(id => kader.find(p => p.id === id)?.name || id).join(', ')}`);
     if (at && opts.deadline && at > new Date(opts.deadline)) r.notes.push(`Nach der Deadline ${sent ? 'gesendet' : 'gepostet'} (${fmtAt(at)}, Deadline ${fmtAt(new Date(opts.deadline))}) – Gebot ungültig (Ziff. 7.1), falls die Mail nicht früher im Postfach war`);
-    const block = { managerId: b.manager.id, name: b.manager.name, title: b.title, at, sentAt: sent, postedAt: b.at || null, ...r, problems, ok: problems.length === 0, spaet: !!(at && opts.deadline && at > new Date(opts.deadline)) };
-    if (prev) { out[out.indexOf(prev)] = block; block.notes.unshift(`Ersetzt den früheren Post «${prev.title}»`); } else out.push(block);
+    const block = { managerId: b.manager.id, name: b.manager.name, title: b.title, at, sentAt: sent, postedAt: b.at || null, ...r, rawGroups: merged, problems, ok: problems.length === 0, spaet: !!(at && opts.deadline && at > new Date(opts.deadline)) };
+    if (prev) { out[out.indexOf(prev)] = block; block.notes.unshift(mergeNote || `Ersetzt den früheren Post «${prev.title}»`); } else out.push(block);
   }
   return { blocks: out, unclear, skipped };
 }

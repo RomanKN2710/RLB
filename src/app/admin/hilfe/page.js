@@ -14,7 +14,7 @@ const SCHRITTE = [
 ];
 const FEHLER = [
   ['Vorschau: Aufstellung «zu wenige Spieler» oder Name «nicht im Kader»', 'Meist ein Tippfehler im Blog. Einfachster Weg: den Text direkt im Einfügefeld korrigieren (z. B. den Namen so schreiben wie im Kader) und nochmals «Vorschau». Steht der Spieler erst durch ein Gebot dieser Runde im Kader: zuerst zuteilen, dann den Blog nochmals einfügen. Oder die Elf von Hand speichern: Rundenseite › «Aufstellungen & Spielerwerte» aufklappen › «Aufstellung bearbeiten» › Manager.'],
-  ['Vorschau: Gebot «keine Entlassung genannt» oder unklar', 'Die Mail nochmals lesen. Ist klar, was gemeint ist, den Satz im Einfügefeld eindeutig machen, z. B. «Biete Potulski, Mainz, V, 2.- und entlasse Dallinga. Ihn für Claude-Maurice einwechseln.», dann «Vorschau». Bei echten Zweifeln beim Manager nachfragen.'],
+  ['Vorschau: Gebot «keine Entlassung genannt» oder unklar', 'Die Mail nochmals lesen. Ist klar, was gemeint ist, den Satz im Einfügefeld eindeutig machen, z. B. «Biete Potulski, Mainz, V, 2.- und entlasse Dallinga. Ihn für Claude-Maurice einwechseln.», dann «Vorschau». Oder das Gebot selbst erfassen: Transfermarkt › «Gebot erfassen für:» › Manager. Bei echten Zweifeln beim Manager nachfragen.'],
   ['Gebote falsch aufgelöst', 'Rundenseite › Schritt 1 › «Auflösung zurücksetzen» (nur solange die Runde nicht final ist). Korrigieren, dann neu zuteilen.'],
   ['kicker: «Name prüfen»', 'kicker schreibt den Spieler anders. Unter Kader & Trades beim Spieler die kicker-Kennung setzen (letzter Teil der kicker-Adresse), dann «Eingang erneut importieren».'],
   ['kicker: «Spiel fehlt»', 'Diese Aufstellungsseite fehlt im Eingang. Die Seite auf dem Handy nochmals öffnen (Reiter «Aufstellung», nicht Spielbericht).'],
@@ -25,6 +25,8 @@ const FEHLER = [
 ];
 const SONST = [
   ['Spieler verlässt die Bundesliga', 'Admin › Kader & Spielerpool › «Abgang» beim Spieler. Der Wert wird dem Kaufbudget gutgeschrieben (Ziff. 7.4).'],
+  ['Gebot für einen Manager erfassen (z. B. aus einer Mail)', 'Transfermarkt › oben «Gebot erfassen für:» › Manager wählen. Wie im Formular der Manager: mehrere Gebote, Spieler in Reihenfolge, «höchstens N», Entlassungen und Eventualaufträge.'],
+  ['Spielerpool aktuell halten', 'Der Pool wird mit jedem kicker-Import nachgeführt (wer im Spielbericht steht, ist im Kader). Nach der Wintertransferzeit einmal Admin › Kader & Spielerpool › «Alle 18 Kader jetzt von kicker laden», sonst das Kader-JSON.'],
   ['Kauf oder Gebühr ausserhalb der Gebote', 'Admin › Kader & Spielerpool › «Manueller Kauf / Buchung».'],
   ['Zusatzposition von Hand', 'Kader & Trades › beim Spieler «+M» usw. Die App erkennt Positionen sonst selbst aus der kicker-Startelf (gilt ab der Folgerunde).'],
   ['Trade', 'Die beiden Manager erledigen das unter «Kader & Trades» selbst (Vorschlag und Annahme). Admins sehen alles dort.'],
@@ -41,7 +43,7 @@ export default async function Hilfe() {
       <p className="mini">Das Handbuch zeigt alle Schritte mit Bildern aus der App (20 Folien). Diese Seite ist die Kurzfassung.</p>
       <p className="small">Alles passiert auf der Seite der Runde: Admin › Zeile des Spieltags › «Auswerten». Die drei Schritte stehen dort untereinander. {open ? <>Offen ist gerade <b>{open.label}</b>, Deadline {fmtDt(open.deadline)}.</> : null}</p>
       <ol className="small" style={{ paddingLeft: 20 }}>{SCHRITTE.map(([t, x]) => <li key={t} style={{ marginBottom: 8 }}><b>{t}.</b> {x}</li>)}</ol>
-      <p className="mini">Die App rechnet nach dem Regelwerk: Blog gilt vor der App, Gleichstand bei Geboten gewinnt der schlechtere Tabellenplatz, Eventualaufträge sind gratis, Spieler mit mehreren Positionen werden so eingesetzt, dass die Elf zulässig ist, und eine Vorlage zu einem Eigentor zählt als Assist. Das Regelwerk steht unter <Link href="/regeln">Regeln</Link>.</p></div>
+      <p className="mini">Die App rechnet nach dem Regelwerk: Blog gilt vor der App, Gleichstand bei Geboten gewinnt der schlechtere Tabellenplatz, Eventualaufträge sind gratis, Spieler mit mehreren Positionen werden so eingesetzt, dass die Elf zulässig ist, eine Vorlage zu einem Eigentor zählt als Assist, und nummerierte Gebote («Gebot Nr. 1», «Gebot Nr. 2») gelten je für sich mit eigenem Maximum und eigener Entlassung. Das Regelwerk steht unter <Link href="/regeln">Regeln</Link>.</p></div>
     <div className="card"><div className="eyebrow">Wenn etwas nicht stimmt</div><h3>Fehlerbild und Lösung</h3>
       <div className="tbl wrap"><table><thead><tr><th className="l">Was du siehst</th><th className="l">Was du tust</th></tr></thead><tbody>{FEHLER.map(([a, b]) => <tr key={a}><td className="l small"><b>{a}</b></td><td className="l small">{b}</td></tr>)}</tbody></table></div></div>
     <div className="card"><div className="eyebrow">Gelegentlich</div><h3>Weitere Aufgaben</h3>

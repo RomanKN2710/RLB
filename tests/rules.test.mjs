@@ -98,3 +98,12 @@ describe('Zusatzpositionen gelten ab der Folgerunde (Ziff. 5.2)', () => {
     assert.deepEqual(fitPositions(e, Q, new Set(), 20), { changes: { beier: 'M' } }); assert.equal(fitPositions(e, Q, new Set(), 10), null);
   });
 });
+
+describe('resolveBids: «höchstens N» gilt je Gebotsgruppe', () => {
+  const players = { 'm-a': { id: 'm-a', manager_id: 6, status: 'active' }, 'm-b': { id: 'm-b', manager_id: 6, status: 'active' } };
+  const bid = (id, player_name, priority, gruppe, rel) => ({ id, manager_id: 6, player_name, club: 'Hamburg', pos: 'M', price: 2, priority, gruppe, max_wins: 1, release_player_id: null, release_order: [rel] });
+  test('Torhüter aus Gebot 1 und erste Wahl aus Gebot 2, die zweite Wahl fällt weg', () => {
+    const out = resolveBids([bid(1, 'Kaua Santos', 1, 1, 'm-a'), bid(2, 'Chaibi', 2, 2, 'm-b'), bid(3, 'Krattenmacher', 3, 2, 'm-b')], { players, budgetLeft: () => 50, managerName: m => 'M' + m, tiebreak: [6], prevReleases: [] });
+    assert.deepEqual(out.map(b => b.status), ['won', 'won', 'lost']); assert.match(out[2].reason, /Limit/);
+  });
+});

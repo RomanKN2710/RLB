@@ -100,6 +100,18 @@ export const STEPS = [
     }
     if (!log.length) log.push('Keine Vorlage zu einem Eigentor in den gespeicherten kicker-Seiten');
     await setSetting('assist_eigentor_20261026', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'pool_spielberichte_20261110', title: 'Spielerpool: wer in einem gespeicherten Spielbericht steht (Startelf oder Bank), gilt als im Bundesliga-Kader (Kader-Abgleich hing seit 11.09.2026)', run: async () => {
+    const K = await import('./kicker'); const Inbox = await import('./kicker-inbox'); const D = await import('./data'); const b = await D.base(); const log = [];
+    const vorher = await one('select count(*)::int as n from bl_players where in_squad');
+    for (const r of await q("select * from rounds where type='regulaer' order by number")) {
+      const pg = await Inbox.pages(r.matchday).catch(() => ({ matches: [] })); let n = 0;
+      for (const html of pg.matches || []) { let parsed; try { parsed = K.parseMatchPage(html); } catch (e) { continue; }
+        const stats = Object.values(K.matchStats(parsed)); n += stats.length; await K.upsertPool(stats, b, r.matchday, r.deadline || new Date()); }
+      if (n) log.push(`${r.label}: ${n} Spieler aus ${pg.matches.length} Spielberichten`);
+    }
+    const nachher = await one('select count(*)::int as n from bl_players where in_squad');
+    log.unshift(`Spieler im Bundesliga-Kader: vorher ${vorher.n}, nachher ${nachher.n}`);
+    await setSetting('pool_spielberichte_20261110', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

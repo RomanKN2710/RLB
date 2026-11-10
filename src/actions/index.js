@@ -70,32 +70,65 @@ export const previewLineupTextAction = wrap(async (roundId, text) => { await req
   return ok(`${parsed.blocks.length} Manager erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.missing.length ? ' · ohne Block: ' + parsed.missing.join(', ') : ''}${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ ...x, entries: undefined, ambiguous: undefined })), missing: parsed.missing, ohnePost: parsed.ohnePost, unclear: parsed.unclear, skipped: parsed.skipped, warnung: parsed.warnung }); });
 
 /* ---------- Gebote (Manager: eigenes, offene Runde, bis Deadline) ---------- */
-export const submitBidAction = wrap(async (prev, fd) => {
-  const u = await requireUser(); const managerId = u.role === 'admin' ? Number(fd.get('manager_id')) : u.manager_id;
+/* Gebote abgeben (Ziff. 7.1): ein oder mehrere Gebote («Gebot Nr. 1», «Gebot Nr. 2»), je Gebot Spieler in Reihenfolge,
+   «höchstens N Spieler», Entlassungen und Eventualaufträge in Reihenfolge (1. Zuschlag entlässt den ersten, ersetzt den ersten …).
+   payload: { managerId?, groups: [{ maxWins, bids: [{ name, club, pos, price }], releases: [playerId], swaps: [playerId] }] } */
+export const submitBidsAction = wrap(async (payload) => {
+  const u = await requireUser(); const admin = u.role === 'admin';
+  const managerId = admin && Number(payload?.managerId) ? Number(payload.managerId) : u.manager_id;
   if (!managerId) return fail('Kein Manager');
+  if (!admin && managerId !== u.manager_id) return fail('Nur eigene Gebote');
   const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
-  const bid = { player_name: String(fd.get('player_name') || '').trim(), club: String(fd.get('club') || ''), pos: String(fd.get('pos') || '').toUpperCase(), price: Number(fd.get('price')), release: String(fd.get('release') || ''), swap: String(fd.get('swap') || '') };
-  if (!bid.player_name) return fail('Spielername fehlt'); if (!'TVMS'.includes(bid.pos) || !bid.pos) return fail('Position');
-  if (!Number.isInteger(bid.price) || !(bid.price >= R.MIN_BID)) return fail(`Gebot in ganzen Franken, mindestens ${R.MIN_BID}`);
-  { // Ziff. 7.3: eigener Abgang erst eine Runde später, sonst alter Wert als Mindestgebot
-    const pr = await one("select t.* from transfers t join rounds r on r.id=t.round_id where t.type='entlassung' and lower(t.player_name)=lower($1) and r.number < $2 order by r.number desc limit 1", [bid.player_name, open.number]);
-    const prevNo = await one('select number from rounds where number < $1 order by number desc limit 1', [open.number]);
-    if (pr && prevNo && pr.round_id && (await one('select number from rounds where id=$1', [pr.round_id])).number === prevNo.number) {
-      if (pr.manager_id === managerId) return fail(`${bid.player_name} hast du in der Vorrunde selbst entlassen: frühestens nächste Runde bieten (Ziff. 7.3)`);
-      if (bid.price < Number(pr.price)) return fail(`Mindestgebot für ${bid.player_name} in dieser Runde: CHF ${Number(pr.price)} (alter Wert, Ziff. 7.3)`); } }
-  const budget = await D.budgetLeft(managerId); if (bid.price > budget) return fail(`Kaufbudget reicht nicht (${budget} verfügbar, Ziff. 7.4)`);
-  const rel = await one('select * from players where id=$1', [bid.release]); if (!rel || rel.manager_id !== managerId || rel.status !== 'active') return fail('Zu entlassender Spieler fehlt (Kader bleibt 22, Ziff. 7.1)');
-  const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1) and ($2 = '' or p.club is null or p.club=$2)", [bid.player_name, bid.club]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
-  if (bid.swap) { const lu = (await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId])) || (await D.prevLineup(open, managerId)); if (!lu || !lu.entries[bid.swap]) return fail('Eventualauftrag: der zu ersetzende Spieler steht nicht in deiner Aufstellung'); }
-  await BlogImport.ensureBidColumns(); await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]);
-  await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,source) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),1,1,'app')`,
-    [open.id, managerId, bid.player_name, bid.club || null, bid.pos, bid.price, bid.release, bid.swap || null]);
-  await audit(u.id, 'bid', { roundId: open.id, managerId }); rev();
-  return ok('Gebot verdeckt gespeichert');
+  if (!admin && open.deadline && new Date(open.deadline) <= new Date()) return fail('Gebots-Deadline vorbei (Ziff. 7.1)');
+  const b = await D.base(); const clubs = new Set(b.clubs.map(c => c.id));
+  const groups = (payload?.groups || []).map(g => ({ maxWins: Number(g.maxWins) || 1, bids: (g.bids || []).map(x => ({ player_name: String(x.name || '').trim(), club: String(x.club || ''), pos: String(x.pos || '').toUpperCase(), price: Number(x.price) })).filter(x => x.player_name), releases: (g.releases || []).filter(Boolean).map(String), swaps: (g.swaps || []).filter(Boolean).map(String) })).filter(g => g.bids.length);
+  if (!groups.length) return fail('Mindestens ein Spieler');
+  const budget = await D.budgetLeft(managerId);
+  const prevNo = await one('select number from rounds where number < $1 order by number desc limit 1', [open.number]);
+  const lu = (await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId])) || (await D.prevLineup(open, managerId));
+  const seenNames = new Set(), seenRel = new Set(), seenSwap = new Set();
+  for (const [gi, g] of groups.entries()) { const tag = groups.length > 1 ? `Gebot ${gi + 1}: ` : '';
+    if (g.maxWins < 1 || g.maxWins > g.bids.length) return fail(`${tag}«höchstens» muss zwischen 1 und ${g.bids.length} liegen`);
+    for (const bid of g.bids) {
+      if (!'TVMS'.includes(bid.pos) || !bid.pos) return fail(`${tag}${bid.player_name}: Position wählen`);
+      if (!clubs.has(bid.club)) return fail(`${tag}${bid.player_name}: Verein wählen`);
+      if (!Number.isInteger(bid.price) || !(bid.price >= R.MIN_BID)) return fail(`${tag}${bid.player_name}: Gebot in ganzen Franken, mindestens ${R.MIN_BID}`);
+      if (bid.price > budget) return fail(`${tag}${bid.player_name}: Kaufbudget reicht nicht (${budget} verfügbar, Ziff. 7.4)`);
+      const key = R.norm(bid.player_name) + '|' + bid.club; if (seenNames.has(key)) return fail(`${bid.player_name} steht zweimal in deinen Geboten`); seenNames.add(key);
+      const own = await one("select p.*, m.name as mname from players p join managers m on m.id=p.manager_id where p.status='active' and lower(p.name)=lower($1) and (p.club is null or p.club=$2)", [bid.player_name, bid.club]); if (own) return fail(`${own.name} steht bereits im Kader von ${own.mname}`);
+      // Ziff. 7.3: eigener Abgang erst eine Runde später, sonst alter Wert als Mindestgebot
+      const pr = await one("select t.* from transfers t join rounds r on r.id=t.round_id where t.type='entlassung' and lower(t.player_name)=lower($1) and r.number < $2 order by r.number desc limit 1", [bid.player_name, open.number]);
+      if (pr && prevNo && pr.round_id && (await one('select number from rounds where id=$1', [pr.round_id])).number === prevNo.number) {
+        if (pr.manager_id === managerId) return fail(`${bid.player_name} wurde in der Vorrunde von dir entlassen: frühestens nächste Runde bieten (Ziff. 7.3)`);
+        if (bid.price < Number(pr.price)) return fail(`Mindestgebot für ${bid.player_name} in dieser Runde: CHF ${Number(pr.price)} (alter Wert, Ziff. 7.3)`); }
+    }
+    const need = Math.min(g.maxWins, g.bids.length);
+    if (g.releases.length < need) return fail(`${tag}${need === 1 ? 'Eine Entlassung' : need + ' Entlassungen'} nötig (Kader bleibt 22, Ziff. 7.1)`);
+    for (const pid of g.releases) { const rel = b.players[pid]; if (!rel || rel.manager_id !== managerId || rel.status !== 'active') return fail(`${tag}Entlassung: Spieler nicht in deinem Kader`);
+      if (seenRel.has(pid)) return fail(`${rel.name} ist mehrfach zur Entlassung genannt`); seenRel.add(pid); }
+    if (g.swaps.length > g.maxWins) return fail(`${tag}höchstens ${g.maxWins} Eventualauftrag/-aufträge`);
+    for (const pid of g.swaps) { if (!lu || !lu.entries[pid]) return fail(`${tag}Eventualauftrag: ${(b.players[pid] || {}).name || 'Spieler'} steht nicht in deiner Aufstellung`);
+      if (seenSwap.has(pid)) return fail(`${(b.players[pid] || {}).name} ist mehrfach für einen Eventualauftrag genannt`); seenSwap.add(pid); }
+  }
+  await BlogImport.ensureBidColumns();
+  await tx(async x => {
+    await x.q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]);
+    let prio = 0;
+    for (const [gi, g] of groups.entries()) {
+      // eine Entlassung bzw. ein Eventualauftrag für ein «höchstens 1»: direkt am Gebot, sonst in Reihenfolge je Zuschlag
+      const rel = g.releases.length === 1 ? g.releases[0] : null, sw = g.maxWins === 1 && g.swaps.length === 1 ? g.swaps[0] : null;
+      for (const bid of g.bids) await x.q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,swap_order,gruppe,source) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,$12,$13,'app')`,
+        [open.id, managerId, bid.player_name, bid.club, bid.pos, bid.price, rel, sw, ++prio, g.maxWins, g.releases, g.swaps, gi + 1]);
+    }
+  });
+  await audit(u.id, 'bid', { roundId: open.id, managerId, groups: groups.map(g => ({ maxWins: g.maxWins, n: g.bids.length })) }); rev();
+  const n = groups.reduce((a, g) => a + g.bids.length, 0);
+  return ok(`${groups.length > 1 ? groups.length + ' Gebote' : 'Gebot'} mit ${n} Spieler${n === 1 ? '' : 'n'} verdeckt gespeichert${admin && managerId !== u.manager_id ? ' für ' + b.managerName[managerId] : ''}`);
 });
-export const withdrawBidAction = wrap(async () => {
+export const withdrawBidAction = wrap(async (forManager) => {
   const u = await requireUser(); const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
-  await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, u.manager_id]); rev(); return ok('Gebot zurückgezogen');
+  const managerId = u.role === 'admin' && Number(forManager) ? Number(forManager) : u.manager_id; if (!managerId) return fail('Kein Manager');
+  await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]); await audit(u.id, 'bid_withdraw', { roundId: open.id, managerId }); rev(); return ok('Gebote zurückgezogen');
 });
 
 /** Aufstellung einer Runde holen; fehlt sie, aus der letzten Vorrunde übernehmen (Ziff. 5.1) und speichern. */
@@ -232,7 +265,7 @@ export const deleteCorrectionAction = wrap(async (id) => { await requireAdmin();
 export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); await BlogImport.ensureBidColumns(); const round = await D.roundById(roundId); const b = await D.base();
   const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await BlogImport.resolveRoundBids(round, b, bids); return ok('Vorschau', { list: list.map(x => ({ ...x, manager_name: b.managerName[x.manager_id], release_name: (b.players[x.release_player_id] || {}).name || null, swap_name: (b.players[x.swap_out_player_id] || {}).name || null })) }); });
 export const previewBidTextAction = wrap(async (roundId, text) => { await requireAdmin(); const { parsed } = await BlogImport.parseBidPaste(roundId, text);
-  return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
+  return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, groups: (x.groups || []).map(g => ({ gruppe: g.gruppe, nr: g.nr, maxWins: g.maxWins, releases: g.releases.map(p => p.name) })), budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, gruppe: bd.gruppe || 1, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
 
 export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); if (round.bids_resolved) return fail('Bereits aufgelöst');
   const r = await BlogImport.applyBids(a.id, roundId); rev(); return ok(`Gebote aufgelöst: ${r.won} Zuschlag${r.won === 1 ? '' : 'e'}` + (r.log.length ? ' · ' + r.log.join(' · ') : '')); });

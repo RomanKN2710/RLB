@@ -188,8 +188,9 @@ export function resolveBids(bids, ctx) {
       g.slice(1).forEach(b => { b.status = 'lost'; b.reason = b.price === g[0].price ? 'Gleichstand, besserer Tabellenplatz' : 'überboten'; });
     }
     let changed = false;
-    for (const m of new Set(list.map(b => b.manager_id))) {
-      const mine = list.filter(b => b.manager_id === m && b.status !== 'invalid' && !withdrawn.has(b)).sort((a, b) => a.priority - b.priority); let wins = 0;
+    // Limit je Gebotsgruppe («Gebot Nr. 1: max. 1 Torhüter», «Gebot Nr. 2: max. 1 aus vier»)
+    for (const m of new Set(list.map(b => `${b.manager_id}|${Number(b.gruppe) || 1}`))) {
+      const mine = list.filter(b => `${b.manager_id}|${Number(b.gruppe) || 1}` === m && b.status !== 'invalid' && !withdrawn.has(b)).sort((a, b) => a.priority - b.priority); let wins = 0;
       for (const b of mine) { if (wins >= b.max_wins) { withdrawn.add(b); b.status = 'lost'; b.reason = `Limit erreicht: ${b.max_wins} Zuschlag${b.max_wins > 1 ? 'e' : ''} aus früheren Geboten`; changed = true; continue; } if (b.status === 'won') wins++; }
     }
     if (!changed) break;

@@ -66,3 +66,27 @@ describe('Handy-Blog Runde 7 (23.10.2026): Blog-Kopf, Gebot per Mail nach der Bl
   test('Arbi: Potulski für 2, Dallinga entlassen, Eventualauftrag für Claude-Maurice; Kramaric-Wechsel nur als Rückfall-Notiz', () => { const x = block(res, 'Arbi'); assert.equal(bid(x, 0), 'V Potulski (Mainz) 2 -Dallinga >Claude-Maurice'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.fallback.in.name, 'Kramaric'); assert.equal(x.fallback.out.name, 'Claude-Maurice'); assert.ok(x.notes.some(n => /Kramaric für Claude-Maurice/.test(n) && /kostenpflichtig/.test(n))); });
   test('sentAt liest das Mail-Datum', () => { assert.equal(sentAt(['Fw: x', 'Gesendet: Freitag, 23. Oktober 2026 um 18:08', 'Von: a@b.ch']).toISOString(), '2026-10-23T16:08:00.000Z'); assert.equal(sentAt(['nur Text']), null); });
 });
+
+describe('Mehrere Gebote in einem Post («Gebot Nr. 1», «Gebot Nr. 2»), Spieltag 10', () => {
+  // Gebot Nr. 2 ist Mikes Text wörtlich; Gebot Nr. 1 ist für den Test ergänzt (zweite Gruppe mit eigener Entlassung)
+  const text = fs.readFileSync(new URL('./fixtures/gebot-mike-gruppen.txt', import.meta.url), 'utf8');
+  const res = parse(text, { roundNumbers: [100, 10] }); const x = block(res, 'Mike');
+  test('zwei Gruppen mit je eigenem Maximum und eigener Entlassung', () => {
+    assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.groups.length, 2);
+    assert.deepEqual(x.groups.map(g => [g.nr, g.maxWins, g.releases.map(p => p.name)]), [[1, 1, ['Hollerbach']], [2, 1, ['Latte Lath']]]);
+    assert.deepEqual(x.bids.map(b => b.gruppe), [1, 2, 2, 2, 2]);
+  });
+  test('«Ich entlasse X und wechsle den neuen Spieler für Y ein»: Eventualauftrag für alle vier Alternativen', () => {
+    assert.equal(bid(x, 1), 'M Fares Chaibi (Frankfurt) 3 >Tillman'); assert.equal(bid(x, 4), 'S Terem Moffi (Hamburg) 2 >Tillman');
+    assert.ok(x.bids.filter(b => b.gruppe === 2).every(b => b.swapOut?.name === 'Tillman')); assert.equal(x.bids[0].swapOut, null);
+  });
+  test('«(kann auch als M eingesetzt werden)»: Position bleibt V, Hinweis statt Positionsangabe', () => {
+    assert.equal(bid(x, 3), 'V Miro Muheim (Hamburg) 2 >Tillman'); assert.ok(x.notes.some(n => /Muheim: laut Gebot auch als M/.test(n)));
+    assert.deepEqual(playerSpec('V Miro Muheim, Hamburg (kann auch als M eingesetzt werden)'), { name: 'Miro Muheim', club: 'Hamburg', pos: 'V', also: 'M' });
+  });
+  test('zweiter Post mit «Gebot Nr. 2» ergänzt den ersten statt ihn zu ersetzen', () => {
+    const [a, b2] = text.split('Gebot Nr. 2:'); const two = a.replace(/\n*$/, '\nMarkadona um 17:00\n') + 'Gebote Mike, Nachtrag\nGebot Nr. 2:' + b2;
+    const y = block(parse(two, { roundNumbers: [100, 10] }), 'Mike');
+    assert.equal(y.groups.length, 2); assert.ok(y.notes.some(n => /Ergänzt den früheren Post/.test(n))); assert.ok(y.ok, y.problems.join('; '));
+  });
+});

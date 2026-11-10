@@ -88,7 +88,7 @@ export async function importPages(round, b, pages, opts = {}) {
     const stats = matchStats(parsed, opts); parsed.teams.forEach(t => importedTeams.push(t.slug));
     matches.push({ paarung, teams: parsed.teams.map(t => t.slug), n: Object.keys(stats).length });
     Object.values(stats).forEach(s => (pageNames[s.team] ||= []).push(s));
-    await upsertPool(Object.values(stats), b, round.matchday);
+    await upsertPool(Object.values(stats), b, round.matchday, round.deadline || new Date());   // Spieltagskader = Bundesliga-Kader
     allStarters.push(...Object.values(stats).filter(s => s.start === 1 && s.kpos).map(s => ({ ...s, formation: (parsed.teams.find(t => t.slug === s.team) || {}).formation })));
     const seen = {}; let n = 0;
     // Werte der übrigen Kaderspieler (Ersatzbank der Manager): für die Potential-Tabelle; sie zählen nicht in der Wertung
@@ -179,7 +179,10 @@ export async function importInbox(matchday, opts = {}) {
 export function importSummary(r) { const c = r.counts || {}; return [`${r.games} Spiele${r.elf ? ' + Elf des Tages' : ''}`, `Startelf ${c.startelf || 0}`, `eingewechselt ${c.eingewechselt || 0}`, `Bank ${c.bank || 0}`, `nicht im Kader ${c.nicht_im_kader || 0}`, `Name prüfen ${c.nicht_gefunden || 0}`, `Spiel fehlt ${c.spiel_fehlt || 0}`]; }
 
 /** Spielerpool pflegen: jeder Spieler, der laut kicker im Spieltagskader stand, mit Verein und kicker-Position. */
-export async function upsertPool(stats, b, matchday) {
+/** Spielerpool pflegen. playedAt (Zeitpunkt des Spieltags) gesetzt: jeder Spieler auf der Aufstellungsseite (Startelf oder
+    Bank) steht im Bundesliga-Kader – so bleibt der Pool aktuell, auch wenn der Kader-Abgleich mit kicker ausfällt. Ein
+    späterer Abgang (left_at nach dem Spieltag) bleibt bestehen, damit ein nachträglicher Import ihn nicht zurückholt. */
+export async function upsertPool(stats, b, matchday, playedAt = null) {
   const seen = new Set(); const rows = [];
   for (const s of stats) {
     if (!s.slug || seen.has(s.slug)) continue; seen.add(s.slug);
@@ -191,8 +194,12 @@ export async function upsertPool(stats, b, matchday) {
   for (let i = 0; i < rows.length; i += 150) {
     const part = rows.slice(i, i + 150); const params = [];
     const vals = part.map((r, ri) => { for (const v of r) params.push(v); const b0 = ri * cols.length; return `($${b0 + 1},$${b0 + 2},$${b0 + 3},$${b0 + 4},$${b0 + 5},1,$${b0 + 6})`; }).join(',');
-    await q(`insert into bl_players(slug,name,club,pos,last_matchday,games,played_pos) values ${vals}
-      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when excluded.last_matchday > coalesce(bl_players.last_matchday, 0) then bl_players.games+1 else bl_players.games end, played_pos=coalesce((select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), '{}'), updated_at=now()`, params);
+    const t = playedAt ? new Date(playedAt) : null; params.push(t); const pt = `$${params.length}::timestamptz`;
+    const vals2 = part.map((r, ri) => { const b0 = ri * cols.length; return `($${b0 + 1},$${b0 + 2},$${b0 + 3},$${b0 + 4},$${b0 + 5},1,$${b0 + 6},${pt} is not null,${pt})`; }).join(',');
+    await q(`insert into bl_players(slug,name,club,pos,last_matchday,games,played_pos,in_squad,seen_at) values ${vals2}
+      on conflict(slug) do update set name=excluded.name, club=coalesce(excluded.club, bl_players.club), pos=coalesce(excluded.pos, bl_players.pos), last_matchday=greatest(bl_players.last_matchday, excluded.last_matchday), games=case when excluded.last_matchday > coalesce(bl_players.last_matchday, 0) then bl_players.games+1 else bl_players.games end, played_pos=coalesce((select array_agg(distinct x) from unnest(bl_players.played_pos || excluded.played_pos) x), '{}'), updated_at=now(),
+        in_squad=case when ${pt} is not null and (bl_players.left_at is null or bl_players.left_at < ${pt}) then true else bl_players.in_squad end,
+        seen_at=case when ${pt} is not null and (bl_players.seen_at is null or bl_players.seen_at < ${pt}) then ${pt} else bl_players.seen_at end`, params);
   }
 }
 

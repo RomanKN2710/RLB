@@ -218,6 +218,8 @@ alter table bl_players add column if not exists played_pos char(1)[] not null de
 
 -- Spalten, die bisher erst zur Laufzeit ergaenzt wurden (blog-import.js, kicker.js); hier vollstaendig
 alter table bids add column if not exists note text;                                   -- Hinweis aus dem Gebots-Post (bedingter Wechsel, Frist)
+alter table bids add column if not exists gruppe int not null default 1;               -- Gebotsgruppe («Gebot Nr. 2»): Maximum und Entlassungen gelten je Gruppe
+alter table bids add column if not exists swap_order text[] not null default '{}';     -- Eventualaufträge in Reihenfolge (1. Zuschlag ersetzt den ersten, …)
 alter table players add column if not exists kicker_slug text;                         -- Kennung bei kicker, wenn der Name nicht reicht
 alter table players add column if not exists extra_pos_from jsonb not null default '{}'; -- Zusatzposition gilt ab Runde {M: 20} (Ziff. 5.2: Folgerunde)
 

@@ -14,7 +14,7 @@ export async function GET(req) {
   for (const t of tables) { try { out[t] = await q(`select * from ${t}`); } catch (e) { out[t] = { fehler: e.message }; } }
   out.kicker_pages = await q("select matchday, page_id, kind, title, at, length(html) as bytes, html from kicker_pages order by matchday, at").catch(() => []);   // mit Quelltext: so laesst sich ein hakender Import nachstellen
   out.users = await q('select id, email, name, role, manager_id, must_change_pw, created_at from users');
-  out.bl_players = await q('select slug, name, club, pos, squad_pos, played_pos, games, last_matchday from bl_players');
+  out.bl_players = await q('select slug, name, first_name, club, pos, squad_pos, played_pos, games, last_matchday, in_squad, seen_at, left_at from bl_players');
   out.audit = await q('select * from audit order by id desc limit 500');
   const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
   return new NextResponse(JSON.stringify(out, null, 1), { headers: { 'content-type': 'application/json; charset=utf-8', 'content-disposition': `attachment; filename="rlb-export-${stamp}.json"` } });

@@ -102,6 +102,7 @@ let bidColsReady = false;
 export async function ensureBidColumns() { if (bidColsReady) return;
   await q("alter table bids add column if not exists priority int not null default 1"); await q("alter table bids add column if not exists max_wins int not null default 1");
   await q("alter table bids add column if not exists release_order text[] not null default '{}'"); await q("alter table bids add column if not exists source text"); await q("alter table bids add column if not exists note text");
+  await q("alter table bids add column if not exists gruppe int not null default 1"); await q("alter table bids add column if not exists swap_order text[] not null default '{}'");
   await q("alter table bids drop constraint if exists bids_round_id_manager_id_key"); await q("create unique index if not exists bids_round_manager_priority on bids(round_id, manager_id, priority)"); bidColsReady = true; }
 /* ---------- Admin: Gebote aus eingefuegtem Text (Blog: weitergeleitete Gebots-Mails) ---------- */
 export async function parseBidPaste(roundId, text) {
@@ -145,12 +146,15 @@ export async function applyBidPaste(u, roundId, text) {
     if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})`); continue; }
     if (x.resolved) { log.push(`${x.name}: Gebote schon aufgelöst, nicht geändert`); continue; }
     await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [round.id, x.managerId]);
-    const order = x.releases.map(p => p.id);
     // Notizen (bedingter Wechsel ohne Kauf, Frist) bleiben am Gebot, damit sie beim Aufloesen und in der Tabelle sichtbar sind
     const note = [x.fallback ? `Falls kein Zuschlag: ${x.fallback.in.name} für ${x.fallback.out.name} einwechseln (kostenpflichtig, von Hand)` : null, x.spaet ? 'nach der Deadline eingegangen' : null].filter(Boolean).join(' · ') || null;
-    for (const bd of x.bids) await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,source,note) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,'blog',$12)`,
-      [round.id, x.managerId, bd.poolName || bd.player_name, bd.club, bd.pos, bd.price, bd.release?.id || null, bd.swapOut?.id || null, bd.priority, x.maxWins, order, note]);
-    n++; log.push(`${x.name}: ${x.bids.length} Gebot(e) gespeichert (max. ${x.maxWins}): ${x.bids.map(bd => `${bd.priority}. ${bd.pos} ${bd.poolName || bd.player_name} ${bd.price}${bd.release ? ' −' + bd.release.name : ''}${bd.swapOut ? ' ⇄' + bd.swapOut.name : ''}`).join(', ')}${order.length ? ' · Entlassungen: ' + x.releases.map(p => p.name).join(', ') : ''}${note ? ' · ' + note : ''}`);
+    const groups = x.groups || [{ gruppe: 1, maxWins: x.maxWins, releases: x.releases }];
+    for (const bd of x.bids) { const g = groups.find(y => y.gruppe === (bd.gruppe || 1)) || groups[0];
+      await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,source,note,gruppe) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,'blog',$12,$13)`,
+        [round.id, x.managerId, bd.poolName || bd.player_name, bd.club, bd.pos, bd.price, bd.release?.id || null, bd.swapOut?.id || null, bd.priority, g.maxWins, g.releases.map(p => p.id), note, g.gruppe]); }
+    const gtxt = g => { const mine = x.bids.filter(bd => (bd.gruppe || 1) === g.gruppe);
+      return `${groups.length > 1 ? `Gebot Nr. ${g.nr ?? g.gruppe} ` : ''}(max. ${g.maxWins}): ${mine.map(bd => `${bd.priority}. ${bd.pos} ${bd.poolName || bd.player_name} ${bd.price}${bd.release ? ' −' + bd.release.name : ''}${bd.swapOut ? ' ⇄' + bd.swapOut.name : ''}`).join(', ')}${g.releases.length ? ' · Entlassungen: ' + g.releases.map(p => p.name).join(', ') : ''}`; };
+    n++; log.push(`${x.name}: ${x.bids.length} Gebot(e) gespeichert ${groups.map(gtxt).join(' | ')}${note ? ' · ' + note : ''}`);
   }
   if (parsed.unclear.length) log.push('Unklar: ' + parsed.unclear.join('; '));
   const prevLog = (await getSetting(`bid_paste_${roundId}`)) || { runs: [] };
@@ -187,7 +191,7 @@ const setSettingTx = (x, key, value) => x.q('insert into settings(key,value) val
 export async function applyBids(userId, roundId) {
   await ensureBidColumns(); const round = await D.roundById(roundId); if (!round) throw new Error('Runde?'); if (round.bids_resolved) throw new Error('Bereits aufgelöst');
   const b = await D.base(); const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await resolveRoundBids(round, b, bids);
-  const { playerMatches: pm } = await import('./kicker'); const usedRel = new Set(); const log = [];
+  const { playerMatches: pm } = await import('./kicker'); const usedRel = new Set(); const usedSwap = new Set(); const log = [];
   await tx(async x => {
     const snap = await x.q('select manager_id, entries, free_in from lineups where round_id=$1', [round.id]);
     await setSettingTx(x, `bids_snapshot_${round.id}`, { at: new Date().toISOString(), lineups: snap });
@@ -208,8 +212,11 @@ export async function applyBids(userId, roundId) {
       const np = { id, name: bid.player_name, base_pos: basePos, extra_pos: extra, manager_id: m }; let note = `${b.managerName[m]}: ${bid.player_name} für ${bid.price}${rel ? ', ' + rel.name + ' entlassen' : ''}`;
       const lu = await materializeLineup(x, round, m, b);
       if (lu) { let e = { ...lu.entries }; const free = (lu.free_in || []).slice(); let ch = false; const marks = [];
-        if (bid.swap_out_player_id) {
-          const out = b.players[bid.swap_out_player_id]; const sw = R.swapIn(e, bid.swap_out_player_id, np, b.players, round.number);
+        // Eventualauftrag: am Gebot genannt, sonst der nächste noch freie aus der Reihenfolge der Gruppe (1. Zuschlag ersetzt den ersten, …)
+        const swapId = bid.swap_out_player_id || (bid.swap_order || []).find(pid => !usedSwap.has(`${m}|${pid}`) && e[pid]) || null;
+        if (swapId) { usedSwap.add(`${m}|${swapId}`); if (!bid.swap_out_player_id) await x.q('update bids set swap_out_player_id=$1 where id=$2', [swapId, bid.id]); }
+        if (swapId) {
+          const out = b.players[swapId]; const sw = R.swapIn(e, swapId, np, b.players, round.number);
           if (sw) { e = sw.entries; ch = true; marks.push(`eingewechselt für ${out?.name || '?'}` + (Object.keys(sw.changes).length ? ' (' + Object.entries(sw.changes).map(([pid, p2]) => `${b.players[pid]?.name || pid} als ${p2}`).join(', ') + ')' : '') + (sw.ok ? '' : ' – Aufstellung prüfen, Positionsregel verletzt')); }
           else if (e[id]) marks.push('steht schon in der Aufstellung');
           else marks.push(`Eventualauftrag nicht ausführbar: ${out?.name || '?'} steht nicht in der Aufstellung`);
@@ -278,7 +285,7 @@ export async function previewBlog(roundId, text) {
   const pl = l.parsed, pg = g.parsed;
   return { msg: `Aufstellungen: ${pl.blocks.length} erkannt, ${pl.blocks.filter(x => x.ok).length} zulässig · Gebote: ${pg.blocks.length} Manager, ${pg.blocks.filter(x => x.ok).length} zulässig`,
     lineups: { blocks: pl.blocks.map(x => ({ ...x, entries: undefined, ambiguous: undefined })), missing: pl.missing, ohnePost: pl.ohnePost, unclear: pl.unclear, skipped: pl.skipped, warnung: pl.warnung },
-    bids: { blocks: pg.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: pg.unclear, skipped: pg.skipped } };
+    bids: { blocks: pg.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, groups: (x.groups || []).map(g => ({ gruppe: g.gruppe, nr: g.nr, maxWins: g.maxWins, releases: g.releases.map(p => p.name) })), budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, gruppe: bd.gruppe || 1, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: pg.unclear, skipped: pg.skipped } };
 }
 
 /** Alles in einem Rutsch: Posts ins Archiv, Gebote speichern, Aufstellungen uebernehmen (nur Zulaessiges). */
