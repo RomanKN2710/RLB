@@ -10,6 +10,7 @@ import { applyKariusRevert } from './korrektur-karius';
 import { applyArbiST4 } from './korrektur-arbi-st4';
 import statsSeed from '../../db/seed/kicker-stats-st1-3.json';
 import ewigeSeed from '../../db/seed/ewige-rangliste.json';
+import kader20261110 from '../../db/seed/kicker-kader-2026-11-10.json';
 import * as HOF from './halloffame';
 import * as Blog from './blog-import';
 import fs from 'node:fs';
@@ -112,6 +113,16 @@ export const STEPS = [
     const nachher = await one('select count(*)::int as n from bl_players where in_squad');
     log.unshift(`Spieler im Bundesliga-Kader: vorher ${vorher.n}, nachher ${nachher.n}`);
     await setSetting('pool_spielberichte_20261110', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'kader_kicker_20261110', title: 'kicker-Kader aller 18 Vereine vom 10.11.2026 (von Roman gespeicherte Kaderseiten): Zu- und Abgänge, Positionen laut kicker', run: async () => {
+    const S = await import('./squads'); const D = await import('./data'); const b = await D.base();
+    const r = await S.applySquads(kader20261110, b, 'kicker-Seiten 10.11.2026');
+    const n = t => r.log.filter(l => l.type === t);
+    const log = [`${r.players} Spieler in ${r.clubs} Kadern · Zugänge ${n('zugang').length}, Wechsel ${n('wechsel').length}, Abgänge ${n('abgang').length}, Positionen ${n('position').length}`];
+    const mgr = id => { const p = b.playersArr.find(x => x.id === id); const m = p && b.managers.find(x => x.id === p.manager_id); return m ? ` (RLB: ${m.name})` : ''; };
+    for (const l of r.log.filter(l => l.type !== 'zugang' || l.rlb_player_id)) log.push(`${l.type}: ${l.name}${l.club_from ? ' ' + l.club_from : ''}${l.club_to ? ' → ' + l.club_to : ''}${l.pos_from ? ` ${l.pos_from} → ${l.pos_to}` : ''}${mgr(l.rlb_player_id)}`);
+    const weg = await S.rlbLeavers(await D.base());
+    log.push(weg.length ? `RLB-Spieler in keinem Bundesliga-Kader mehr: ${weg.map(w => w.player.name).join(', ')}` : 'Alle aktiven RLB-Spieler stehen in einem Bundesliga-Kader');
+    await setSetting('kader_kicker_20261110', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

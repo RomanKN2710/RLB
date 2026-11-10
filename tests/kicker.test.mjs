@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseElfDesTages, classify } from '../src/lib/kicker-parse.js';
-import { matchStats } from '../src/lib/kicker-parse.js';
+import { matchStats, parseSquadPage } from '../src/lib/kicker-parse.js';
 
 const P = [['manuel-neuer', 'fc-bayern-muenchen', 'Neuer'], ['joshua-kimmich', 'fc-bayern-muenchen', 'Kimmich'], ['nico-schlotterbeck', 'borussia-dortmund', 'Schlotterbeck'], ['waldemar-anton', 'borussia-dortmund', 'Anton'], ['alphonso-davies', 'fc-bayern-muenchen', 'Davies'], ['angelo-stiller', 'vfb-stuttgart', 'Stiller'], ['michael-olise', 'fc-bayern-muenchen', 'Olise'], ['florian-wirtz', 'bayer-04-leverkusen', 'Wirtz'], ['jamie-gittens', 'borussia-dortmund', 'Gittens'], ['harry-kane', 'fc-bayern-muenchen', 'Kane'], ['serhou-guirassy', 'borussia-dortmund', 'Guirassy']];
 const link = ([slug, team, name], inner) => `<a href="/${slug}/spieler/bundesliga/${team}" class="kick__lineup-player-card">${inner ?? `<img alt="${name} ${name}"><span class="kick__lineup-player-card__name">${name}</span>`}</a>`;
@@ -85,4 +85,21 @@ describe('Assist bei Eigentor (Entscheid 26.10.2026)', () => {
   const parsed = { starters: [{ ...bischof, pos: 'M' }, { ...makengo, pos: 'V' }], bench: [], events: [{ type: 'goal', minute: '82', scorer: bischof, assist: makengo, ownGoal: true, penalty: false }] };
   test('Vorlage zum Eigentor zählt als Assist, das Eigentor nicht als Tor', () => { const s = matchStats(parsed); assert.equal(s['jordy-makengo'].assist, 1); assert.equal(s['tom-bischof'].tore, 0); assert.match(s['jordy-makengo'].notes[0], /als Assist gezählt/); });
   test('abschaltbar', () => { assert.equal(matchStats(parsed, { assistOnOwnGoal: false })['jordy-makengo'].assist, 0); });
+});
+
+describe('parseSquadPage', () => {
+  const row = (href, last, first) => `<tr><td>1</td><td><a href="${href}"><strong>${last}</strong><span>${first}</span></a></td></tr>`;
+  const section = (title, rows) => `<div><h2 class="kick__section-headline kick__section-headline--tableheadline">${title}</h2><table class="kick__table"><tbody>${rows.join('')}</tbody></table></div>`;
+  test('im Browser gespeicherte Seite (volle Adressen) und live geladene (relative Links)', () => {
+    const html = `<h2 class="kick__site-headline">Aktueller Kader</h2>`
+      + section('Tor', [row('https://www.kicker.ch/manuel-neuer/spieler/bundesliga/2026-27/fc-bayern-muenchen', 'Neuer', 'Manuel')])
+      + section('Abwehr', [row('/alphonso-davies/spieler/bundesliga/2026-27/fc-bayern-muenchen', 'Davies', 'Alphonso')])
+      + section('Sturm', [row('https://www.kicker.de/harry-kane/spieler/bundesliga/2026-27/fc-bayern-muenchen', 'Kane', 'Harry')])
+      + section('Trainer', [row('https://www.kicker.ch/vincent-kompany/trainer/fc-bayern-muenchen', 'Kompany', 'Vincent')]);
+    assert.deepEqual(parseSquadPage(html), [
+      { pos: 'T', last: 'Neuer', first: 'Manuel', slug: 'manuel-neuer' },
+      { pos: 'V', last: 'Davies', first: 'Alphonso', slug: 'alphonso-davies' },
+      { pos: 'S', last: 'Kane', first: 'Harry', slug: 'harry-kane' },
+    ]);
+  });
 });

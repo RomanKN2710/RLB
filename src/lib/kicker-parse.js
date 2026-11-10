@@ -143,3 +143,20 @@ export function matchStats(parsed, opts = {}) {
   }
   return stats;
 }
+
+/** Kader-Seite eines Vereins parsen → [{pos, last, first, slug}]. Live geladene Seiten haben relative Links,
+    im Browser gespeicherte (.mht/.html) volle Adressen; slugOfHref liest beide. */
+const SQUAD_POS = { Tor: 'T', Abwehr: 'V', Mittelfeld: 'M', Sturm: 'S' };
+export function parseSquadPage(html) {
+  const $ = cheerio.load(html); const out = [];
+  $('h2.kick__section-headline--tableheadline').each((_, h) => {
+    const pos = SQUAD_POS[$(h).text().trim()]; if (!pos) return;
+    let t = $(h).next(); if (!t.is('table')) t = t.find('table').first(); if (!t.length) return;
+    t.find('a[href*="/spieler/"]').each((_, a) => {
+      const slug = slugOfHref($(a).attr('href') || ''); if (!slug) return;
+      const last = $(a).find('strong').text().trim() || $(a).text().trim(); const first = $(a).find('span').text().trim();
+      out.push({ pos, last, first, slug });
+    });
+  });
+  return out;
+}

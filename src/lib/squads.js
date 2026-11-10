@@ -1,27 +1,12 @@
 /* kicker-Kader: täglicher Abgleich aller 18 Vereinskader (Spieler, Position laut kicker, Zu- und Abgänge). */
-import * as cheerio from 'cheerio';
 import { q, one, getSetting, setSetting } from './db';
 import { fetchHtml, clubMatches, playerMatches } from './kicker';
 import clubSlugs from '../../db/seed/kicker-clubs.json';
+import { parseSquadPage } from './kicker-parse';
+export { parseSquadPage };
 
-const POS = { Tor: 'T', Abwehr: 'V', Mittelfeld: 'M', Sturm: 'S' };
 const BASE = () => process.env.KICKER_BASE || 'https://www.kicker.de';
 const SEASON = () => process.env.KICKER_SEASON || '2026-27';
-
-/** Kader-Seite eines Vereins parsen → [{pos, last, first, slug}] */
-export function parseSquadPage(html) {
-  const $ = cheerio.load(html); const out = [];
-  $('h2.kick__section-headline--tableheadline').each((_, h) => {
-    const pos = POS[$(h).text().trim()]; if (!pos) return;
-    let t = $(h).next(); if (!t.is('table')) t = t.find('table').first(); if (!t.length) return;
-    t.find('a[href*="/spieler/"]').each((_, a) => {
-      const href = $(a).attr('href') || ''; const slug = href.split('/').filter(Boolean)[0]; if (!slug) return;
-      const last = $(a).find('strong').text().trim() || $(a).text().trim(); const first = $(a).find('span').text().trim();
-      out.push({ pos, last, first, slug });
-    });
-  });
-  return out;
-}
 
 /** Liste {kickerClubSlug: [[pos,last,first,slug],…]} in die Datenbank übernehmen; liefert Protokoll. */
 export async function applySquads(squads, b, source = 'kicker') {
