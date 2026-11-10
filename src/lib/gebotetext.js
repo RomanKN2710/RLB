@@ -46,14 +46,16 @@ export function playerSpec(raw) {
 
 /** Gebots-Post eines Managers lesen. kader: aktive Spieler des Managers (fuer Entlassung und Eventualauftrag). */
 function readBidPost(lines, kader, title = '') {
-  const bids = [], releases = [], notes = [], unmatched = []; let maxWins = null, mode = 'bid', stop = false, fallback = null; let seg = null, relTarget = null, pendingSwap = null, sinceRelease = 0;   // seg: Gebot, zu dem Folgezeilen gehoeren
+  const bids = [], releases = [], notes = [], unmatched = []; let maxWins = null, mode = 'bid', stop = false, fallback = null; let seg = null, relTarget = null, pendingSwap = null, sinceRelease = 0, lastRel = null;   // seg: Gebot, zu dem Folgezeilen gehoeren
   const clean = lines.map(l => l.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()); let titleSeen = false;
   const resolve = (name, quiet) => { const { hits } = findPlayer(name, kader); if (hits.length === 1) return hits[0]; if (hits.length > 1) notes.push(`«${name}» ist mehrdeutig: ${hits.map(h => h.name).join(' oder ')}`); else if (!quiet) unmatched.push(name); return null; };
   const releaseNames = txt => String(txt).replace(/\([^)]*\)/g, ' ').split(/\s*[,;]\s*|\s+(?:und|&|oder)\s+/).map(x => playerSpec(x).name).filter(n => n && norm(n).length >= 3 && !/^(in|der|die|folgender|folgende|reihenfolge|ich|dafur|dafuer|entlasse|entlassen|entlassung)$/i.test(n));
   // Eventualauftrag: zuerst «für X» im Satz lesen (X bis Komma, Verein oder «ein»), sonst alle Kadernamen im Satz suchen –
   // ohne Spieler, deren Namensteile im Gebotsspieler vorkommen («Fabio Viera» darf nicht «Fabio Silva» treffen)
   const swapOf = (sentence, bidNames) => {
-    const fm = sentence.match(/\b(?:für|fuer)\s+(?:[TVMS]\s+)?([\p{L}' .-]+?)(?=\s*,|\s+(?:ein|einwechseln|einsetzen|einzuwechseln|rein|ersetzt|aus|raus)\b|\s*[.!;]|\s*$)/iu);
+    const fm = sentence.match(/\b(?:für|fuer)\s+(?:[TVMS]\s+)?([\p{L}' .-]+?)(?=\s*,|\s+(?:ein|einwechseln|einsetzen|einzuwechseln|rein|ersetzt|aus|raus|in)\b|\s*[.!;]|\s*$)/iu);
+    // «Ich entlasse Nicolas und wechsle den neuen Torhüter für ihn ein»: «ihn» ist der eben Entlassene
+    if (fm && /^(?:ihn|ihm|diesen|den)$/i.test(fm[1].trim())) return lastRel ? [lastRel] : [];
     if (fm) { const spec = playerSpec(fm[1]); const h = spec.name ? findPlayer(spec.name, kader).hits : []; if (h.length === 1) return h; }
     const bidWords = new Set(bidNames.flatMap(n => words(n).map(norm)));
     return kader.filter(p => words(p.name).some(w => w.length >= 3 && !bidWords.has(norm(w)) && new RegExp('(?<!\\p{L})' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!\\p{L})', 'iu').test(sentence)) && !bidNames.some(b => norm(b) === norm(p.name))); };
@@ -70,6 +72,8 @@ function readBidPost(lines, kader, title = '') {
       // «Ich entlasse X und wechsle den neuen Spieler für Y ein»: Entlassung und Eventualauftrag sind zwei Aussagen
       .flatMap(x => /entlass/i.test(x) ? x.split(/\s+und\s+(?=(?:ich\s+)?(?:wechsle|wechseln|setze|stelle|ihn|den\s+neuen|der\s+neue|diesen)\b)/i) : [x]);
     let bidLine = null;
+    // «Werde 3 Spieler direkt einsetzen in Runde 9:» leitet Eventualaufträge ein (keine Gebote, keine Entlassungen)
+    if (/\b(?:einsetzen|einwechseln|einwechsle|einsetze)\b[^.]*:\s*$/i.test(raw) && !/\bbiete\b/i.test(raw)) { mode = 'swap'; continue; }
     for (const sentence of parts) {
       const inRelease = mode === 'release' && !/^(?:\d+[.)]\s*)?(?:ich\s+)?(?:biete|gebote?)\b/i.test(sentence) && !/^(falls|sollte|wenn)\b/i.test(sentence);
       const hasBid = !inRelease && /\d/.test(sentence) && !/^(falls|sollte|wenn)\b/i.test(sentence) && !/entlass\w*\s*:?\s*$/i.test(sentence);
@@ -84,8 +88,8 @@ function readBidPost(lines, kader, title = '') {
         const spec = playerSpec(desc); if (!spec.name) { notes.push(`Gebotszeile ohne Spielername: «${raw}»`); continue; }
         const bid = { priority: bids.length + 1, player_name: spec.name, club: spec.club, pos: spec.pos, price: pr.price, release: relByFuer, swapOut: pendingSwap, raw: sentence.trim() };
         if (spec.also) notes.push(`${spec.name}: laut Gebot auch als ${spec.also} einsetzbar – zählt erst, wenn kicker ihn so in der Startelf führt (Ziff. 5.2)`);
-        if (relTxt) { const n = releaseNames(relTxt)[0]; const p = n && resolve(n); if (p) bid.release = p; else if (n) notes.push(`Entlassung «${n}» nicht im Kader`); }
-        bids.push(bid); seg = bid; bidLine = bid; relTarget = null; sinceRelease++; mode = 'bid'; continue;
+        if (relTxt) { const n = releaseNames(relTxt)[0]; const p = n && resolve(n); if (p) { bid.release = p; lastRel = p; } else if (n) notes.push(`Entlassung «${n}» nicht im Kader`); }
+        if (bid.release) lastRel = bid.release; bids.push(bid); seg = bid; bidLine = bid; relTarget = null; sinceRelease++; mode = 'bid'; continue;
       }
       // Eventualauftrag: "Ihn gleich für X einwechseln", "wechsle ich (ihn) für X ein", "direkt einwechseln für X", "der auch direkt T X ersetzt"
       const conditional = /^(falls|wenn|sollte|sofern)\b/i.test(sentence);
@@ -95,11 +99,19 @@ function readBidPost(lines, kader, title = '') {
         const inP = fm && findPlayer(fm[1].replace(/^(?:dann|wird|soll|ich|er|ihn)\s+/i, '').replace(/.*\b(?:dann|soll|wird)\s+/i, ''), kader).hits, outP = fm && findPlayer(fm[2], kader).hits;
         if (inP && inP.length === 1 && outP && outP.length === 1 && inP[0].id !== outP[0].id) { fallback = { in: inP[0], out: outP[0] }; notes.push(`Bedingter Wechsel, nur wenn das Gebot nicht durchkommt: ${inP[0].name} für ${outP[0].name} – kein Eventualauftrag, kostenpflichtig (50 % von ${inP[0].name}), von Hand in der Aufstellung`); }
         else notes.push(`Bedingte Aufstellungsänderung, nicht übernommen: «${sentence.trim()}»`); continue; }
-      if ((/einwechsel|einsetz|wechsle|wechseln|ersetz|\brein\b/i.test(sentence) || conditional) && /\b(?:für|fuer)\b|ersetzt/i.test(sentence)) {
+      // «V Machida Frankfurt anstelle V Posch Mainz», «M Onyedika (oder dann Chaibi) Frankfurt für V Caci»: links Gebot(e), rechts Spieler der Aufstellung
+      const am = !/^(?:\S+\s+)?entlass/i.test(sentence) && sentence.match(/^(.*?)\s+(?:anstelle(?:\s+von)?|an\s+stelle\s+von|statt|für|fuer)\s+(.+?)\s*[.!]?$/i);
+      if (am && bids.length) {
+        const named = bids.filter(b => words(b.player_name).some(w => w.length >= 3 && new RegExp('(?<!\\p{L})' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!\\p{L})', 'iu').test(am[1])));
+        const outName = playerSpec(am[2].replace(/\([^)]*\)/g, ' ').replace(/\s+(?:ein|einsetzen|einwechseln|rein)$/i, '')).name; const outs = outName ? findPlayer(outName, kader).hits : [];
+        if (named.length && outs.length === 1) { for (const b of named) if (!b.swapOut) b.swapOut = outs[0]; continue; }
+      }
+      if (mode === 'swap') continue;   // Formationshinweise («Neu ein 3-5-2») u. ä.
+      if ((/einwechsel|einsetz|wechsle|wechseln|ersetz|\brein\b/i.test(sentence) || conditional) && /\b(?:für|fuer)\b|ersetzt|anstelle|statt/i.test(sentence)) {
         const cand = swapOf(sentence, bids.map(b => b.player_name));
         if (cand.length === 1) {
           const named = bids.filter(b => new RegExp('(?<!\\p{L})' + norm(b.player_name).slice(0, 5), 'i').test(norm(sentence)) || words(b.player_name).some(w => w.length >= 4 && new RegExp(w, 'i').test(sentence)));
-          const generic = /\b(?:den|der|die)\s+(?:neuen?\s+)?spieler\b|\bneuen\s+spieler\b|\bneueinkauf\b/i.test(sentence);
+          const generic = /\b(?:den|der|die)\s+(?:neuen?\s+)?(?:spieler|torh[üu]ter|torwart|keeper|verteidiger|mittelfeldspieler|st[üu]rmer)\b|\bneuen\s+(?:spieler|torh[üu]ter|torwart)\b|\bneueinkauf\b/i.test(sentence);
           const targets = named.length ? named : bidLine ? [bidLine] : generic ? bids.filter(b => !b.swapOut) : seg ? [seg] : bids;
           for (const b of targets) if (!b.swapOut) b.swapOut = cand[0];
           if (!targets.length) pendingSwap = cand[0];
@@ -111,8 +123,8 @@ function readBidPost(lines, kader, title = '') {
       const rh = sentence.match(/^(?:dafür\s+|dafuer\s+|und\s+|ich\s+)?entlass\w*(?:\s+ich)?(?:\s+in\s+(?:der\s+)?folgender?\s+reihenfolge)?\s*:?\s*(.*)$/i);
       // «Dafür entlasse ich:» gehoert zum Gebot direkt davor; stehen mehrere Gebote davor (Alternativen) oder heisst es «in folgender Reihenfolge», ist es eine Liste
       if (rh) { mode = 'release'; relTarget = /^(dafür|dafuer)\b/i.test(sentence) && !/reihenfolge/i.test(sentence) && sinceRelease === 1 && seg && !seg.release ? seg : null; sinceRelease = 0;
-        const inline = rh[1].trim(); if (inline) for (const n of releaseNames(inline)) { const p = resolve(n); if (!p) continue; if (relTarget && !relTarget.release) { relTarget.release = p; relTarget = null; } else releases.push(p); } continue; }
-      if (mode === 'release') { for (const n of releaseNames(sentence)) { const p = resolve(n, true); if (!p) continue; if (relTarget && !relTarget.release) { relTarget.release = p; relTarget = null; } else releases.push(p); } continue; }
+        const inline = rh[1].trim(); if (inline) for (const n of releaseNames(inline)) { const p = resolve(n); if (!p) continue; lastRel = p; if (relTarget && !relTarget.release) { relTarget.release = p; relTarget = null; } else releases.push(p); } continue; }
+      if (mode === 'release') { for (const n of releaseNames(sentence)) { const p = resolve(n, true); if (!p) continue; lastRel = p; if (relTarget && !relTarget.release) { relTarget.release = p; relTarget = null; } else releases.push(p); } continue; }
     }
     if (!bidLine && /^(gebot|biete|ich biete|meine gebote|gebote)/i.test(raw)) mode = 'bid';
   }

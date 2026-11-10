@@ -13,6 +13,7 @@ R1.players.filter(p => p.status === 'active').forEach(p => { const [b, ...e] = S
 [['Arbi', 'Musiala', 'M', 'Bayern'], ['Arbi', 'Mensah', 'V', 'Köln'], ['Arbi', 'Mokwa', 'S', 'Elversberg', ['M']], ['Arbi', 'Lemperle', 'S', 'Hoffenheim', ['M']], ['Arbi', 'Doan', 'M', 'Frankfurt'], ['Mike', 'Katic', 'V', 'Schalke'], ['Mike', 'Diaby', 'S', 'Leverkusen'],
  ['René', 'Fellhauer', 'M', 'Augsburg'], ['Roman', 'Avdullahu', 'M', 'Hoffenheim'], ['Roman', 'Ibrahimovic', 'M', 'Bayern'], ['Pädi', 'Grüll', 'M', 'Bremen'], ['Dani', 'Fabio Silva', 'M', 'Dortmund'], ['Dani', 'Banzuzi', 'M', 'Leipzig'], ['Roman', 'Medina', 'V', 'Leverkusen'], ['Roman', 'Davies', 'V', 'Bayern'], ['Röfe', 'Karaman', 'M', 'Schalke'], ['Mark', 'Gutierrez', 'V', 'Bayern']]
   .forEach(([m, n, p, c, e]) => add(m, n, p, c, e || []));
+add('Arbi', 'Potulski', 'V', 'Mainz');   // Kauf Spieltag 7
 for (const [m, n, e] of [['Pädi', 'Caci', ['M']], ['Pädi', 'Mwéne', ['M']], ['Arbi', 'Ryerson', ['M']], ['Roman', 'Beier', ['M', 'V']]]) { const p = kader[mid(m)].find(x => x.name === n); if (p) p.extra_pos = e; }
 export { kader };
 export const kaderOf = id => kader[id];

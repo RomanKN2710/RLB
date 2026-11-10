@@ -123,6 +123,35 @@ export const STEPS = [
     const weg = await S.rlbLeavers(await D.base());
     log.push(weg.length ? `RLB-Spieler in keinem Bundesliga-Kader mehr: ${weg.map(w => w.player.name).join(', ')}` : 'Alle aktiven RLB-Spieler stehen in einem Bundesliga-Kader');
     await setSetting('kader_kicker_20261110', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'st9_gebote_abschluss_20261110', title: 'Spieltag 9: Gebote aus dem Blog (Arbi, Pädi, Mike) übernehmen, zuteilen, kicker-Werte neu einlesen und abschliessen (Auftrag Roman 10.11.2026)', run: async userId => {
+    const D = await import('./data'); const BI = await import('./blog-import'); const K = await import('./kicker'); const { roundCheck } = await import('./rundencheck');
+    const log = []; const round = await one("select * from rounds where type='regulaer' and matchday=9");
+    if (!round) throw new Error('Spieltag 9 fehlt');
+    if (round.status === 'final') { log.push('Spieltag 9 ist schon abgeschlossen – nichts geändert'); await setSetting('st9_gebote_abschluss_20261110', { at: new Date().toISOString(), log }); return { log }; }
+    const text = fs.readFileSync(path.join(process.cwd(), 'db/seed/gebote-st9-2026-11-06.txt'), 'utf8');
+    if (!round.bids_resolved) {
+      // erst prüfen, dann schreiben: alle drei Posts müssen zulässig sein
+      const { parsed } = await BI.parseBidPaste(round.id, text);
+      const names = parsed.blocks.map(x => x.name).sort().join(', ');
+      if (names !== 'Arbi, Mike, Pädi' || parsed.blocks.some(x => !x.ok)) throw new Error(`Gebote nicht wie erwartet gelesen: ${parsed.blocks.map(x => x.name + (x.ok ? '' : ' (' + x.problems.join('; ') + ')')).join(' · ')}`);
+      for (const x of parsed.blocks) for (const n of x.notes || []) log.push(`${x.name}: ${n}`);
+      try { const Archiv = await import('./blog-archiv'); await Archiv.ensureTable(); const b = await D.base(); const rounds = (await D.rounds()).filter(r => r.type === 'regulaer' && r.deadline);
+        const posts = Archiv.parseBlogText(text, { defaultDate: '2026-11-06' }); if (posts.length) { const a = await Archiv.importPosts(posts, b.managers, rounds, 'Gebote ST9 (Roman 10.11.)'); log.push(`Blog-Archiv: ${a.neu} neue Posts`); } }
+      catch (e) { log.push('Blog-Archiv nicht ergänzt: ' + e.message); }
+      const u = await one('select * from users where id=$1', [userId]) || { id: userId, name: 'Migration' };
+      const p = await BI.applyBidPaste(u, round.id, text); log.push(...p.log.map(l => 'Gebote: ' + l));
+      const z = await BI.applyBids(userId, round.id); log.push(...z.log.map(l => 'Zuteilung: ' + l));
+      for (const bd of await q("select b.*, m.name as m from bids b join managers m on m.id=b.manager_id where b.round_id=$1 and b.status<>'won' order by m.name, b.priority", [round.id])) log.push(`Kein Zuschlag: ${bd.m} ${bd.player_name} ${bd.price} (${bd.reason || bd.status})`);
+    } else log.push('Gebote waren schon zugeteilt – nur Werte und Abschluss');
+    // Neu gekaufte Spieler brauchen ihre Spieltag-9-Werte (Eventualauftrag: sie spielen in dieser Runde)
+    const imp = await K.importInbox(round.matchday, { userId, auto: true }); log.push('kicker neu eingelesen: ' + K.importSummary(imp).join(', ') + (imp.errors.length ? ' · Probleme: ' + imp.errors.join(' · ') : ''));
+    const b = await D.base(); const fresh = await one('select * from rounds where id=$1', [round.id]); const d = await D.roundData(fresh, b); const c = await roundCheck(fresh, b, d);
+    const pts = Object.entries(d.totals).map(([id, t]) => [b.managerName[id] || id, t.punkte]).sort((x, y) => y[1] - x[1]); log.push('Punkte Spieltag 9: ' + pts.map(([n, p]) => `${n} ${p}`).join(', '));
+    if (c.problems.length) { log.push('NICHT abgeschlossen, Rundencheck meldet: ' + c.problems.map(x => x.text || x).join(' · ')); }
+    else { await BI.finalizeRound(userId, round.id); log.push('Spieltag 9 abgeschlossen');
+      try { const rep = BI.triggerReport(round.id); if (rep) { const { waitUntil } = await import('@vercel/functions'); waitUntil(rep); log.push('Spieltagsbericht wird erstellt (Seite «Bericht»)'); } } catch (e) { log.push('Bericht bitte von Hand anstossen: ' + e.message); } }
+    if (c.warnings.length) log.push('Hinweise: ' + c.warnings.map(x => x.text || x).join(' · '));
+    await setSetting('st9_gebote_abschluss_20261110', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

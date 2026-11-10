@@ -67,7 +67,7 @@ describe('Handy-Blog Runde 7 (23.10.2026): Blog-Kopf, Gebot per Mail nach der Bl
   test('sentAt liest das Mail-Datum', () => { assert.equal(sentAt(['Fw: x', 'Gesendet: Freitag, 23. Oktober 2026 um 18:08', 'Von: a@b.ch']).toISOString(), '2026-10-23T16:08:00.000Z'); assert.equal(sentAt(['nur Text']), null); });
 });
 
-describe('Mehrere Gebote in einem Post («Gebot Nr. 1», «Gebot Nr. 2»), Spieltag 10', () => {
+describe('Mehrere Gebote in einem Post («Gebot Nr. 1», «Gebot Nr. 2»), Spieltag 9', () => {
   // Gebot Nr. 2 ist Mikes Text wörtlich; Gebot Nr. 1 ist für den Test ergänzt (zweite Gruppe mit eigener Entlassung)
   const text = fs.readFileSync(new URL('./fixtures/gebot-mike-gruppen.txt', import.meta.url), 'utf8');
   const res = parse(text, { roundNumbers: [100, 10] }); const x = block(res, 'Mike');
@@ -88,5 +88,23 @@ describe('Mehrere Gebote in einem Post («Gebot Nr. 1», «Gebot Nr. 2»), Spiel
     const [a, b2] = text.split('Gebot Nr. 2:'); const two = a.replace(/\n*$/, '\nMarkadona um 17:00\n') + 'Gebote Mike, Nachtrag\nGebot Nr. 2:' + b2;
     const y = block(parse(two, { roundNumbers: [100, 10] }), 'Mike');
     assert.equal(y.groups.length, 2); assert.ok(y.notes.some(n => /Ergänzt den früheren Post/.test(n))); assert.ok(y.ok, y.problems.join('; '));
+  });
+});
+
+describe('Gebote Spieltag 9 (06./07.11.2026): Eventualaufträge mit «anstelle» und «für ihn»', () => {
+  const text = fs.readFileSync(new URL('../db/seed/gebote-st9-2026-11-06.txt', import.meta.url), 'utf8');
+  const res = parse(text, { roundNumbers: [90, 9], notBefore: '2026-10-30T18:00:00Z', deadline: '2026-11-06T18:00:00Z' });
+  test('drei Gebots-Posts, alle zulässig', () => { assert.deepEqual(res.blocks.map(b => b.name).sort(), ['Arbi', 'Mike', 'Pädi']); for (const x of res.blocks) assert.ok(x.ok, x.name + ': ' + x.problems.join('; ')); });
+  test('Mike, Gebot Nr. 1: «entlasse Nicolas und wechsle den neuen Torhüter für ihn ein» gilt für alle drei Torhüter', () => {
+    const x = block(res, 'Mike'); assert.deepEqual(x.groups.map(g => [g.nr, g.maxWins, g.releases.map(p => p.name)]), [[1, 1, ['Nicolas']], [2, 1, ['Latte Lath']]]);
+    assert.deepEqual(x.bids.filter(b => b.gruppe === 1).map(b => b.swapOut?.name), ['Nicolas', 'Nicolas', 'Nicolas']);
+    assert.ok(x.bids.filter(b => b.gruppe === 2).every(b => b.swapOut?.name === 'Tillman'));
+  });
+  test('Pädi: vier Entlassungen; die Zeilen «X anstelle Y» sind Eventualaufträge, keine Entlassungen', () => {
+    const x = block(res, 'Pädi'); assert.equal(x.maxWins, 4); assert.deepEqual(x.releases.map(p => p.name), ['Posch', 'Itakura', 'Hwang', 'Höler']);
+    assert.deepEqual([0, 1, 2, 3].map(i => bid(x, i)), ['V Machida (Frankfurt) 2 >Posch', 'V Assignon (Stuttgart) 2 >Mwene', 'M Onyedika (Frankfurt) 2 >Caci', 'M Chaibi (Frankfurt) 2 >Caci']);
+  });
+  test('Arbi: «2.- für Otavio» ist die Entlassung; Blog-Post nach der Deadline wird markiert', () => {
+    const x = block(res, 'Arbi'); assert.equal(bid(x, 0), 'M Krattenmacher (Elversberg) 2 -Otavio'); assert.equal(bid(x, 1), 'S Machino (Gladbach) 2 -Mensah >Potulski'); assert.equal(x.spaet, true);
   });
 });

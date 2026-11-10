@@ -119,6 +119,10 @@ export async function parseBidPaste(roundId, text) {
     for (const bid of x.bids) {
       const hitsAll = pool.filter(p => (!bid.club || p.club === bid.club) && (playerMatches(p.slug, p.name, bid.player_name) || R.norm(p.name) === R.norm(bid.player_name) || (p.first && R.norm(p.first + ' ' + p.name) === R.norm(bid.player_name))));
       const hits = hitsAll.filter((p, i) => hitsAll.findIndex(x => x.name === p.name && x.club === p.club) === i);   // doppelte Pool-Eintraege (gleicher Name und Verein) zaehlen einmal
+      // Verein im Gebot falsch, Name im ganzen Pool eindeutig (z. B. «Machida Frankfurt», laut kicker Hoffenheim): diesen Spieler nehmen, Verein korrigieren und vermerken
+      if (!hits.length && bid.club) { const nameHit = p => playerMatches(p.slug, p.name, bid.player_name) || R.norm(p.name) === R.norm(bid.player_name) || (p.first && R.norm(p.first + ' ' + p.name) === R.norm(bid.player_name));
+        const any = pool.filter(nameHit).filter((p, i, a) => a.findIndex(x => x.name === p.name && x.club === p.club) === i);
+        if (any.length === 1 && (!bid.pos || any[0].positions.split('/').includes(bid.pos))) { x.notes = x.notes || []; x.notes.push(`${bid.player_name}: Verein laut Gebot ${bid.club}, laut kicker ${any[0].club} – als ${any[0].name} (${any[0].club}) gelesen`); bid.club = any[0].club; hits.push(any[0]); } }
       const hit = hits.length === 1 ? hits[0] : hits.filter(p => p.club === bid.club).length === 1 ? hits.find(p => p.club === bid.club) : null;
       if (hit) { bid.poolName = hit.name; bid.club = bid.club || hit.club; bid.pos = bid.pos || hit.pos; bid.taken = hit.taken; bid.pool = `${hit.positions} ${hit.name}, ${hit.club}`; }
       else bid.poolNote = hits.length > 1 ? `mehrere im Pool: ${hits.map(p => p.name + ' (' + p.club + ')').join(', ')}` : 'nicht im Pool (noch kein Einsatz oder Schreibweise prüfen)';
