@@ -4,7 +4,7 @@ import * as D from '@/lib/data';
 import { CATS } from '@/lib/rules';
 import { fmtDt, fmtRp, Info } from '@/components/ui';
 import Countdown from '@/components/Countdown';
-import { one } from '@/lib/db';
+import { q, one } from '@/lib/db';
 import Rennen from '@/components/Rennen';
 import Auszeichnungen from '@/components/Auszeichnungen';
 import { roundAwards } from '@/lib/auszeichnungen';
@@ -15,7 +15,9 @@ export default async function Tabelle({ searchParams }) {
   const u = await requireUser();
   const all = await D.rounds();
   const played = all.filter(r => r.deadline && new Date(r.deadline) < new Date());
-  if (!played.length) return <div className="card"><h2>Noch keine gewertete Runde</h2><p className="mini">Die Tabelle erscheint, sobald die erste Deadline vorbei ist.</p></div>;
+  if (!played.length) { const first = await D.openRound();
+    return <div className="card"><h2>Noch keine gewertete Runde</h2><p className="mini">Die Tabelle erscheint, sobald die erste Deadline vorbei ist.</p>
+      {first && <><p className="small">{first.label}: Deadline <b>{fmtDt(first.deadline)}</b> · <Countdown to={first.deadline} /></p><div className="cta"><Link className="btn" href="/aufstellung">Aufstellung →</Link> <Link className="btn sec" href="/markt">Transfermarkt</Link> <Link className="btn sec" href="/kader">Kader</Link></div></>}</div>; }
   const want = Number(searchParams?.r); const sel = played.some(r => r.number === want) ? want : played[played.length - 1].number;
   const sd = await D.season(sel);
   const cur = sd.upto[sd.upto.length - 1]; const curData = sd.datas[sd.datas.length - 1];
@@ -29,7 +31,10 @@ export default async function Tabelle({ searchParams }) {
   // Mein Stand: eigener Rang, Abstand, offene Runde mit Aufstellungs- und Gebotsstatus
   const me = u.manager_id; const mine = me ? sd.table.find(r => r.manager_id === me) : null; const leader = sd.table[0]; const second = sd.table[1];
   const open = await D.openRound(); const myLu = open && me ? await one('select updated_at, updated_by from lineups where round_id=$1 and manager_id=$2', [open.id, me]) : null;
-  const myBid = open && me ? await one("select player_name, price from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, me]) : null;
+  // alle verdeckten Gebote: der offenen Runde und – zwischen Deadline und Auflösung – der Runde davor
+  const myBids = me ? await q("select b.player_name, b.price, b.gruppe, b.round_id, r.label from bids b join rounds r on r.id=b.round_id where b.manager_id=$1 and b.status='sealed' order by r.number, b.priority", [me]) : [];
+  const bidsOpen = myBids.filter(x => open && x.round_id === open.id), bidsWait = myBids.filter(x => !open || x.round_id !== open.id);
+  const bidText = list => { const g = new Set(list.map(x => x.gruppe || 1)).size; return `${g} ${g === 1 ? 'Gebot' : 'Gebote'}, ${list.length} Spieler (${list.map(x => `${x.player_name} ${Number(x.price)}`).join(', ')})`; };
   const myDelta = mine && prev ? prevRank[me] - mine.rank : 0;
   const rt = curData.totals; const rr = sd.base.managerIds.map(m => ({ m, t: rt[m] })).sort((a, b) => b.t.punkte - a.t.punkte);
   return (<>
@@ -39,7 +44,8 @@ export default async function Tabelle({ searchParams }) {
         <span><b>{fmtRp(mine.total)}</b> Rangpunkte{myDelta > 0 && <span className="delta up"> ▲{myDelta}</span>}{myDelta < 0 && <span className="delta down"> ▼{-myDelta}</span>}</span>
         <span>{mine.rank === 1 ? <>Vorsprung <b>{fmtRp(mine.total - (second?.total ?? mine.total))}</b> auf {name(second?.manager_id)}</> : <>Rückstand <b>{fmtRp(leader.total - mine.total)}</b> auf {name(leader.manager_id)}</>}</span>
         {open && <span>{open.label}: <Countdown to={open.deadline} /></span>}
-        {open && <span>Aufstellung: <b>{myLu ? 'gespeichert' : 'Vorrunde gilt'}</b> · Gebot: <b>{myBid ? `${myBid.player_name} (${Number(myBid.price)})` : 'keins'}</b></span>}
+        {open && <span>Aufstellung: <b>{myLu ? 'gespeichert' : 'Vorrunde gilt'}</b> · Gebote: <b>{bidsOpen.length ? bidText(bidsOpen) : 'keine'}</b></span>}
+        {bidsWait.length > 0 && <span>{bidsWait[0].label}: <b>{bidText(bidsWait)}</b> – warten auf die Auflösung</span>}
       </div>
       {open && <div className="cta"><Link className="btn" href="/aufstellung">Aufstellung →</Link><Link className="btn sec" href="/markt">Transfermarkt</Link></div>}
     </div>}

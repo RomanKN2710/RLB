@@ -38,8 +38,8 @@ export function BumpChart({ labels, ranks, names, ids, me }) {
         return <g key={m}>
           <polyline points={pts.map((r, i) => `${x(i)},${y(r)}`).join(' ')} fill="none" stroke={col} strokeWidth={isMe ? 5 : 3} strokeLinejoin="round" strokeLinecap="round" opacity={isMe ? 1 : 0.85} />
           {pts.map((r, i) => <circle key={i} cx={x(i)} cy={y(r)} r={isMe ? 5 : 4} fill="var(--surface)" stroke={col} strokeWidth="2.5" />)}
-          {!small && <text x={L - 10} y={y(first) + 4 + off(first, 0)} fontSize="12" textAnchor="end" fill={col} fontWeight={isMe ? 700 : 600}>{names[m]}</text>}
-          <text x={W - R + 10} y={y(last) + 4 + off(last, pts.length - 1)} fontSize={small ? 12 : 13} fill={col} fontWeight={isMe ? 700 : 600}>{last}. {names[m]}</text>
+          {!small && <text x={L - 10} y={y(first) + 4 + off(first, 0)} fontSize="12" textAnchor="end" fill="var(--ink)" fontWeight={isMe ? 700 : 600}>{names[m]}</text>}
+          <text x={W - R + 10} y={y(last) + 4 + off(last, pts.length - 1)} fontSize={small ? 12 : 13} fill="var(--ink)" fontWeight={isMe ? 700 : 600}>{last}. {names[m]}</text>
         </g>; })}
     </svg></div>
   );
@@ -63,7 +63,7 @@ export function Lines({ labels, series, names, ids, me, title, small }) {
       {[...ids].sort((a, b) => (a === me) - (b === me)).map(m => { const k = ids.indexOf(m); const col = color(k); const isMe = m === me; return <g key={m}>
         <polyline points={series[m].map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke={col} strokeWidth={isMe ? 4.5 : (small ? 2.2 : 2.8)} strokeLinejoin="round" strokeLinecap="round" opacity={isMe ? 1 : 0.85} />
         {!small && series[m].map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={isMe ? 4 : 3} fill="var(--surface)" stroke={col} strokeWidth="2" />)}</g>; })}
-      {lab.map(o => <text key={o.m} x={W - R + 8} y={o.ty + 4} fontSize="12" fill={color(o.k)} fontWeight={o.m === me ? 700 : 600}>{names[o.m]} {fmt(o.v)}</text>)}
+      {lab.map(o => <text key={o.m} x={W - R + 8} y={o.ty + 4} fontSize="12" fill="var(--ink)" fontWeight={o.m === me ? 700 : 600}>{names[o.m]} {fmt(o.v)}</text>)}
     </svg></div>
   );
 }

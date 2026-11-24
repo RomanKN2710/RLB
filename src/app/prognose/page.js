@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import { prognose } from '@/lib/prognose';
 import { fmtRp, Info } from '@/components/ui';
+import { getSetting, setSetting } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -9,7 +10,10 @@ const pct = p => p < 0.005 ? '<1 %' : `${Math.round(p * 100)} %`;
 export default async function Prognose() {
   const u = await requireUser(); const sd = await D.season(null);
   const total = sd.rounds.filter(r => r.type === 'regulaer').length || 34;
-  const P = prognose(sd, { totalRounds: total });
+  // 3000 simulierte Saisons je Aufruf sind unnötig: das Ergebnis hängt nur vom Stand der Tabelle ab und wird damit gemerkt
+  const stand = JSON.stringify([total, sd.upto.map(r => r.id), sd.table.map(r => [r.manager_id, r.total, Object.values(r.tot)])]);
+  let P = null; try { const c = await getSetting('prognose_cache'); if (c && c.stand === stand) P = c.P; } catch { /* ohne Zwischenspeicher rechnen */ }
+  if (!P) { P = prognose(sd, { totalRounds: total }); if (P) { try { await setSetting('prognose_cache', { stand, at: new Date().toISOString(), P }); } catch { /* nur Beigabe */ } } }
   if (!P) return <div className="card"><h2>Saisonprognose</h2><p className="mini">Ab zwei gewerteten Spieltagen.</p></div>;
   const name = id => sd.base.managerName[id]; const n = P.rows.length;
   const col = k => k === 0 ? 'var(--komm)' : k < 4 ? 'var(--accent)' : k === n - 1 ? 'var(--bad)' : `hsl(150 10% ${60 + k * 3}%)`;

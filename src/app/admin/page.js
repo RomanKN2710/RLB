@@ -36,7 +36,7 @@ export default async function Admin() {
   const lastPlayed = [...rounds].filter(r => r.type === 'regulaer' && r.deadline && new Date(r.deadline).getTime() < now).pop();
   const show = rounds.filter(r => r.type === 'nachtrag' || r.matchday <= (lastPlayed ? lastPlayed.matchday + 1 : 2));
   const cnt = (list, r) => (list.find(x => x.round_id === r.id) || {});
-  const checks = {}; for (const r of show) { if (r.deadline && new Date(r.deadline).getTime() < now) { try { checks[r.id] = await roundCheck(r, b, await D.roundData(r, b)); } catch (e) { checks[r.id] = { problems: [{ text: 'Check fehlgeschlagen: ' + e.message }], warnings: [], ok: false }; } } }
+  const checks = {}; for (const r of show) { if (r.status !== 'final' && r.deadline && new Date(r.deadline).getTime() < now) { try { checks[r.id] = await roundCheck(r, b, await D.roundData(r, b)); } catch (e) { checks[r.id] = { problems: [{ text: 'Check fehlgeschlagen: ' + e.message }], warnings: [], ok: false }; } } }
   const blogUrl = process.env.BLOG_URL || 'https://rotisseryleaguebundesliga.blogspot.com';
   return (<>
     {authSecretMissing() && <div className="note" style={{ borderColor: 'var(--bad, #b23a3a)' }}><b>Sicherheit:</b> In Vercel ist <code>AUTH_SECRET</code> nicht gesetzt (oder kürzer als 16 Zeichen). Die Anmeldung läuft mit einem Ersatzschlüssel weiter. Bitte unter Vercel › Settings › Environment Variables einen langen Zufallstext als <code>AUTH_SECRET</code> eintragen und neu veröffentlichen; danach melden sich alle einmal neu an.</div>}

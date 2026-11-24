@@ -16,7 +16,7 @@ export default async function Kader() {
   const squad = await q('select slug,name,club,squad_pos,in_squad from bl_players where in_squad or left_at is not null');
   const kinfo = {}; for (const p of b.playersArr) { if (p.status !== 'active') continue; const same = squad.filter(r => r.club === p.club && playerMatches(r.slug, r.name, p.name)); const clubKnown = squad.some(r => r.club === p.club); const any = same.length ? same : clubKnown ? [] : squad.filter(r => playerMatches(r.slug, r.name, p.name)); const hit = any.length === 1 ? any[0] : same[0]; if (hit) kinfo[p.id] = { pos: hit.squad_pos, club: hit.club, in: hit.in_squad }; }
   const sd = await D.season(null, b); const aus = await D.auslagen(sd);
-  const budgets = {}; for (const m of b.managerIds) budgets[m] = await D.budgetLeft(m);
+  const budgets = await D.budgetsAll(b.managerIds);
   const trades = await q('select t.*, f.name as from_name, o.name as to_name from trades t join managers f on f.id=t.from_manager join managers o on o.id=t.to_manager order by t.created_at desc');
   const transfers = await D.transfersAll();
   const order = { T: 0, V: 1, M: 2, S: 3 };
@@ -28,6 +28,7 @@ export default async function Kader() {
   return (<>
     {mine && (() => { const ps = sorted(mine.id); return <div className="card" style={{ borderColor: 'var(--accent)' }}><div className="row between"><div><div className="eyebrow">Mein Kader</div><h2>{mine.name} <span className="mini">{ps.length}/22</span></h2></div>{meta(mine)}</div>{squadTable(ps)}</div>; })()}
     <div className="card"><div className="eyebrow">Liga</div><h2>{mine ? 'Die anderen Kader' : 'Kader'}</h2><p className="mini">Antippen zum Aufklappen.</p>
+      <div className="legend"><b>J</b> Jugendspieler · <b>1J / 2J</b> Vertrag über ein oder zwei Jahre · <b>k:V</b> Position laut kicker · <b>Abgang?</b> steht laut kicker in keinem Bundesliga-Kader mehr · <b>→ Verein</b> spielt laut kicker bei einem anderen Verein · Zahl hinter dem Namen: Wert in CHF</div>
       <div className="grid2">{others.map(m => { const ps = sorted(m.id); return (
         <details key={m.id} className="squad"><summary><b>{m.name} <span className="mini">{ps.length}/22</span></b>{meta(m)}</summary><div className="inner">{squadTable(ps)}</div></details>); })}</div></div>
     <div className="grid2">

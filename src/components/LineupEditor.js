@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { saveLineupAction } from '@/actions';
 import { POSRULE, SWAP_PCT, posProblems, fitPositions } from '@/lib/rules';
 import { chf, Msg } from '@/components/ui';
@@ -8,6 +8,9 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
   const [entries, setEntries] = useState(initial || {});
   const [msg, setMsg] = useState(null);
   const [pending, start] = useTransition();
+  // Gespeicherter Stand zum Vergleich: zeigt «ungespeicherte Änderungen» und warnt beim Verlassen der Seite
+  const keyOf = e => JSON.stringify(Object.keys(e).sort().map(k => [k, e[k].pos]));
+  const [savedKey, setSavedKey] = useState(() => keyOf(initial || {}));
   const byId = Object.fromEntries(players.map(p => [p.id, p]));
   const cnt = { T: 0, V: 0, M: 0, S: 0 }; Object.entries(entries).forEach(([pid, e]) => { const pos = e.pos || byId[pid]?.base_pos; if (cnt[pos] !== undefined) cnt[pos]++; });
   const n = Object.keys(entries).length; const bad = Object.entries(POSRULE).filter(([k, [lo, hi]]) => cnt[k] < lo || cnt[k] > hi).map(([k]) => k);
@@ -21,11 +24,15 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
   // eine von Hand gewählte Position bleibt, solange es anders aufgeht.
   const [manual, setManual] = useState(() => new Set()); const [hint, setHint] = useState('');
   const fitted = (c, fixed) => { const fit = fitPositions(c, byId, fixed); if (!fit) return c; const out = { ...c }; for (const [pid, pos] of Object.entries(fit.changes)) out[pid] = { pos }; setHint(Object.entries(fit.changes).map(([pid, pos]) => `${byId[pid]?.name} als ${pos}`).join(', ')); return out; };
-  const toggle = p => setEntries(e => { const c = { ...e }; if (c[p.id]) delete c[p.id]; else c[p.id] = { pos: p.base_pos }; return fitted(c, manual); });
-  const setPos = (pid, pos) => { const m = new Set(manual); m.add(pid); setManual(m); setEntries(e => fitted({ ...e, [pid]: { pos } }, m)); };
+  const toggle = p => { setMsg(null); setEntries(e => { const c = { ...e }; if (c[p.id]) delete c[p.id]; else c[p.id] = { pos: p.base_pos }; return fitted(c, manual); }); };
+  const setPos = (pid, pos) => { setMsg(null); const m = new Set(manual); m.add(pid); setManual(m); setEntries(e => fitted({ ...e, [pid]: { pos } }, m)); };
   const order = { T: 0, V: 1, M: 2, S: 3 };
-  const sorted = players.slice().sort((a, b) => order[a.base_pos] - order[b.base_pos] || (a.slot > b.slot ? 1 : -1) || a.name.localeCompare(b.name));
-  const save = () => start(async () => { const r = await saveLineupAction(roundId, managerId, entries); setMsg(r); });
+  // Reihenfolge: nach Position, darin zuerst die bisher Aufgestellten (bleibt beim Antippen stehen), dann nach Namen
+  const was = initial || {};
+  const sorted = players.slice().sort((a, b) => order[a.base_pos] - order[b.base_pos] || (a.id in was ? 0 : 1) - (b.id in was ? 0 : 1) || a.name.localeCompare(b.name));
+  const dirty = keyOf(entries) !== savedKey;
+  useEffect(() => { if (!dirty) return; const warn = e => { e.preventDefault(); e.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [dirty]);
+  const save = () => start(async () => { const sent = keyOf(entries); const r = await saveLineupAction(roundId, managerId, entries); setMsg(r); if (r && r.ok) setSavedKey(sent); });
   return (<div className="stack">
     <div className="row between"><div className="posgrid">{Object.entries(POSRULE).map(([k, [lo, hi]]) => <span key={k} className={bad.includes(k) ? 'bad' : 'ok'}>{k} <b>{cnt[k]}</b> <span className="muted">({lo}–{hi})</span></span>)}<span className={n === 11 ? 'ok' : 'bad'}><b>{n}</b>/11</span></div>
       <div className="mini">{isFirst ? 'Grundaufstellung: kostenlos' : <>Wechselkosten: <b>CHF {chf(swapTotal)}</b>{swaps.length > 0 && ` (${swaps.map(s => `${s.name} ${chf(s.cost)}`).join(', ')})`}</>}</div></div>
@@ -33,8 +40,8 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
       <thead><tr><th className="l">Auf.</th><th className="l">Pos</th><th className="l">Spieler</th><th className="l">Verein</th><th>Wert</th></tr></thead>
       <tbody>{sorted.map(p => { const e = entries[p.id]; const on = !!e; const wasIn = prevEntries && p.id in prevEntries; return (
         <tr key={p.id} className={`lineup-row ${on ? '' : 'off'}`} onClick={ev => { if (ev.target.closest('select,input,a')) return; toggle(p); }}>
-          <td className="l"><input type="checkbox" checked={on} onChange={() => toggle(p)} /></td>
-          <td className="l">{on ? (p.positions.length > 1 ? <select value={e.pos} onChange={ev => setPos(p.id, ev.target.value)}>{p.positions.map(x => <option key={x}>{x}</option>)}</select> : e.pos) : <span className="muted">{p.positions.join('/')}</span>}</td>
+          <td className="l"><input type="checkbox" aria-label={`${p.name} aufstellen`} checked={on} onChange={() => toggle(p)} /></td>
+          <td className="l">{on ? (p.positions.length > 1 ? <select aria-label={`Position von ${p.name}`} value={e.pos} onChange={ev => setPos(p.id, ev.target.value)}>{p.positions.map(x => <option key={x}>{x}</option>)}</select> : e.pos) : <span className="muted">{p.positions.join('/')}</span>}</td>
           <td className="l"><b>{p.name}</b>{p.jugend && <span className="badge j" title="Jugendspieler">J</span>}{p.contract && <span className="badge v">{p.contract}</span>}{!isFirst && on && !wasIn && !free.has(p.id) && <span className="badge" title="neu aufgestellt: kostenpflichtig">neu</span>}{free.has(p.id) && <span className="badge j" title="Eventualauftrag oder Trade: ohne Wechselkosten">gratis</span>}</td>
           <td className="l muted">{p.club}</td><td>{p.price}</td></tr>); })}</tbody>
     </table></div>
@@ -42,7 +49,14 @@ export default function LineupEditor({ roundId, managerId, players, initial, pre
     {!zulaessig && <div className="err"><b>Unzulässige Aufstellung – so kann sie nicht abgegeben werden.</b>
       <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{probleme.map(x => <li key={x}>{x}</li>)}</ul>
       <span className="mini">Regel (Ziff. 5.1): genau 11 Spieler, davon 1 Torwart, 3–5 Verteidiger, 3–6 Mittelfeld, 1–3 Sturm. Gewertet wird die zuletzt gültig gespeicherte Aufstellung, ohne gespeicherte Aufstellung die der Vorrunde.</span></div>}
+    {/* Leiste bleibt beim Scrollen sichtbar: Zähler, Kosten, Stand und Speichern */}
+    <div className="savebar" role="region" aria-label="Aufstellung speichern">
+      <div className="savebar-info"><span className={n === 11 && zulaessig ? 'ok' : 'bad'}><b>{n}</b>/11</span>
+        <span className="mini">{isFirst ? 'kostenlos' : <>Wechsel CHF <b>{chf(swapTotal)}</b></>}</span>
+        <span className={`mini ${dirty ? 'delta down' : ''}`} aria-live="polite">{pending ? 'speichert …' : dirty ? 'ungespeicherte Änderungen' : 'gespeichert'}</span></div>
+      <button onClick={save} disabled={pending || !zulaessig || !dirty} title={zulaessig ? '' : 'Aufstellung ist unzulässig (siehe Hinweis)'}>{pending ? 'Speichern…' : 'Aufstellung speichern'}</button>
+    </div>
     <Msg state={msg} />
-    <div className="row"><button onClick={save} disabled={pending || !zulaessig} title={zulaessig ? '' : 'Aufstellung ist unzulässig (siehe Hinweis)'}>{pending ? 'Speichern…' : 'Aufstellung speichern'}</button><span className="mini">{zulaessig ? 'Speichern ist bis zur Deadline beliebig oft möglich; es gilt der letzte Stand.' : 'Speichern ist gesperrt, bis die Aufstellung zulässig ist.'}</span></div>
+    <span className="mini">{zulaessig ? 'Speichern ist bis zur Deadline beliebig oft möglich; es gilt der letzte Stand.' : 'Speichern ist gesperrt, bis die Aufstellung zulässig ist.'}</span>
   </div>);
 }

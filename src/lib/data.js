@@ -111,6 +111,14 @@ export async function budgetLeft(managerId) {
   return R.SEASON_BUDGET - k.s + g.s;
 }
 
+/** Kaufbudget aller Manager in zwei Abfragen statt zwei je Manager. */
+export async function budgetsAll(managerIds) {
+  const k = await q("select manager_id, coalesce(sum(price),0)::float as s from transfers where type='kauf' group by manager_id");
+  const g = await q("select manager_id, coalesce(sum(amount),0)::float as s from ledger where type='gutschrift' group by manager_id");
+  const out = {}; for (const m of managerIds) out[m] = R.SEASON_BUDGET - ((k.find(x => x.manager_id === m) || {}).s || 0) + ((g.find(x => x.manager_id === m) || {}).s || 0);
+  return out;
+}
+
 /** Auslagen pro Manager (in den Pott, Ziff. 4.3.1, 5.1, 6, 7.4). */
 export async function auslagen(seasonData) {
   const b = seasonData.base; const swaps = swapCostsAll(seasonData);

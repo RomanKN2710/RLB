@@ -3,6 +3,7 @@ import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
 import { proposeTradeAction, respondTradeAction, vetoTradeAction, revertTradeAction } from '@/actions';
 import { Msg } from '@/components/ui';
+import SubmitButton from '@/components/SubmitButton';
 
 export function Propose({ me, managers, players, fee }) {
   const [state, action] = useFormState(proposeTradeAction, null);
@@ -13,7 +14,7 @@ export function Propose({ me, managers, players, fee }) {
       <div className="grid2"><fieldset className="checklist"><legend className="mini">Ich gebe</legend>{players.filter(p => p.manager_id === me).map(p => <label key={p.id} className="small"><input type="checkbox" name="give" value={p.id} /> {p.label}</label>)}</fieldset>
         <fieldset className="checklist" key={to}><legend className="mini">Ich erhalte</legend>{players.filter(p => p.manager_id === to).map(p => <label key={p.id} className="small"><input type="checkbox" name="get" value={p.id} /> {p.label}</label>)}</fieldset></div>
       <Msg state={state} />
-      <div className="row"><button>Vorschlag senden</button><span className="mini">Gleich viele Spieler auf beiden Seiten. Nach Annahme sofort vollzogen; Unbeteiligte haben ein Veto, bei Mehrheit macht der Admin den Trade rückgängig.</span></div>
+      <div className="row"><SubmitButton busy="Sendet …">Vorschlag senden</SubmitButton><span className="mini">Gleich viele Spieler auf beiden Seiten. Nach Annahme sofort vollzogen; Unbeteiligte haben ein Veto, bei Mehrheit macht der Admin den Trade rückgängig.</span></div>
     </form></details>);
 }
 export function Actions({ trade, me, admin }) {

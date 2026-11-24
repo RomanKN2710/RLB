@@ -2,6 +2,7 @@
 import { useFormState } from 'react-dom';
 import { changePasswordAction } from '@/actions';
 import { Msg } from '@/components/ui';
+import SubmitButton from '@/components/SubmitButton';
 
 export default function PasswordForm() {
   const [state, action] = useFormState(changePasswordAction, null);
@@ -11,7 +12,7 @@ export default function PasswordForm() {
       <label>Neues Passwort (min. 8 Zeichen)<br /><input type="password" name="password" minLength={8} required autoComplete="new-password" /></label>
       <label>Wiederholen<br /><input type="password" name="password2" minLength={8} required autoComplete="new-password" /></label>
       <Msg state={state} />
-      <div><button>Speichern</button></div>
+      <div><SubmitButton busy="Speichert …">Speichern</SubmitButton></div>
     </form>
   );
 }

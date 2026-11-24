@@ -3,6 +3,7 @@ import { useFormState } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { loginAction } from '@/actions';
 import { Msg } from '@/components/ui';
+import SubmitButton from '@/components/SubmitButton';
 
 export default function LoginForm() {
   const [state, action] = useFormState(loginAction, null); const next = useSearchParams().get('next') || '';
@@ -14,7 +15,7 @@ export default function LoginForm() {
         <label>E-Mail<br /><input type="email" name="email" required autoComplete="username" style={{ width: '100%' }} /></label>
         <label>Passwort<br /><input type="password" name="password" required autoComplete="current-password" style={{ width: '100%' }} /></label>
         <Msg state={state} />
-        <button>Anmelden</button>
+        <SubmitButton busy="Anmelden …">Anmelden</SubmitButton>
       </form>
       <p className="mini">Konten werden vom Admin angelegt. Passwort vergessen: Admin setzt ein neues Startpasswort.</p>
     </div>

@@ -169,3 +169,26 @@ details.bidform[open]>summary{background:var(--accent-soft)}
 .checklist label { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .checklist label:last-child { border-bottom: 0; }
 .checklist input { width: 20px; height: 20px; flex: none; }
+
+/* Aufstellung: Speicherleiste bleibt sichtbar (auf dem Handy über der Tab-Leiste) */
+.savebar{position:sticky;bottom:0;z-index:20;display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;box-shadow:0 -4px 14px rgba(24,32,25,.10)}
+.savebar-info{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.savebar-info .ok{color:var(--good)}.savebar-info .bad{color:var(--bad)}.savebar-info b{font-size:15px}
+@media (max-width:640px){.savebar{bottom:calc(64px + env(safe-area-inset-bottom))}}
+/* Handy: Knöpfe und Häkchen gross genug für den Daumen */
+@media (max-width:640px){
+  button,.btn{min-height:44px;padding:10px 14px}
+  button.sm,.btn.sm{min-height:38px;padding:8px 12px}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px}
+  select,input:not([type=checkbox]):not([type=radio]),textarea{min-height:40px;font-size:16px}   /* 16px: iOS zoomt beim Antippen sonst hinein */
+  .row{gap:8px}
+  .adminwide{grid-template-columns:1fr !important}
+}
+/* Ladeanzeige beim Seitenwechsel */
+.skeleton{border-radius:8px;background:linear-gradient(90deg,var(--surface2) 25%,var(--surface) 37%,var(--surface2) 63%);background-size:400% 100%;animation:skel 1.2s ease infinite;min-height:64px;margin-bottom:10px}
+@keyframes skel{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none}*{scroll-behavior:auto !important}}
+/* Text in der Akzentfarbe «komm» auf hellem Grund: dunklere Variante für genug Kontrast */
+:root{--komm-ink:#7A4F0B}
+@media (prefers-color-scheme:dark){:root{--komm-ink:#E5B863}}
+.adminbox h3,.bericht h3,.hof-tile-title{color:var(--komm-ink)}
+.legend{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}.legend b{color:var(--ink);font-weight:600}

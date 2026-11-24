@@ -19,6 +19,8 @@ export default async function Markt({ searchParams }) {
     budget = await D.budgetLeft(managerId); kader = await D.kader(managerId, open.number);
     lineup = (await q('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId]))[0] || await D.prevLineup(open, managerId);
   }
+  // Eigene Gebote zwischen Deadline und Auflösung: nur lesen, damit sichtbar bleibt, was geboten wurde
+  const wartend = managerId ? await q("select b.*, r.label as round_label from bids b join rounds r on r.id=b.round_id where b.manager_id=$1 and b.status='sealed' and ($2::int is null or b.round_id<>$2) order by r.number, b.priority", [managerId, open ? open.id : null]) : [];
   const submitted = open ? await q('select distinct manager_id from bids where round_id=$1', [open.id]) : [];   // je Manager einmal, auch bei mehreren Geboten
   const published = await q("select b.*, m.name as manager_name, r.label as round_label, r.number as rnum, p.name as release_name from bids b join managers m on m.id=b.manager_id join rounds r on r.id=b.round_id left join players p on p.id=b.release_player_id where b.status<>'sealed' order by r.number desc, b.price desc");
   const releases = await q("select t.*, m.name as manager_name, r.label as round_label, r.number as rnum from transfers t join managers m on m.id=t.manager_id left join rounds r on r.id=t.round_id where t.type='entlassung' order by t.created_at desc limit 20");
@@ -26,6 +28,9 @@ export default async function Markt({ searchParams }) {
   const tag = s => s === 'won' ? <span className="tag-won">Zuschlag</span> : s === 'invalid' ? <span className="tag-inv">ungültig</span> : <span className="tag-lost">kein Zuschlag</span>;
   return (<>
     {open && admin && <div className="row" style={{ gap: 4, marginBottom: 8 }}><span className="mini">Gebot erfassen für:</span>{b.managers.map(m => <a key={m.id} className={`btn sm ${m.id === managerId ? '' : 'sec'}`} href={`/markt?m=${m.id}`}>{m.name}</a>)}</div>}
+    {wartend.length > 0 && <div className="card"><div className="eyebrow">{fuerAndere ? `Gebote von ${b.managerName[managerId]}` : 'Meine Gebote'} · {wartend[0].round_label}</div><h2>Warten auf die Auflösung <span className="pill open">verdeckt</span></h2>
+      <p className="mini">Die Deadline ist vorbei. Die Admins lösen die Gebote mit der Auswertung der Runde auf; bis dahin kann nichts mehr geändert werden.</p>
+      <ul className="clean small">{wartend.map(x => <li key={x.id}>{wartend.some(y => (y.gruppe || 1) > 1) ? `Gebot ${x.gruppe || 1} · ` : ''}{x.priority}. {x.pos} <b>{x.player_name}</b> ({x.club}) CHF {Number(x.price)}{x.release_player_id && b.players[x.release_player_id] ? ` · entlässt ${b.players[x.release_player_id].name}` : ''}{x.swap_out_player_id && b.players[x.swap_out_player_id] ? ` · gratis für ${b.players[x.swap_out_player_id].name}` : ''}</li>)}</ul></div>}
     {open && managerId && <div className="card"><div className="eyebrow">{fuerAndere ? `Gebote von ${b.managerName[managerId]}` : 'Meine Gebote'} · {open.label} · Deadline {fmtDt(open.deadline)}</div><h2>{mine.length ? <>Gebote abgegeben <span className="pill ok">verdeckt</span></> : 'Neues Gebot'}</h2>
       {mine.length > 0 && <div className="stack" style={{ marginBottom: 10 }}>{[...new Set(mine.map(x => x.gruppe || 1))].map(gr => { const rows = mine.filter(x => (x.gruppe || 1) === gr); const f = rows[0];
         const rel = (f.release_order?.length ? f.release_order : [f.release_player_id]).filter(Boolean).map(id => (b.players[id] || {}).name).join(', ');
