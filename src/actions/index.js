@@ -1,8 +1,9 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { q, one, tx, audit, setSetting, getSetting, dbHint } from '@/lib/db';
-import { login, clearSession, requireUser, requireAdmin, hashPassword } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { q, one, tx, audit, setSetting, getSetting, dbHint, ensureSchema } from '@/lib/db';
+import { login, clearSession, createSession, requireUser, requireAdmin, hashPassword } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
 import { syncTeams, syncSchedule, syncCurrent, refreshDeadlines } from '@/lib/oldb';
@@ -24,15 +25,24 @@ const rev = () => ['/', '/aufstellung', '/markt', '/kader', '/abrechnung', '/adm
 
 /* ---------- Auth ---------- */
 export async function loginAction(prev, fd) {
-  let u;
+  let u; const email = String(fd.get('email') || '').trim().toLowerCase();
   // Der Datenbankteil braucht einen eigenen try-Block: redirect() weiter unten wirft
   // selbst eine Ausnahme, die nicht abgefangen werden darf.
   try {
-    u = await login(String(fd.get('email') || ''), String(fd.get('password') || ''));
+    await ensureSchema();
+    // Bremse gegen Passwort-Raten: höchstens 8 Fehlversuche je Konto und 30 je Adresse in 15 Minuten
+    const ip = (headers().get('x-forwarded-for') || '').split(',')[0].trim() || 'unbekannt';
+    const f = await one("select count(*) filter (where email=$1)::int as e, count(*) filter (where ip=$2)::int as i from login_attempts where not ok and at > now() - interval '15 minutes'", [email, ip]);
+    if (f && (f.e >= 8 || f.i >= 30)) return fail('Zu viele Fehlversuche. Bitte in 15 Minuten nochmals versuchen; ein Admin kann ein neues Startpasswort setzen.');
+    u = await login(email, String(fd.get('password') || ''));
+    await q('insert into login_attempts(email, ip, ok) values($1,$2,$3)', [email, ip, !!u]);
+    if (u) await q("delete from login_attempts where at < now() - interval '30 days' or (email=$1 and not ok)", [email]);
   } catch (e) { return fail(dbHint(e)); }
   if (!u) return fail('E-Mail oder Passwort falsch');
   await audit(u.id, 'login', {});
-  redirect(u.must_change_pw ? '/konto?first=1' : '/');
+  // zurück zur Seite, die vor dem Anmelden gewünscht war (nur eigene Pfade)
+  const next = String(fd.get('next') || ''); const ziel = /^\/[^/\\]/.test(next) && !next.startsWith('/login') ? next : '/';
+  redirect(u.must_change_pw ? '/konto?first=1' : ziel);
 }
 export async function logoutAction() { clearSession(); redirect('/login'); }
 export const changePasswordAction = wrap(async (prev, fd) => {
@@ -41,8 +51,10 @@ export const changePasswordAction = wrap(async (prev, fd) => {
   if (!row || !(await bcrypt.compare(cur, row.password_hash))) return fail('Aktuelles Passwort stimmt nicht');
   if (pw.trim().length < 8) return fail('Mindestens 8 Zeichen (ohne Leerzeichen am Rand)'); if (pw !== pw2) return fail('Passwörter stimmen nicht überein');
   if (pw === cur) return fail('Das neue Passwort muss sich vom aktuellen unterscheiden');
-  await q('update users set password_hash=$1, must_change_pw=false where id=$2', [await hashPassword(pw), u.id]);
-  return ok('Passwort geändert');
+  await q('update users set password_hash=$1, must_change_pw=false, pw_changed_at=now() where id=$2', [await hashPassword(pw), u.id]);
+  // Andere Geräte werden abgemeldet (ältere Sitzungen gelten nicht mehr); dieses Gerät bekommt eine neue Sitzung
+  await createSession({ ...u, must_change_pw: false }); await audit(u.id, 'pw_change', {});
+  return ok('Passwort geändert. Auf anderen Geräten bitte neu anmelden.');
 });
 
 /* ---------- Aufstellung (Manager: nur eigene, nur offene Runde, bis Deadline; Admin: alles) ---------- */
@@ -234,7 +246,7 @@ export const createUserAction = wrap(async (prev, fd) => {
   await q('insert into users(email,name,role,manager_id,password_hash,must_change_pw) values($1,$2,$3,$4,$5,true)', [email, name, role, mid, await hashPassword(pw)]);
   await audit(a.id, 'user_create', { email, role, mid }); rev(); return ok(`Konto ${email} angelegt`);
 });
-export const resetPasswordAction = wrap(async (userId, pw) => { const a = await requireAdmin(); if (String(pw).length < 8) return fail('min. 8 Zeichen'); await q('update users set password_hash=$1, must_change_pw=true where id=$2', [await hashPassword(String(pw)), userId]); await audit(a.id, 'pw_reset', { userId }); return ok('Startpasswort gesetzt'); });
+export const resetPasswordAction = wrap(async (userId, pw) => { const a = await requireAdmin(); if (String(pw).length < 8) return fail('min. 8 Zeichen'); await q('update users set password_hash=$1, must_change_pw=true, pw_changed_at=now() where id=$2', [await hashPassword(String(pw)), userId]); await audit(a.id, 'pw_reset', { userId }); return ok('Startpasswort gesetzt'); });
 export const deleteUserAction = wrap(async (userId) => { const a = await requireAdmin(); if (userId === a.id) return fail('Eigenes Konto nicht löschbar'); const u = await one('select id, name, role, manager_id from users where id=$1', [userId]); if (!u) return fail('Konto nicht gefunden');
   // Verweise lösen (wer hat gespeichert, Protokoll), sonst verweigert die Datenbank das Löschen
   await tx(async x => { await x.q('update lineups set updated_by=null where updated_by=$1', [userId]); await x.q('update audit set user_id=null where user_id=$1', [userId]); await x.q('delete from users where id=$1', [userId]); });
@@ -318,6 +330,7 @@ export const deleteCorrectionAction = wrap(async (id) => { const a = await requi
 
 /* ---------- Admin: Gebote auflösen (Ziff. 7) ---------- */
 export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); await BlogImport.ensureBidColumns(); const round = await D.roundById(roundId); const b = await D.base();
+  if (round && round.deadline && new Date(round.deadline) > new Date()) return fail('Die Deadline ist noch nicht vorbei: Gebote bleiben bis dahin verdeckt (Ziff. 7.1)');
   const bids = await q('select * from bids where round_id=$1 order by manager_id, priority', [roundId]); const list = await BlogImport.resolveRoundBids(round, b, bids); return ok('Vorschau', { list: list.map(x => ({ ...x, manager_name: b.managerName[x.manager_id], release_name: (b.players[x.release_player_id] || {}).name || null, swap_name: (b.players[x.swap_out_player_id] || {}).name || null })) }); });
 export const previewBidTextAction = wrap(async (roundId, text) => { await requireAdmin(); const { parsed } = await BlogImport.parseBidPaste(roundId, text);
   return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, groups: (x.groups || []).map(g => ({ gruppe: g.gruppe, nr: g.nr, maxWins: g.maxWins, releases: g.releases.map(p => p.name) })), budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, gruppe: bd.gruppe || 1, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
@@ -421,3 +434,6 @@ export const removePositionAction = wrap(async (pid, pos) => { await requireAdmi
 export const hofImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const season = String(fd.get('season') || '').trim(); const n = await HOF.importSeason(season, String(fd.get('text') || ''), String(fd.get('note') || '').trim());
   await audit(a.id, 'hof_import', { season, n }); revalidatePath('/hall-of-fame'); revalidatePath('/admin'); return ok(`Saison ${season}: ${n} Plätze gespeichert`); });
 export const hofDeleteAction = wrap(async (season) => { const a = await requireAdmin(); await HOF.deleteSeason(season); await audit(a.id, 'hof_delete', { season }); revalidatePath('/hall-of-fame'); revalidatePath('/admin'); return ok('Saison gelöscht'); });
+
+/* ---------- Admin: Sicherung von Hand ---------- */
+export const createBackupAction = wrap(async () => { const a = await requireAdmin(); const { createBackup } = await import('@/lib/backup'); const r = await createBackup('von Hand'); await audit(a.id, 'backup', { id: r.id, bytes: r.bytes }); rev(); return ok(`Sicherung Nr. ${r.id} erstellt (${r.zeilen} Zeilen, ${Math.round(r.bytes / 1024)} kB)`); });

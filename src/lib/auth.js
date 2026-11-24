@@ -2,12 +2,14 @@ import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { one, q, ensureSchema } from './db';
+import { authSecret } from './auth-secret';
 
 const COOKIE = 'rlb_session';
-const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || 'dev-secret-change-me');
+const secret = () => authSecret();
 
 export async function createSession(user) {
-  const token = await new SignJWT({ uid: user.id, role: user.role, mid: user.manager_id, name: user.name })
+  // mcp: Startpasswort noch nicht ersetzt – das Middleware lässt dann nur die Konto-Seite zu
+  const token = await new SignJWT({ uid: user.id, role: user.role, mid: user.manager_id, name: user.name, mcp: !!user.must_change_pw })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('30d').sign(secret());
   cookies().set(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 30 * 86400 });
 }
@@ -23,7 +25,10 @@ export async function getUser() {
   // /login bedienbar, statt dass jede Seite mit einer Fehlerseite antwortet.
   try {
     await ensureSchema();
-    return await one('select u.id,u.email,u.name,u.role,u.manager_id,u.must_change_pw,m.name as manager_name from users u left join managers m on m.id=u.manager_id where u.id=$1', [p.uid]);
+    const u = await one('select u.id,u.email,u.name,u.role,u.manager_id,u.must_change_pw,u.pw_changed_at,m.name as manager_name from users u left join managers m on m.id=u.manager_id where u.id=$1', [p.uid]);
+    // Nach einem Passwortwechsel oder einem neuen Startpasswort gelten ältere Sitzungen nicht mehr
+    if (u && u.pw_changed_at && p.iat && p.iat * 1000 < new Date(u.pw_changed_at).getTime() - 2000) return null;
+    return u;
   } catch { return null; }
 }
 export async function requireUser() { const u = await getUser(); if (!u) throw new Error('Nicht angemeldet'); return u; }

@@ -5,6 +5,7 @@ import { rlbLeavers } from '@/lib/squads';
 import { playerMatches } from '@/lib/kicker';
 import { norm } from '@/lib/rules';
 import { GEPRUEFT_OK, AUSSERHALB_DER_LIGA } from '@/lib/korrekturen';
+import { authSecretMissing } from '@/lib/auth-secret';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Neon-Kaltstart einrechnen
 
@@ -17,6 +18,7 @@ export async function GET(req) {
   const out = { at: new Date().toISOString(), warnungen: [] };
   if (!await schemaReady()) return NextResponse.json({ ...out, ok: false, schema: false, warnungen: ['Die Datenbank ist noch nicht eingerichtet – /api/setup?key=CRON_SECRET aufrufen'] });
   out.schema = true;
+  if (authSecretMissing()) out.warnungen.push('AUTH_SECRET ist nicht gesetzt (oder zu kurz) – in Vercel eintragen');
   try {
     const [lastSync, lastCur, squads] = [await getSetting('last_sync'), await getSetting('last_sync_current'), await getSetting('squads_sync')];
     out.sync = {

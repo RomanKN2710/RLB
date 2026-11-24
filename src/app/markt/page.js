@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
 import * as R from '@/lib/rules';
-import { q } from '@/lib/db';
+import { q, audit } from '@/lib/db';
 import { fmtDt, Info } from '@/components/ui';
 import BidForm from './BidForm';
 import FreeList from './FreeList';
@@ -14,6 +14,8 @@ export default async function Markt({ searchParams }) {
   let mine = [], budget = null, kader = [], lineup = null;
   if (open && managerId) {
     mine = await q("select * from bids where round_id=$1 and manager_id=$2 and status='sealed' order by priority", [open.id, managerId]);
+    if (fuerAndere && mine.length && open.deadline && new Date(open.deadline) > new Date()) { const schon = await q("select 1 from audit where action='sealed_bids_view' and user_id=$1 and (detail->>'managerId')::int=$2 and (detail->>'roundId')::int=$3 and created_at > now() - interval '1 hour' limit 1", [u.id, managerId, open.id]);
+      if (!schon.length) await audit(u.id, 'sealed_bids_view', { managerId, roundId: open.id }); }
     budget = await D.budgetLeft(managerId); kader = await D.kader(managerId, open.number);
     lineup = (await q('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId]))[0] || await D.prevLineup(open, managerId);
   }

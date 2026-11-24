@@ -1,1 +1,4 @@
-{ "crons": [ { "path": "/api/sync", "schedule": "0 3 * * *" } ] }
+{
+  "buildCommand": "npm test && next build",
+  "crons": [ { "path": "/api/sync", "schedule": "0 3 * * *" } ]
+}

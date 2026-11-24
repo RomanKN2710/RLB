@@ -1,14 +1,16 @@
 'use client';
 import { useFormState } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import { loginAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 export default function LoginForm() {
-  const [state, action] = useFormState(loginAction, null);
+  const [state, action] = useFormState(loginAction, null); const next = useSearchParams().get('next') || '';
   return (
     <div className="card login">
       <div className="eyebrow">Anmelden</div><h2>RLB Managerspiel</h2>
       <form action={action} className="stack">
+        <input type="hidden" name="next" value={next} />
         <label>E-Mail<br /><input type="email" name="email" required autoComplete="username" style={{ width: '100%' }} /></label>
         <label>Passwort<br /><input type="password" name="password" required autoComplete="current-password" style={{ width: '100%' }} /></label>
         <Msg state={state} />

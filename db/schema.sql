@@ -279,3 +279,7 @@ alter table players add column if not exists extra_pos_denied text[] not null de
 alter table results add column if not exists club text;   -- Verein des Spielers in dieser Runde (ein späterer Vereinswechsel ändert frühere Runden nicht)
 alter table kicker_pages add column if not exists vorlaeufig boolean not null default false;   -- vor Spielende gesendet
 alter table kicker_pages add column if not exists match_id int;
+alter table users add column if not exists pw_changed_at timestamptz;   -- ältere Sitzungen gelten danach nicht mehr
+create table if not exists login_attempts (id bigserial primary key, email text, ip text, ok boolean not null default false, at timestamptz not null default now());
+create index if not exists login_attempts_at on login_attempts(at);
+create table if not exists backups (id serial primary key, at timestamptz not null default now(), art text not null default 'auto', bytes int not null, tabellen jsonb, data bytea not null);   -- tägliche Sicherung (gzip-JSON)

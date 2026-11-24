@@ -189,6 +189,8 @@ export async function runPending(userId = null) {
   return tx(async x => {
     const lock = await x.one('select pg_try_advisory_xact_lock(2026112401) as ok'); if (!lock.ok) return [{ key: 'läuft', title: 'Einmalige Schritte laufen gerade in einem anderen Fenster', log: ['Seite in einer Minute neu laden'] }];
     const out = [];
+    // Vor Eingriffen in die Daten eine Sicherung ablegen (Admin › Werkzeuge › Sicherungen)
+    try { const { createBackup } = await import('./backup'); await createBackup('vor einmaligen Schritten: ' + offen.map(s => s.key).join(', ').slice(0, 160)); } catch (e) { /* Sicherung ist Beigabe, kein Hindernis */ }
     for (const s of offen) {
       if (await getSetting(s.key)) continue;   // inzwischen von einem anderen Lauf erledigt
       // Ein Schritt, der eben gescheitert ist, wird nicht bei jedem Seitenaufruf neu versucht

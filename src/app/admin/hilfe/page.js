@@ -41,7 +41,8 @@ const SONST = [
   ['Zusatzposition von Hand', 'Kader & Trades › beim Spieler «+M» usw. Die App erkennt Positionen sonst selbst aus der kicker-Startelf (gilt ab der Folgerunde). Eine von Hand entfernte Zusatzposition bleibt entfernt, auch nach dem nächsten Import.'],
   ['Trade', 'Die beiden Manager erledigen das unter «Kader & Trades» selbst (Vorschlag und Annahme). Admins sehen alles dort. «Rückgängig» (bei Veto-Mehrheit) stellt auch die Aufstellungen der offenen Runde wieder her.'],
   ['Bezeichnung einer Runde ändern', 'Rundenseite › Schritt 3 › Feld «Bezeichnung» › «Bezeichnung speichern». Das Team der Runde hat seinen eigenen Knopf «Team der Runde speichern».'],
-  ['Neues Konto, Passwort vergessen', 'Admin › Konten & Einstellungen. Startpasswort setzen, der Manager ändert es beim ersten Login.'],
+  ['Neues Konto, Passwort vergessen', 'Admin › Konten & Einstellungen. Startpasswort setzen. Der Manager muss es beim ersten Login ersetzen; bis dahin erreicht er nur die Konto-Seite. Ein neues Startpasswort meldet ihn auf allen Geräten ab. Nach acht Fehlversuchen ist das Konto 15 Minuten gesperrt.'],
+  ['Sicherungen', 'Die App sichert jede Nacht alle Spieldaten und zusätzlich vor einmaligen Datenschritten. Admin › Werkzeuge › «Sicherungen»: Liste zum Herunterladen und «Sicherung jetzt erstellen» (z. B. vor einer heiklen Korrektur).'],
   ['Deadline verschieben', 'Rundenseite › Schritt 3 › Deadline «Manuell setzen». «Aus Spielplan» stellt sie zurück.'],
   ['Saison-Endstand in die Hall of Fame', 'Admin › Hall of Fame.'],
 ];
@@ -63,7 +64,7 @@ export default async function Hilfe() {
       <ol className="small" style={{ paddingLeft: 20 }}>
         <li>Auf dem Android-Handy Firefox installieren, darin die Erweiterung «Tampermonkey».</li>
         <li>In Firefox unter Einstellungen › Erweitert «Links in Apps öffnen» auf «Nie» stellen, sonst öffnet sich die kicker-App.</li>
-        <li>In Firefox in der RLB-App anmelden, Admin › Werkzeuge › «Tampermonkey-Skript installieren» antippen und bestätigen.</li>
+        <li>In Firefox in der RLB-App anmelden, Admin › Werkzeuge › «Tampermonkey-Skript installieren» antippen und bestätigen. Nach einer neuen Version des Skripts (zuletzt 1.3 vom 24.11.2026) hier nochmals installieren.</li>
         <li>Fertig. Ab jetzt jede kicker-Seite «Aufstellung» einfach öffnen. iPhone: Quelltext am Computer einfügen (Schritt 2, «Quelltext einfügen»).</li></ol></div>
   </>);
 }

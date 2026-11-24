@@ -17,6 +17,8 @@ export default async function Archiv({ searchParams }) {
   const played = rounds.filter(r => r.deadline && new Date(r.deadline) < new Date());
   const sel = Number(searchParams?.runde) || (played.length ? played[played.length - 1].number : rounds[0]?.number);
   const round = rounds.find(r => r.number === sel);
+  // Vor der Deadline zeigt das Archiv nur die eigene Aufstellung der Runde und keine Gebots-Posts (Admins sehen alles)
+  const verdeckt = !!(round && (!round.deadline || new Date(round.deadline) > new Date())) && !admin;
   const kaderOf = m => b.playersArr.filter(p => p.manager_id === m && (p.valid_from ?? 0) <= sel && (p.valid_to == null || p.valid_to >= sel)).sort((a, c) => (a.slot === c.slot ? 0 : a.slot === 'stamm' ? -1 : 1) || 'TVMS'.indexOf(a.base_pos) - 'TVMS'.indexOf(c.base_pos) || a.name.localeCompare(c.name));
   const pre = { whiteSpace: 'pre-wrap', fontSize: 12, margin: '4px 0 0' };
   const PostBox = ({ p }) => <details><summary><b>{p.title}</b> · {p.posted_at ? fmtDt(p.posted_at) : 'ohne Datum'}{p.author && ` · ${p.author}`}</summary><pre style={pre}>{p.body}</pre>{admin && <PostMeta post={{ id: p.id, kind: p.kind, manager_id: p.manager_id, round_number: p.round_number }} managers={b.managers.map(m => ({ id: m.id, name: m.name }))} rounds={rounds.map(r => ({ number: r.number, label: r.label }))} kinds={KINDS} />}</details>;
@@ -28,7 +30,7 @@ export default async function Archiv({ searchParams }) {
       <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>{rounds.filter(r => r.number <= (played[played.length - 1]?.number || 0) + 10).map(r => <a key={r.id} className={`btn sm ${r.number === sel ? '' : 'sec'}`} href={`/archiv?runde=${r.number}`}>{r.label}</a>)}</div>
       {admin && <BlogImport />}</div>
     {round && <div className="card"><h2>{round.label} · Deadline {fmtDt(round.deadline)}</h2>
-      {(() => { const cells = b.managers.map(m => { const ps = posts.filter(p => p.manager_id === m.id && p.round_number === sel); const lu = lus.find(l => l.manager_id === m.id && l.number === sel); const kader = kaderOf(m.id);
+      {(() => { const cells = b.managers.map(m => { const ps = posts.filter(p => p.manager_id === m.id && p.round_number === sel && !(verdeckt && (p.kind === 'gebot' || m.id !== u.manager_id))); const lu = verdeckt && m.id !== u.manager_id ? null : lus.find(l => l.manager_id === m.id && l.number === sel); const kader = kaderOf(m.id);
           const elf = lu ? Object.entries(lu.entries).map(([pid, e]) => ({ pid, pos: e.pos, name: b.players[pid]?.name || pid })).sort((a, c) => 'TVMS'.indexOf(a.pos) - 'TVMS'.indexOf(c.pos) || a.name.localeCompare(c.name)) : [];
           const probs = lu ? R.posProblems(lu.entries, b.players) : [];
           return { m, n: ps.length, lu,

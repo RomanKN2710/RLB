@@ -6,13 +6,14 @@ export const dynamic = 'force-dynamic';
    Öffnet man diese Adresse in einem Browser mit Tampermonkey, erscheint direkt der Installationsdialog. */
 export async function GET(req) {
   const u = await getUser(); if (!u || u.role !== 'admin') return new NextResponse('Bitte zuerst als Admin anmelden.', { status: 403 });
-  if (!process.env.CRON_SECRET) return new NextResponse('CRON_SECRET ist in Vercel nicht gesetzt.', { status: 500 });
+  const KEY = process.env.INBOX_KEY || process.env.CRON_SECRET;   // INBOX_KEY gilt nur für den Eingang; ohne ihn weiter CRON_SECRET
+  if (!KEY) return new NextResponse('INBOX_KEY (oder CRON_SECRET) ist in Vercel nicht gesetzt.', { status: 500 });
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
-  const url = `https://${host}/api/kicker-inbox?key=${process.env.CRON_SECRET}`;
+  const url = `https://${host}/api/kicker-inbox`;
   const script = `// ==UserScript==
 // @name         RLB kicker-Sender
 // @namespace    rlb
-// @version      1.2
+// @version      1.3
 // @description  Sendet kicker-Aufstellungsseiten und die Elf des Tages an das RLB Managerspiel – die Werte werden sofort importiert
 // @match        https://www.kicker.de/*
 // @match        https://www.kicker.ch/*
@@ -25,6 +26,7 @@ export async function GET(req) {
   // Aufstellungsseiten und Elf des Tages (auch Handy-Adressen); der Server prueft die Seite und ordnet sie dem Spieltag zu
   if (!/\\/aufstellung\\/?$|elf-des-tages|elf-der-woche/i.test(location.pathname) && !/Elf des Tages/i.test(document.title)) return;
   var ZIEL = ${JSON.stringify(url)};
+  var SCHLUESSEL = ${JSON.stringify(KEY)};   // geht im Kopf der Anfrage mit, nicht in der Adresse
   var box = document.createElement('div');
   box.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:2147483647;background:#1E6B3A;color:#fff;padding:12px 14px;border-radius:8px;font:15px/1.35 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.35);white-space:pre-wrap';
   var txt = document.createElement('div'); box.appendChild(txt);
@@ -39,12 +41,12 @@ export async function GET(req) {
   }
   function senden() {
     show('sende Seite …'); btn.style.display = 'none';
-    var ziel = ZIEL + '&url=' + encodeURIComponent(location.href); var body = quelltext();
+    var ziel = ZIEL + '?url=' + encodeURIComponent(location.href); var body = quelltext();
     var fertig = function (status, text) { if (status >= 200 && status < 300) { show(text); setTimeout(function () { box.remove(); }, 15000); } else show((text || ('Senden fehlgeschlagen (HTTP ' + status + ')')), true); };
     var gm = (typeof GM_xmlhttpRequest === 'function') ? GM_xmlhttpRequest : (typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function') ? GM.xmlHttpRequest : null;
-    if (gm) gm({ method: 'POST', url: ziel, headers: { 'Content-Type': 'text/plain' }, data: body, timeout: 90000,
+    if (gm) gm({ method: 'POST', url: ziel, headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + SCHLUESSEL }, data: body, timeout: 90000,
       onload: function (r) { fertig(r.status, r.responseText); }, onerror: function () { fertig(0, 'Senden fehlgeschlagen (keine Verbindung)'); }, ontimeout: function () { fertig(0, 'Zeitüberschreitung – nochmals senden'); } });
-    else fetch(ziel, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body }).then(function (r) { return r.text().then(function (t) { fertig(r.status, t); }); }).catch(function (e) { fertig(0, 'Senden fehlgeschlagen: ' + e); });
+    else fetch(ziel, { method: 'POST', headers: { 'Content-Type': 'text/plain', 'Authorization': 'Bearer ' + SCHLUESSEL }, body: body }).then(function (r) { return r.text().then(function (t) { fertig(r.status, t); }); }).catch(function (e) { fertig(0, 'Senden fehlgeschlagen: ' + e); });
   }
   btn.addEventListener('click', function (e) { e.stopPropagation(); senden(); });
   document.body.appendChild(box);

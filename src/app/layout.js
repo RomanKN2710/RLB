@@ -1,6 +1,7 @@
 import './globals.css';
 import Link from 'next/link';
 import { getUser } from '@/lib/auth';
+import { cookies } from 'next/headers';
 import { logoutAction } from '@/actions';
 import { maybeSync } from '@/lib/oldb';
 import { waitUntil } from '@vercel/functions';
@@ -30,7 +31,8 @@ export default async function RootLayout({ children }) {
           </div>
           {user && <Nav admin={user.role === 'admin'} />}
         </header>
-        <main>{children}</main>
+        <main>{!user && cookies().get('rlb_session') && <div className="note" style={{ margin: '12px 0' }}>Deine Sitzung ist beendet (zum Beispiel nach einem Passwortwechsel oder einem neuen Startpasswort). <a href="/login">Neu anmelden</a></div>}
+          {children}</main>
       </body></html>
   );
 }

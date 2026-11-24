@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useFormState } from 'react-dom';
-import { importKickerInboxMatchdayAction, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction, hofImportAction, hofDeleteAction } from '@/actions';
+import { importKickerInboxMatchdayAction, syncAction, syncCurrentAction, splitNachtragAction, createUserAction, resetPasswordAction, deleteUserAction, setVorsaisonAction, manualBuyAction, ledgerAction, poolPasteAction, hofImportAction, hofDeleteAction, createBackupAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -34,3 +34,10 @@ export function HallOfFameAdmin({ seasons }) { const [s, a] = useFormState(hofIm
       <div className="row"><button className="komm sm">Saison speichern</button><Msg state={s} /></div></form>
     {seasons.length > 0 && <div className="mini">Erfasst: {seasons.map(x => <span key={x.season} style={{ marginRight: 10 }}>{x.season} ({x.rows.length} Plätze, Meister {x.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}) {arm === x.season ? <><button className="danger sm" disabled={pending} onClick={() => { run(() => hofDeleteAction(x.season)); setArm(null); }}>wirklich löschen</button> <button className="sec sm" onClick={() => setArm(null)}>abbrechen</button></> : <button className="sec sm" onClick={() => setArm(x.season)}>löschen</button>}</span>)}{msg && <span className="mini">{msg.msg}</span>}</div>}
   </div>; }
+
+/* Sicherungen: Liste zum Herunterladen und Knopf für eine Sicherung jetzt */
+export function Backups({ list }) { const { msg, pending, run } = useRun();
+  return <details><summary className="mini"><b>Sicherungen</b> – {list.length ? `letzte ${new Date(list[0].at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : 'noch keine'} ({list.length})</summary>
+    <p className="mini" style={{ marginTop: 6 }}>Jede Nacht legt die App eine Sicherung aller Spieldaten ab (ohne Passwörter und ohne kicker-Quelltexte), ebenso vor einmaligen Datenschritten. Die letzten 30 bleiben. Zum Wiederherstellen eine Sicherung herunterladen und an Roman schicken.</p>
+    <div className="row"><button className="sm sec" disabled={pending} onClick={() => run(createBackupAction)}>{pending ? 'sichert …' : 'Sicherung jetzt erstellen'}</button>{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</div>
+    <ul className="mini" style={{ paddingLeft: 18 }}>{list.map(b => <li key={b.id}><a href={`/api/backup?id=${b.id}`}>{new Date(b.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}</a> · {b.art} · {Math.round(b.bytes / 1024)} kB</li>)}</ul></details>; }

@@ -8,7 +8,9 @@ export const maxDuration = 60;
 // Aufrufe kommen per Bookmarklet/Userscript direkt aus der kicker-Seite (anderer Origin): CORS erlauben
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, GET, OPTIONS', 'access-control-allow-headers': 'content-type, authorization' };
 export async function OPTIONS() { return new NextResponse(null, { status: 204, headers: CORS }); }
-const allowed = async req => { const u = await getUser(); const key = new URL(req.url).searchParams.get('key') || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''); return (u && u.role === 'admin') || (process.env.CRON_SECRET && key === process.env.CRON_SECRET); };
+// Schlüssel: bevorzugt INBOX_KEY (gilt nur für den Eingang) im Kopf «Authorization: Bearer …»; CRON_SECRET und ?key= bleiben für schon installierte Skripte gültig
+const allowed = async req => { const u = await getUser(); const key = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || new URL(req.url).searchParams.get('key') || '';
+  return (u && u.role === 'admin') || (!!key && ((process.env.INBOX_KEY && key === process.env.INBOX_KEY) || (process.env.CRON_SECRET && key === process.env.CRON_SECRET))); };
 
 /** Quelltext einer kicker-Seite ablegen: POST Body = HTML (text/plain oder text/html) oder JSON {html, url}. ?matchday=N optional. */
 export async function POST(req) {
@@ -18,6 +20,7 @@ export async function POST(req) {
   if (ct.includes('application/json')) { const j = await req.json().catch(() => ({})); html = j.html || j.body || ''; url = j.url || url; }
   else html = await req.text();
   if (!html || html.length < 500) return new NextResponse('Kein Quelltext empfangen (Body leer)', { status: 400, headers: CORS });
+  const mdParam = sp.get('matchday'); if (mdParam && !(Number(mdParam) >= 1 && Number(mdParam) <= 34)) return new NextResponse('matchday muss zwischen 1 und 34 liegen', { status: 400, headers: CORS });
   let r; try { r = await savePage(html, { url, matchday: Number(sp.get('matchday')) || null }); }
   catch (e) { return new NextResponse('Fehler: ' + e.message, { status: 422, headers: CORS }); }
   const head = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday}: ${r.elf?.n || 0} Spieler${r.elf?.sdt ? ', Spieler des Tages ' + r.elf.sdt : ', Spieler des Tages nicht erkannt'}${(r.elf?.n || 0) < 11 ? ` – nur ${r.elf?.n || 0} erkannt (${r.elf?.links || 0} Spielerlinks), bitte die Seite melden` : ''}` : `${r.title} – Spieltag ${r.matchday}`;
@@ -36,6 +39,7 @@ export async function GET(req) {
   const sp = new URL(req.url).searchParams; const md = Number(sp.get('matchday')); if (!md) return new NextResponse('?matchday=N', { status: 400, headers: CORS });
   // ?page=elf oder ?page=<Spiel-Kennung>: die abgelegte Seite selbst (zum Nachsehen, was der Import zu lesen bekam)
   if (sp.get('page')) { const p = await page(md, sp.get('page')); if (!p) return new NextResponse('Seite nicht im Eingang', { status: 404, headers: CORS });
-    return new NextResponse(p.html, { headers: { ...CORS, 'content-type': 'text/html; charset=utf-8', 'content-disposition': `inline; filename="kicker-st${md}-${sp.get('page')}.html"` } }); }
+    // Fremder Quelltext auf unserer Adresse: in einer Sandbox ohne Skripte und ohne Zugriff auf die Sitzung ausliefern
+    return new NextResponse(p.html, { headers: { ...CORS, 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data: https:", 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'content-disposition': `inline; filename="kicker-st${md}-${sp.get('page')}.html"` } }); }
   const s = await status(md); return NextResponse.json(s, { headers: CORS });
 }
