@@ -11,15 +11,15 @@ export async function createSession(user) {
   // mcp: Startpasswort noch nicht ersetzt – das Middleware lässt dann nur die Konto-Seite zu
   const token = await new SignJWT({ uid: user.id, role: user.role, mid: user.manager_id, name: user.name, mcp: !!user.must_change_pw })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('30d').sign(secret());
-  cookies().set(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 30 * 86400 });
+  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 30 * 86400 });
 }
-export function clearSession() { cookies().set(COOKIE, '', { path: '/', maxAge: 0 }); }
+export async function clearSession() { (await cookies()).set(COOKIE, '', { path: '/', maxAge: 0 }); }
 
 export async function verifyToken(token) { try { const { payload } = await jwtVerify(token, secret()); return payload; } catch { return null; } }
 
 /** Aktueller Benutzer (aus DB, damit Rollenänderungen sofort greifen) oder null. */
 export async function getUser() {
-  const c = cookies().get(COOKIE); if (!c) return null;
+  const c = (await cookies()).get(COOKIE); if (!c) return null;
   const p = await verifyToken(c.value); if (!p) return null;
   // Faellt die Datenbank aus, gilt der Besucher als abgemeldet: dann bleibt wenigstens
   // /login bedienbar, statt dass jede Seite mit einer Fehlerseite antwortet.

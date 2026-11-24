@@ -31,7 +31,7 @@ export async function loginAction(prev, fd) {
   try {
     await ensureSchema();
     // Bremse gegen Passwort-Raten: höchstens 8 Fehlversuche je Konto und 30 je Adresse in 15 Minuten
-    const ip = (headers().get('x-forwarded-for') || '').split(',')[0].trim() || 'unbekannt';
+    const ip = ((await headers()).get('x-forwarded-for') || '').split(',')[0].trim() || 'unbekannt';
     const f = await one("select count(*) filter (where email=$1)::int as e, count(*) filter (where ip=$2)::int as i from login_attempts where not ok and at > now() - interval '15 minutes'", [email, ip]);
     if (f && (f.e >= 8 || f.i >= 30)) return fail('Zu viele Fehlversuche. Bitte in 15 Minuten nochmals versuchen; ein Admin kann ein neues Startpasswort setzen.');
     u = await login(email, String(fd.get('password') || ''));
@@ -44,7 +44,7 @@ export async function loginAction(prev, fd) {
   const next = String(fd.get('next') || ''); const ziel = /^\/[^/\\]/.test(next) && !next.startsWith('/login') ? next : '/';
   redirect(u.must_change_pw ? '/konto?first=1' : ziel);
 }
-export async function logoutAction() { clearSession(); redirect('/login'); }
+export async function logoutAction() { await clearSession(); redirect('/login'); }
 export const changePasswordAction = wrap(async (prev, fd) => {
   const u = await requireUser(); const pw = String(fd.get('password') || ''), pw2 = String(fd.get('password2') || ''), cur = String(fd.get('current') || '');
   const row = await one('select password_hash from users where id=$1', [u.id]); const bcrypt = (await import('bcryptjs')).default;

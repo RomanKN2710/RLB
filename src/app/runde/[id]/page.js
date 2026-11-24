@@ -7,7 +7,8 @@ import { fmtDt } from '@/components/ui';
 import Auszeichnungen from '@/components/Auszeichnungen';
 import { roundAwards } from '@/lib/auszeichnungen';
 
-export default async function Runde({ params }) {
+export default async function Runde(props) {
+  const params = await props.params;   // Next 15: asynchron
   const u = await requireUser(); const b = await D.base(); const round = await D.roundById((Number.isInteger(Number(params.id)) && Number(params.id) > 0) ? Number(params.id) : notFound());
   if (!round) return <div className="card">Runde nicht gefunden.</div>;
   const passed = round.deadline && new Date(round.deadline) < new Date();

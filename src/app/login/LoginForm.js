@@ -1,21 +1,21 @@
 'use client';
-import { useFormState } from 'react-dom';
+import useFormState from '@/components/useFormAction';   // behält die Eingaben, auch wenn die Aktion einen Fehler meldet
 import { useSearchParams } from 'next/navigation';
 import { loginAction } from '@/actions';
 import { Msg } from '@/components/ui';
 import SubmitButton from '@/components/SubmitButton';
 
 export default function LoginForm() {
-  const [state, action] = useFormState(loginAction, null); const next = useSearchParams().get('next') || '';
+  const [state, action, pending] = useFormState(loginAction, null); const next = useSearchParams().get('next') || '';
   return (
     <div className="card login">
       <div className="eyebrow">Anmelden</div><h2>RLB Managerspiel</h2>
-      <form action={action} className="stack">
+      <form onSubmit={action} className="stack">
         <input type="hidden" name="next" value={next} />
         <label>E-Mail<br /><input type="email" name="email" required autoComplete="username" style={{ width: '100%' }} /></label>
         <label>Passwort<br /><input type="password" name="password" required autoComplete="current-password" style={{ width: '100%' }} /></label>
         <Msg state={state} />
-        <SubmitButton busy="Anmelden …">Anmelden</SubmitButton>
+        <SubmitButton pending={pending} busy="Anmelden …">Anmelden</SubmitButton>
       </form>
       <p className="mini">Konten werden vom Admin angelegt. <a href="/login/vergessen">Passwort vergessen?</a></p>
     </div>

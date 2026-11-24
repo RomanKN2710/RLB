@@ -11,7 +11,8 @@ import { roundAwards } from '@/lib/auszeichnungen';
 import * as HOF from '@/lib/halloffame';
 
 export const maxDuration = 60;
-export default async function Tabelle({ searchParams }) {
+export default async function Tabelle(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await requireUser();
   const all = await D.rounds();
   const played = all.filter(r => r.deadline && new Date(r.deadline) < new Date());

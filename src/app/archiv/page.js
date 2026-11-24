@@ -9,7 +9,8 @@ import { BlogImport, PostMeta } from './ArchivTools';
 export const dynamic = 'force-dynamic';
 
 /* Archiv: alle Blog-Einträge, Kader und Aufstellungen je Runde – die Datenbasis, gegen die App und Excel geprüft werden. */
-export default async function Archiv({ searchParams }) {
+export default async function Archiv(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await getUser(); if (!u) return null; const admin = u.role === 'admin';
   const b = await D.base(); const rounds = (await D.rounds()).filter(r => r.type === 'regulaer');
   const posts = await allPosts();

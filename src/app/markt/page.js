@@ -6,7 +6,8 @@ import { fmtDt, Info } from '@/components/ui';
 import BidForm from './BidForm';
 import FreeList from './FreeList';
 
-export default async function Markt({ searchParams }) {
+export default async function Markt(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await requireUser(); const admin = u.role === 'admin';
   const b = await D.base(); const open = await D.openRound(); const pool = await D.freeAgents(b); const free = pool.filter(p => !p.taken);
   // Admins können für einen Manager erfassen (Gebot per Mail): ?m=<Manager>

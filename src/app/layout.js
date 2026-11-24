@@ -44,7 +44,7 @@ export default async function RootLayout({ children }) {
           {user && <Nav admin={user.role === 'admin'} hinweise={hinweise} />}
         </header>
         <main>{user && Object.keys(hinweise).length > 0 && <div className="note" style={{ margin: '0 0 12px' }}>{Object.entries(hinweise).map(([h, t]) => <div key={h}><a href={h}>{t} →</a></div>)}</div>}
-          {!user && cookies().get('rlb_session') && <div className="note" style={{ margin: '12px 0' }}>Deine Sitzung ist beendet (zum Beispiel nach einem Passwortwechsel oder einem neuen Startpasswort). <a href="/login">Neu anmelden</a></div>}
+          {!user && (await cookies()).get('rlb_session') && <div className="note" style={{ margin: '12px 0' }}>Deine Sitzung ist beendet (zum Beispiel nach einem Passwortwechsel oder einem neuen Startpasswort). <a href="/login">Neu anmelden</a></div>}
           {children}</main>
       </body></html>
   );

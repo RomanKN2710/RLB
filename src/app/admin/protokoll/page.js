@@ -17,7 +17,8 @@ const ART = {
 };
 const GRUPPEN = { 'Runden und Werte': ['results', 'results_unlock', 'correction_add', 'correction_delete', 'round_status', 'round_label', 'round_tdr_manual', 'deadline', 'nachtrag', 'kicker_import'], 'Aufstellungen und Gebote': ['lineup', 'lineup_paste', 'bid', 'bid_withdraw', 'bid_paste', 'bids_applied', 'bids_undone', 'sealed_bids_view'], 'Kader und Geld': ['club_change', 'player_edit', 'position_add', 'position_remove', 'contract', 'jugend', 'manual_buy', 'release', 'abgang', 'ledger', 'paid', 'trade_done', 'trade_revert', 'squads_sync', 'squads_json', 'squads_upload', 'pool_paste'], 'Konten': ['login', 'user_create', 'user_delete', 'pw_reset', 'pw_change', 'pw_reset_request', 'pw_reset_mail'] };
 
-export default async function Protokoll({ searchParams }) {
+export default async function Protokoll(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await getUser(); if (!u || u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>;
   const gruppe = GRUPPEN[searchParams?.g] ? searchParams.g : null; const ohneLogin = !gruppe;
   const rows = await q(`select a.id, a.created_at, a.action, a.detail, u.name as user_name from audit a left join users u on u.id=a.user_id where ${gruppe ? 'a.action = any($1)' : "a.action <> 'login' and $1::text[] is not null"} order by a.id desc limit 300`, [gruppe ? GRUPPEN[gruppe] : []]);

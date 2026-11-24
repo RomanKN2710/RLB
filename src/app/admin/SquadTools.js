@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { useFormState } from 'react-dom';
+import useFormState from '@/components/useFormAction';   // behält die Eingaben, auch wenn die Aktion einen Fehler meldet
 import { syncSquadsAction, squadsJsonAction, abgangPlayerAction } from '@/actions';
 import { Msg } from '@/components/ui';
 
@@ -16,7 +16,7 @@ export function SquadSync({ status, slugs, season }) {
     <details style={{ marginTop: 8 }}><summary>Rückfall: Kader-JSON einfügen (falls kicker den Abruf blockiert)</summary>
       <p className="mini">1. Auf kicker.de eine beliebige Seite öffnen, Browser-Konsole (F12 › Console), den Text unten einfügen und Enter drücken. Das Skript liest alle 18 Kader und kopiert sie als JSON in die Zwischenablage. 2. Hier einfügen und übernehmen.</p>
       <textarea readOnly rows={3} value={snippet} onFocus={e => e.target.select()} style={{ fontFamily: 'monospace', fontSize: 11 }} />
-      <form action={a} className="stack" style={{ marginTop: 6 }}><textarea name="json" rows={4} placeholder='{"date":"…","squads":{…}}' /><div className="row"><button className="sm sec">Kader-JSON übernehmen</button><Msg state={s} /></div></form>
+      <form onSubmit={a} className="stack" style={{ marginTop: 6 }}><textarea name="json" rows={4} placeholder='{"date":"…","squads":{…}}' /><div className="row"><button className="sm sec">Kader-JSON übernehmen</button><Msg state={s} /></div></form>
     </details></div>);
 }
 

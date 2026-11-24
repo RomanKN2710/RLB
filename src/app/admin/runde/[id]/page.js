@@ -9,7 +9,8 @@ import { getSetting } from '@/lib/db';
 import { status as inboxStatus } from '@/lib/kicker-inbox';
 import { roundCheck } from '@/lib/rundencheck';
 
-export default async function AdminRunde({ params }) {
+export default async function AdminRunde(props) {
+  const params = await props.params;   // Next 15: asynchron
   const __u = await getUser(); if (!__u || __u.role !== 'admin') return <div className="card"><h2>Kein Zugriff</h2><p className="mini">Dieser Bereich ist der Administration vorbehalten.</p></div>; const b = await D.base(); const round = await D.roundById((Number.isInteger(Number(params.id)) && Number(params.id) > 0) ? Number(params.id) : notFound());
   if (!round) return <div className="card">Runde nicht gefunden.</div>;
   const passed = round.deadline && new Date(round.deadline) < new Date();

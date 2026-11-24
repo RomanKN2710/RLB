@@ -5,7 +5,8 @@ import { fmtDt } from '@/components/ui';
 import LineupEditor from '@/components/LineupEditor';
 import { q, one } from '@/lib/db';
 
-export default async function Aufstellung({ searchParams }) {
+export default async function Aufstellung(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await requireUser(); const admin = u.role === 'admin';
   const b = await D.base();
   const open = await D.openRound();

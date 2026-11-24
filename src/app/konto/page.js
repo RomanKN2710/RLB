@@ -4,7 +4,8 @@ import MailPref from './MailPref';
 import { one } from '@/lib/db';
 import { mailReady } from '@/lib/mail';
 
-export default async function Konto({ searchParams }) {
+export default async function Konto(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const u = await requireUser();
   return (
     <div className="card" style={{ maxWidth: 480 }}>

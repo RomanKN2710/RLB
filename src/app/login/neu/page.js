@@ -2,7 +2,8 @@ import Link from 'next/link';
 import NewPasswordForm from './NewPasswordForm';
 export const dynamic = 'force-dynamic';
 /* Neues Passwort über den Link aus der Mail (/login/neu?token=…) */
-export default function Neu({ searchParams }) {
+export default async function Neu(props) {
+  const searchParams = await props.searchParams;   // Next 15: asynchron
   const token = String(searchParams?.token || '');
   return (<div className="card login"><div className="eyebrow">Passwort vergessen</div><h2>Neues Passwort</h2>
     {token ? <NewPasswordForm token={token} /> : <p className="small">Der Link ist unvollständig. Bitte den Link aus der Mail ganz kopieren oder einen neuen anfordern.</p>}
