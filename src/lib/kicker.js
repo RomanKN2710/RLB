@@ -3,65 +3,18 @@
    Einfügen im Browser): pro Spiel die Seite ".../aufstellung" (Startelf, Reservebank, Wechsel, Tore mit Vorbereitung,
    Karten), pro Spieltag die Seite "Elf des Tages" (Team der Runde, Spieler des Tages).
    Ein direkter Abruf von kicker ist von Vercel aus gesperrt und wird hier nicht mehr versucht. */
-import { q, one, setSetting } from './db';
-import clubSlugs from '../../db/seed/kicker-clubs.json';
+import { q, one, setSetting, ensureSchema, audit } from './db';
 import { parseElfDesTages, parseMatchPage, matchStats } from './kicker-parse.js';
 export { parseElfDesTages, parseMatchPage, matchStats };
 
-/* ---------- Namens- und Vereinsabgleich ---------- */
-/** Kanonische Schreibweise: Umlaute zu ae/oe/ue (wie in kicker-Slugs), Akzente weg, nur a-z0-9 und Bindestrich. */
-export const slugify = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
-  .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-/** Vergleichsform eines Namensteils: ae/oe/ue zusätzlich zusammengezogen, damit "Grüll", "Gruell" und "Grull" gleich sind. */
-const fold = t => t.replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
-const tokens = s => slugify(s).split('-').filter(t => t && !/^\d+$/.test(t)).map(fold);
-const stripInitials = ts => ts.filter(t => t.length > 1);
-/** Passt der kicker-Spieler (Slug "dayot-upamecano", Anzeigename "Upamecano") zu unserem Namen ("Upamecano", "Luis Diaz", "Schlotterbeck N.", "L. Vazquez")? */
-export function playerMatches(kSlug, kName, ourName) {
-  const a = stripInitials(tokens(kSlug)), b = stripInitials(tokens(ourName)), n = stripInitials(tokens(kName));
-  if (!a.length || !b.length) return false;
-  if (b.join('') === a.join('') || b.join('') === n.join('')) return true;
-  // Unser letzter Namensteil ist der Nachname; der muss bei kicker als Nachname vorkommen. Ein Vorname-Treffer reicht nicht.
-  const la = a[a.length - 1], lb = b[b.length - 1];
-  const surname = la === lb || n.includes(lb) || a.join('-').endsWith(lb) || n.join('-').endsWith(lb);
-  if (!surname) return false;
-  return b.every(t => a.includes(t) || n.includes(t) || t === lb);
-}
-/** kicker-Vereinsslug zu unserem Vereinsnamen: feste Zuordnung (db/seed/kicker-clubs.json), Rückfall Namensvergleich. */
-export const clubSlugOf = ourClub => clubSlugs[ourClub] || null;
-export function clubMatches(kTeamSlug, ourClub) {
-  const t = String(kTeamSlug || '').toLowerCase(); if (!t || !ourClub) return false;
-  const fixed = clubSlugOf(ourClub); if (fixed) return t === fixed;
-  const c = fold(slugify(ourClub)); return fold(t).includes(c);
-}
+import { slugify, playerMatches, clubSlugOf, clubMatches, resolveKickerPlayer, surnameOf, lev } from './kicker-match.js';
+export { slugify, playerMatches, clubSlugOf, clubMatches, resolveKickerPlayer };
 
 /* ---------- Zuordnung kicker-Spieler → RLB-Spieler ---------- */
 let colReady = false;
 export async function ensureColumns() { if (colReady) return; await q('alter table players add column if not exists kicker_slug text'); await q("alter table players add column if not exists extra_pos_from jsonb not null default '{}'"); colReady = true; }
 /** Nummer der Runde nach der gegebenen (Positionserwerb gilt ab der Folgerunde, Ziff. 5.2). */
 export async function nextRoundNumber(number) { const r = await one('select min(number) as n from rounds where number > $1', [number]); return (r && r.n) || number + 10; }
-
-/** Ähnlichkeit für Hinweise ("meinten Sie …"): Levenshtein auf dem gefalteten Nachnamen. */
-function lev(a, b) { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]); for (let j = 1; j <= n; j++) d[0][j] = j;
-  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; }
-const surnameOf = name => { const t = stripInitials(tokens(name)); return t[t.length - 1] || ''; };
-
-/**
- * Ordnet einen kicker-Spieler einem RLB-Spieler zu. Reihenfolge: gespeicherter kicker_slug → Namensabgleich (nur im selben Verein).
- * Bei mehreren Treffern entscheidet die Position (kicker-Position muss zu Grund-/Zusatzposition passen); bleibt es mehrdeutig, wird nicht zugeordnet.
- */
-export function resolveKickerPlayer(kp, candidates, log) {
-  // Ohne Vereinsangabe (Handy-Seite nur mit Namen): ueber alle Kandidaten nach Namen, auch bei bekannter kicker-Kennung (deren Nachnamensteil passt)
-  if (!kp.team) { const nm = slugify(kp.name); const hits0 = candidates.filter(p => playerMatches(kp.slug, kp.name, p.name) || (p.kicker_slug && (p.kicker_slug === nm || p.kicker_slug.endsWith('-' + nm) || p.kicker_slug.split('-').includes(nm))));
-    if (hits0.length === 1) return { player: hits0[0], via: 'name' }; if (hits0.length > 1 && log) log.push(`mehrdeutig: ${kp.name} passt auf ${hits0.map(h => h.name + ' (' + h.club + ')').join(', ')} – nicht zugeordnet`); return null; }
-  const sameClub = candidates.filter(p => clubMatches(kp.team, p.club));
-  const bySlug = sameClub.filter(p => p.kicker_slug && p.kicker_slug === kp.slug); if (bySlug.length === 1) return { player: bySlug[0], via: 'slug' };
-  let hits = sameClub.filter(p => !p.kicker_slug && playerMatches(kp.slug, kp.name, p.name));
-  if (hits.length > 1 && kp.kpos) { const byPos = hits.filter(p => [p.base_pos, ...(p.extra_pos || [])].includes(kp.kpos)); if (byPos.length === 1) hits = byPos; }
-  if (hits.length === 1) return { player: hits[0], via: 'name' };
-  if (hits.length > 1 && log) log.push(`mehrdeutig: ${kp.name} (${kp.team}) passt auf ${hits.map(h => h.name).join(', ')} – nicht zugeordnet, bitte kicker-Namen im Kader festlegen`);
-  return null;
-}
 
 /* ---------- Import in die Datenbank ---------- */
 /**
@@ -78,6 +31,13 @@ export async function importPages(round, b, pages, opts = {}) {
   const perPlayer = {}; const onPage = {}; // pid -> {status, kicker}
   const importedTeams = []; const pageNames = {}; // teamSlug -> [{slug,name}] aller auf der Seite genannten Spieler
   const allStarters = []; const matches = []; const benchStats = {};
+  // Vereine, die in dieser Runde spielen (regulär: alle Spiele des Spieltags ohne abgespaltene; Nachtrag: nur das eine Spiel)
+  let roundClubs = null; if ((round.match_ids || []).length) { const ms = await q('select team1, team2 from matches where id = any($1)', [round.match_ids]); if (ms.length) { roundClubs = new Set(); ms.forEach(m => { const c1 = b.teamToClub?.[m.team1], c2 = b.teamToClub?.[m.team2]; if (c1) roundClubs.add(c1); if (c2) roundClubs.add(c2); }); } }
+  // Vereinswechsel innerhalb der Bundesliga: die kicker-Kennung passt, der Verein nicht mehr. Frühere Runden behalten den alten Verein (results.club).
+  const moved = async (p, s) => { const neu = (b.clubs || []).map(c => c.id).find(id => clubMatches(s.team, id)); if (!neu || neu === p.club) return; const alt = p.club;
+    await q('update results set club=$2 where player_id=$1 and club is null', [p.id, alt]); await q('update players set club=$2 where id=$1', [p.id, neu]);
+    for (const x of [p, b.players[p.id], ...lineupPlayers.filter(l => l.id === p.id)]) if (x) x.club = neu;
+    log.push(`Vereinswechsel: ${p.name} ${alt} → ${neu} (laut kicker-Spielbericht); frühere Runden zählen weiter mit ${alt}`); await audit(opts.userId || null, 'club_change', { pid: p.id, von: alt, nach: neu, quelle: 'kicker' }); };
   const fixSlug = async (p, slug, via) => { if (via === 'name' && !p.kicker_slug) { await q('update players set kicker_slug=$1 where id=$2 and kicker_slug is null', [slug, p.id]); p.kicker_slug = slug; const bp = b.players[p.id]; if (bp) bp.kicker_slug = slug; } };
   // 1) Spiele
   for (const html of pages.matches || []) {
@@ -91,12 +51,18 @@ export async function importPages(round, b, pages, opts = {}) {
     await upsertPool(Object.values(stats), b, round.matchday, round.deadline || new Date());   // Spieltagskader = Bundesliga-Kader
     allStarters.push(...Object.values(stats).filter(s => s.start === 1 && s.kpos).map(s => ({ ...s, formation: (parsed.teams.find(t => t.slug === s.team) || {}).formation })));
     const seen = {}; let n = 0;
+    // Zwei kicker-Spieler, die auf denselben noch nicht zugeordneten RLB-Spieler passen (Namensvettern im selben Verein): keinen binden, melden
+    const nameHits = {}; for (const s of Object.values(stats)) { const r = resolveKickerPlayer(s, active, null); if (r && r.via === 'name') (nameHits[r.player.id] ||= []).push(s); }
+    const doppelt = new Set(Object.keys(nameHits).filter(pid => nameHits[pid].length > 1));
+    for (const pid of doppelt) errors.push(`${b.players[pid]?.name || pid}: zwei kicker-Spieler passen (${nameHits[pid].map(s => `${s.name}, ${s.slug}`).join(' / ')}) – nicht zugeordnet, bitte die kicker-Kennung im Kader setzen`);
     // Werte der übrigen Kaderspieler (Ersatzbank der Manager): für die Potential-Tabelle; sie zählen nicht in der Wertung
     const lineupIds = new Set(lineupPlayers.map(p => p.id));
-    for (const s of Object.values(stats)) { if (s.start === 0) continue; const r = resolveKickerPlayer(s, active.filter(p => !lineupIds.has(p.id)), null); if (!r) continue;
+    for (const s of Object.values(stats)) { if (s.start === 0) continue; const r = resolveKickerPlayer(s, active.filter(p => !lineupIds.has(p.id)), null); if (!r || doppelt.has(r.player.id)) continue;
+      if (r.clubChanged) await moved(r.player, s);
       await fixSlug(r.player, s.slug, r.via); benchStats[r.player.id] = { start: s.start, assist: s.assist, tore: s.tore, karten: s.karten, kpos: s.kpos }; }
     for (const s of Object.values(stats)) {
-      const r = resolveKickerPlayer(s, lineupPlayers, log); if (!r) continue; const p = r.player;
+      const r = resolveKickerPlayer(s, lineupPlayers, log); if (!r || doppelt.has(r.player.id)) continue; const p = r.player;
+      if (r.clubChanged) await moved(p, s);
       if (seen[p.id]) { errors.push(`${p.name}: zwei kicker-Spieler passen (${seen[p.id]}, ${s.name}) – ${seen[p.id]} übernommen, bitte kicker-Namen im Kader festlegen`); continue; }
       seen[p.id] = s.name; await fixSlug(p, s.slug, r.via);
       if (s.start > 0) { n++; perPlayer[p.id] = { start: s.start, assist: s.assist, tore: s.tore, karten: s.karten, kpos: s.kpos, notes: s.notes }; }
@@ -120,6 +86,7 @@ export async function importPages(round, b, pages, opts = {}) {
     const team = clubSlugOf(p.club); const played = team && importedTeams.includes(team);
     let status, hint = '';
     if (!team) { status = 'verein_unbekannt'; hint = `Verein «${p.club}» hat keine kicker-Zuordnung`; }
+    else if (!played && roundClubs && !roundClubs.has(p.club)) status = 'spielfrei';   // sein Verein spielt in dieser Runde nicht (verlegtes Spiel bzw. Nachtragsrunde)
     else if (!played) status = 'spiel_fehlt';
     else if (onPage[p.id]) status = onPage[p.id].status;
     else { const sn = surnameOf(p.name); const near = (pageNames[team] || []).map(s => ({ s, d: lev(sn, surnameOf(s.name)) })).filter(x => x.d <= 2).sort((a, b2) => a.d - b2.d)[0];
@@ -146,8 +113,10 @@ export async function importPages(round, b, pages, opts = {}) {
       on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=case when $9 then excluded.tdr else results.tdr end, kpos=excluded.kpos, source='kicker' where results.locked=false`, [round.id, pid, s.start, s.assist, s.tore, s.karten, tdr, s.kpos, !!elf]); }
   if (Object.keys(benchStats).length) log.push(`${Object.keys(benchStats).length} nicht aufgestellte Kaderspieler mit Werten gespeichert (für die Potential-Tabelle)`);
   if (round.type !== 'nachtrag' && elf && tdrNames.length) await q('update rounds set tdr=$1, sdt=coalesce($2, sdt) where id=$3', [tdrNames, elf.sdt ? elf.sdt.name : null, round.id]);
+  // Verein der Runde festhalten (nur wo noch keiner steht)
+  await q('update results r set club=p.club from players p where p.id=r.player_id and r.round_id=$1 and r.club is null', [round.id]);
   log.push(`${written} Spielerzeilen geschrieben${skipped ? `, ${skipped} gesperrt (vom Admin geändert)` : ''}`);
-  const summary = { at: new Date().toISOString(), games: matches.length, elf: !!elf, counts, errors, log, coverage };
+  const summary = { at: new Date().toISOString(), games: matches.length, soll: (round.match_ids || []).length || null, elf: !!elf, counts, errors, log, coverage };
   await setSetting(`kicker_import_${round.id}`, summary);
   return summary;
 }
@@ -166,14 +135,28 @@ export async function matchdayOfPage(html, b) {
 
 /** Eingang eines Spieltags importieren (Handy-Skript, API und Admin-Knopf nehmen denselben Weg). */
 export async function importInbox(matchday, opts = {}) {
-  const Inbox = await import('./kicker-inbox'); const D = await import('./data');
-  const round = await one("select * from rounds where type='regulaer' and matchday=$1", [matchday]); if (!round) throw new Error(`Keine Runde für Spieltag ${matchday}`);
+  const Inbox = await import('./kicker-inbox'); const D = await import('./data'); await ensureSchema();
+  const rounds = await q("select * from rounds where matchday=$1 order by (type='regulaer') desc, number", [matchday]);
+  const regular = rounds.find(r => r.type === 'regulaer'); if (!regular) throw new Error(`Keine Runde für Spieltag ${matchday}`);
   const pg = await Inbox.pages(matchday); if (!pg.matches.length && !pg.elf) throw new Error(`Eingang für Spieltag ${matchday} ist leer`);
-  const b = await D.base(); await D.ensureLineups(round, b);
-  if (opts.unlock) await q('update results set locked=false where round_id=$1', [round.id]);
-  const r = await importPages(round, b, { matches: pg.matches, elf: pg.elf || null });
-  try { await q('insert into audit(user_id,action,detail) values($1,$2,$3)', [opts.userId || null, 'kicker_import', JSON.stringify({ roundId: round.id, games: r.games, elf: r.elf, counts: r.counts, auto: !!opts.auto })]); } catch (e) { /* best effort */ }
-  return { ...r, round };
+  const b = await D.base();
+  // Ein als Nachtragsrunde abgespaltenes Spiel gehört in diese Runde, mit der dann gültigen Aufstellung (Ziff. 5.1 und 8), nicht in die reguläre Runde des Spieltags
+  const nach = rounds.filter(r => r.type === 'nachtrag' && (r.match_ids || []).length); const per = new Map(rounds.map(r => [r.id, []]));
+  for (const html of pg.matches) { let ziel = regular;
+    if (nach.length) { const mp = await matchdayOfPage(html, b).catch(() => null); const n = mp && nach.find(r => (r.match_ids || []).map(Number).includes(Number(mp.matchId))); if (n) ziel = n; }
+    per.get(ziel.id).push(html); }
+  const want = opts.roundId ? rounds.find(r => r.id === Number(opts.roundId)) : null; let main = null;
+  for (const round of rounds) { const list = per.get(round.id) || []; const reg = round.type === 'regulaer';
+    if (want ? round.id !== want.id : round.status === 'final') continue;   // abgeschlossene Runden nur auf ausdrücklichen Wunsch (Rundenseite)
+    if (!reg && !list.length) continue;
+    await D.ensureLineups(round, b);
+    if (opts.unlock) await q('update results set locked=false where round_id=$1', [round.id]);
+    const r = await importPages(round, b, { matches: list, elf: reg ? (pg.elf || null) : null }, { userId: opts.userId || null });
+    try { await q('insert into audit(user_id,action,detail) values($1,$2,$3)', [opts.userId || null, 'kicker_import', JSON.stringify({ roundId: round.id, games: r.games, elf: r.elf, counts: r.counts, auto: !!opts.auto })]); } catch (e) { /* best effort */ }
+    if (!main || round.id === (want || regular).id) main = { ...r, round };
+  }
+  if (!main) throw new Error(`Spieltag ${matchday} ist abgeschlossen – nichts importiert. Falls gewollt: Runde wieder öffnen, dann «Eingang erneut importieren».`);
+  return main;
 }
 /** Kurzfassung eines Importberichts fuer Meldungen. */
 export function importSummary(r) { const c = r.counts || {}; return [`${r.games} Spiele${r.elf ? ' + Elf des Tages' : ''}`, `Startelf ${c.startelf || 0}`, `eingewechselt ${c.eingewechselt || 0}`, `Bank ${c.bank || 0}`, `nicht im Kader ${c.nicht_im_kader || 0}`, `Name prüfen ${c.nicht_gefunden || 0}`, `Spiel fehlt ${c.spiel_fehlt || 0}`]; }

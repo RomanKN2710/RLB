@@ -34,6 +34,14 @@ export function classify(html, hintUrl = '') {
   return { kind: hasLineup ? 'match' : 'unknown', matchday: md ? Number(md) : null, id: id || null, title: teams.length === 2 ? teams.join(' – ') : title.replace(/\s*\|.*$/, '') };
 }
 
+/** Wettbewerb und Saison einer kicker-Spielseite aus ihrer Adresse («…/bremen-gegen-dortmund-2026-bundesliga-4862091/aufstellung»):
+    {wettbewerb: 'bundesliga' | 'dfb-pokal' | '2-bundesliga' | 'champions-league' | …, jahr: 2026} oder null, wenn die Adresse fehlt. */
+export function competitionOf(html, hintUrl = '') {
+  const canon = (String(html || '').match(/rel="canonical" href="([^"]+)"/) || [])[1] || '';
+  for (const u of [canon, hintUrl]) { const m = String(u || '').match(/-gegen-[^/?#]*?-(\d{4})-([a-z0-9-]+?)-(\d{5,})(?:[/?#]|$)/i); if (m) return { wettbewerb: m[2].toLowerCase(), jahr: Number(m[1]) }; }
+  return null;
+}
+
 /** Elf-des-Tages-Seite: 11 Spieler {slug, name, team} und Spieler des Tages. diag sagt, was die Seite hergab. */
 export function parseElfDesTages(html) {
   const $ = cheerio.load(html);

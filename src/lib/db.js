@@ -37,6 +37,7 @@ export async function tx(fn) {
 const DDL = [
   "alter table trades add column if not exists lineup_snapshot jsonb",
   "alter table players add column if not exists extra_pos_denied text[] not null default '{}'",
+  "alter table results add column if not exists club text",
 ];
 export async function ensureSchema() {
   if (!globalThis.__rlbSchema) globalThis.__rlbSchema = (async () => { for (const s of DDL) await pool.query(s); })().catch(e => { globalThis.__rlbSchema = null; throw e; });

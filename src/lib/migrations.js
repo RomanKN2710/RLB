@@ -152,6 +152,10 @@ export const STEPS = [
       try { const rep = BI.triggerReport(round.id); if (rep) { const { waitUntil } = await import('@vercel/functions'); waitUntil(rep); log.push('Spieltagsbericht wird erstellt (Seite «Bericht»)'); } } catch (e) { log.push('Bericht bitte von Hand anstossen: ' + e.message); } }
     if (c.warnings.length) log.push('Hinweise: ' + c.warnings.map(x => x.text || x).join(' · '));
     await setSetting('st9_gebote_abschluss_20261110', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'results_club_20261124', title: 'Verein je Runde festhalten: Punkte und Zu-null früherer Runden bleiben beim damaligen Verein, auch wenn ein Spieler später wechselt', run: async () => {
+    const { ensureSchema } = await import('./db'); await ensureSchema();
+    const r = await q('update results r set club=p.club from players p where p.id=r.player_id and r.club is null returning r.player_id');
+    const log = [`${r.length} Spielerzeilen mit dem heutigen Verein gestempelt`]; await setSetting('results_club_20261124', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

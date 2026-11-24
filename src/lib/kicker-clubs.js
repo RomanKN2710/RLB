@@ -1,0 +1,22 @@
+/* Unser Vereinsname -> kicker-Vereinsslug. Gleicher Inhalt wie db/seed/kicker-clubs.json (tests/kicker.test.mjs prüft das);
+   als Modul, damit der Namensabgleich ohne Datenbank und ohne JSON-Import testbar ist. */
+export default {
+  "Augsburg": "fc-augsburg",
+  "Freiburg": "sc-freiburg",
+  "Dortmund": "borussia-dortmund",
+  "Elversberg": "sv-elversberg",
+  "Mainz": "1-fsv-mainz-05",
+  "Bayern": "fc-bayern-muenchen",
+  "Leverkusen": "bayer-04-leverkusen",
+  "Leipzig": "rb-leipzig",
+  "Stuttgart": "vfb-stuttgart",
+  "Bremen": "werder-bremen",
+  "Köln": "1-fc-koeln",
+  "Paderborn": "sc-paderborn-07",
+  "Frankfurt": "eintracht-frankfurt",
+  "Schalke": "fc-schalke-04",
+  "Union": "1-fc-union-berlin",
+  "Hoffenheim": "tsg-hoffenheim",
+  "Gladbach": "bor-moenchengladbach",
+  "Hamburg": "hamburger-sv"
+};

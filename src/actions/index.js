@@ -305,7 +305,8 @@ export const saveResultsAction = wrap(async (roundId, managerId, rows) => { cons
     const changed = old ? ['start', 'assist', 'tore', 'karten', 'tdr'].some(k => Number(old[k]) !== vals[k]) : true; // Admin ändert gegenüber Import: Zeile sperren
     await x.q(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,locked,source) values($1,$2,$3,$4,$5,$6,$7,$8,'admin')
     on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, locked=(results.locked or excluded.locked), source=case when excluded.locked then 'admin' else results.source end`, [roundId, pid, vals.start, vals.assist, vals.tore, vals.karten, vals.tdr, changed]); } });
-  await audit(a.id, 'results', { roundId, managerId }); rev(); return ok('Resultate gespeichert'); });
+  await q('update results r set club=p.club from players p where p.id=r.player_id and r.round_id=$1 and r.club is null', [roundId]);
+  await audit(a.id, 'results', { roundId, managerId, rows }); rev(); return ok('Resultate gespeichert'); });
 export const unlockResultsAction = wrap(async (roundId) => { const a = await requireAdmin(); const gesperrt = lockedMsg(await D.roundById(roundId)); if (gesperrt) return fail(gesperrt);
   const r = await q('update results set locked=false where round_id=$1 and locked returning player_id', [roundId]); await audit(a.id, 'results_unlock', { roundId, n: r.length }); rev(); return ok('Sperren aufgehoben, Import überschreibt wieder'); });
 export const addCorrectionAction = wrap(async (roundId, managerId, text, delta) => { const a = await requireAdmin(); if (!text) return fail('Text fehlt');
@@ -355,6 +356,8 @@ export const abgangPlayerAction = wrap(async (pid) => { const a = await requireA
 export const editPlayerAction = wrap(async (pid, name, club) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?');
   const nm = String(name || '').trim() || p.name; const cl = String(club || '').trim() || p.club; const b = await D.base();
   if (cl !== p.club && !b.clubs.some(c => c.id === cl)) return fail(`Verein «${cl}» unbekannt – gültig: ${b.clubs.map(c => c.id).join(', ')}`);
+  // Vereinswechsel: frühere Runden behalten den bisherigen Verein (Punkte und Zu-null bleiben, wie sie gewertet wurden)
+  if (cl !== p.club) await q('update results set club=$2 where player_id=$1 and club is null', [pid, p.club]);
   await q('update players set name=$1, club=$2 where id=$3', [nm, cl, pid]); await audit(a.id, 'player_edit', { pid, von: [p.name, p.club], nach: [nm, cl] }); rev();
   return ok(`${p.name} (${p.club}) → ${nm} (${cl})`); });
 export const addPositionAction = wrap(async (pid, pos) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const set = new Set([...(p.extra_pos || []), pos]); set.delete(p.base_pos); await q('update players set extra_pos=$1, extra_pos_denied=array_remove(extra_pos_denied,$3) where id=$2', [[...set], pid, pos]); await audit(a.id, 'position_add', { pid, pos }); rev(); return ok(`${p.name}: Zusatzposition ${pos}`); });
@@ -401,7 +404,7 @@ export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, html
 /* Eingang (Handy oder eingefügter Quelltext) importieren */
 export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
   const gesperrt = lockedMsg(round); if (gesperrt) return fail(gesperrt);
-  let r; try { r = await importInbox(round.matchday, { unlock, userId: a.id }); } catch (e) { return fail(e.message); } rev();
+  let r; try { r = await importInbox(round.matchday, { unlock, userId: a.id, roundId: round.id }); } catch (e) { return fail(e.message); } rev();
   const parts = importSummary(r);
   if (r.errors.length) return fail(`Import mit ${r.errors.length} Problem(en): ${r.errors.join(' · ')} — ${parts.join(', ')}`);
   return ok(`Import ok: ${parts.join(', ')}`); });

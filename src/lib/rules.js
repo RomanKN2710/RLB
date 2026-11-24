@@ -36,7 +36,8 @@ export function clubResults(matches, teamToClub) {
 
 /** Wertung eines Spielers in einer Runde (Ziff. 8). */
 export function entryValues(player, pos, result, clubRes) {
-  const st = Number(result?.start) || 0, cr = clubRes[player.club], played = st === 1 || st === 2;
+  // Verein der Runde: beim Import festgehalten (results.club). Wechselt der Spieler später den Verein, zählen frühere Runden weiter mit dem damaligen.
+  const st = Number(result?.start) || 0, cr = clubRes[result?.club || player.club], played = st === 1 || st === 2;
   return {
     punkte: played && cr ? cr.pts : 0,
     shutout: played && cr && cr.cs && isDef(pos) ? 1 : 0,   // wie Excel-Formel: auch eingewechselte V/T (Ziff. 8.3 nennt keine Startelf-Bedingung)

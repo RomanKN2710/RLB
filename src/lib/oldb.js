@@ -6,7 +6,7 @@ const API = 'https://api.openligadb.de';
 const season = () => process.env.SEASON || '2026';
 
 async function getJson(path) {
-  const r = await fetch(`${API}${path}`, { headers: { accept: 'application/json' }, cache: 'no-store' });
+  const r = await fetch(`${API}${path}`, { headers: { accept: 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(8000) });   // hängt der Dienst, nach 8 s abbrechen statt die Funktion bis zum Limit warten zu lassen
   if (!r.ok) throw new Error(`OpenLigaDB ${path}: HTTP ${r.status}`);
   return r.json();
 }
@@ -82,10 +82,13 @@ export async function syncCurrent() {
 export async function maybeSync(maxAgeMin = 60) {
   try {
     const fail = await getSetting('last_sync_fail'); if (fail && Date.now() - new Date(fail.at).getTime() < 15 * 60e3) return 'backoff';
+    // Nur ein Sync zur selben Zeit: gleichzeitige Seitenaufrufe starten keinen zweiten (Merker verfällt nach 2 Minuten)
+    const run = await getSetting('sync_running'); if (run && Date.now() - new Date(run.at).getTime() < 2 * 60e3) return 'running';
     const last = await getSetting('last_sync');
-    if (!last || Date.now() - new Date(last.at).getTime() > 24 * 3600e3) { await syncTeams(); await syncSchedule(); return 'full'; }
+    const mark = () => setSetting('sync_running', { at: new Date().toISOString() }); const done = () => setSetting('sync_running', { at: new Date(0).toISOString() });
+    if (!last || Date.now() - new Date(last.at).getTime() > 24 * 3600e3) { await mark(); await syncTeams(); await syncSchedule(); await done(); return 'full'; }
     const lc = await getSetting('last_sync_current');
-    if (!lc || Date.now() - new Date(lc.at).getTime() > maxAgeMin * 60e3) { await syncCurrent(); return 'current'; }
+    if (!lc || Date.now() - new Date(lc.at).getTime() > maxAgeMin * 60e3) { await mark(); await syncCurrent(); await done(); return 'current'; }
   } catch (e) { console.error('Sync fehlgeschlagen', e.message); try { await setSetting('last_sync_fail', { at: new Date().toISOString(), error: e.message }); } catch {} return 'error: ' + e.message; }
   return 'skip';
 }

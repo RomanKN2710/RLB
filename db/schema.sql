@@ -276,3 +276,6 @@ create unique index if not exists hall_of_fame_season_manager on hall_of_fame(se
 -- Nachgeführt am 24.11.2026 (src/lib/db.js ensureSchema)
 alter table trades add column if not exists lineup_snapshot jsonb;
 alter table players add column if not exists extra_pos_denied text[] not null default '{}';
+alter table results add column if not exists club text;   -- Verein des Spielers in dieser Runde (ein späterer Vereinswechsel ändert frühere Runden nicht)
+alter table kicker_pages add column if not exists vorlaeufig boolean not null default false;   -- vor Spielende gesendet
+alter table kicker_pages add column if not exists match_id int;

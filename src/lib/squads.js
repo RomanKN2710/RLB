@@ -13,6 +13,8 @@ export async function applySquads(squads, b, source = 'kicker') {
   const clubOf = {}; for (const [id, slug] of Object.entries(clubSlugs)) clubOf[slug] = id;
   const before = await q('select slug, name, club, squad_pos, in_squad from bl_players');
   const prev = {}; before.forEach(p => prev[p.slug] = p);
+  // Plausibilität: ein nur halb gelesener Kader darf niemanden zum Abgang machen
+  for (const [cslug, list] of Object.entries(squads)) if ((list || []).length < 16) throw new Error(`Kader ${clubOf[cslug] || cslug}: nur ${(list || []).length} Spieler gelesen – Seite unvollständig, nichts übernommen`);
   const seen = new Set(); const log = []; const now = new Date(); const rows = [];
   for (const [cslug, list] of Object.entries(squads)) {
     const club = clubOf[cslug] || cslug;
@@ -36,13 +38,16 @@ export async function applySquads(squads, b, source = 'kicker') {
       on conflict(slug) do update set name=excluded.name, first_name=excluded.first_name, club=excluded.club, squad_pos=excluded.squad_pos, pos=coalesce(bl_players.pos, excluded.pos), in_squad=true, seen_at=excluded.seen_at, left_at=null, updated_at=now()`, params);
   }
   // Abgänge: vorher im Kader, jetzt in keinem
-  if (Object.keys(squads).length >= 18) {
+  const abgaenge = before.filter(p => p.in_squad && !seen.has(p.slug));
+  if (Object.keys(squads).length >= 18 && abgaenge.length > 60) log.push({ type: 'hinweis', slug: '-', name: `${abgaenge.length} Spieler fehlen in den neuen Kadern – das ist unplausibel viel, Abgänge nicht gebucht (Kaderseiten prüfen)` });
+  else if (Object.keys(squads).length >= 18) {
     for (const p of before) if (p.in_squad && !seen.has(p.slug)) { await q('update bl_players set in_squad=false, left_at=$2 where slug=$1', [p.slug, now]); log.push({ type: 'abgang', slug: p.slug, name: p.name, club_from: p.club }); }
   }
   // Betroffene RLB-Spieler markieren
   const active = (b?.playersArr || []).filter(p => p.status === 'active');
   for (const l of log) {
-    const hit = active.find(o => clubMatches(l.club_from ? clubSlugs[l.club_from] || l.club_from : clubSlugs[l.club_to] || l.club_to, o.club) && playerMatches(l.slug, l.name, o.name));
+    if (l.type === 'hinweis') { l.rlb_player_id = null; continue; }
+    const hit = active.find(o => o.kicker_slug && o.kicker_slug === l.slug) || active.find(o => !o.kicker_slug && clubMatches(l.club_from ? clubSlugs[l.club_from] || l.club_from : clubSlugs[l.club_to] || l.club_to, o.club) && playerMatches(l.slug, l.name, o.name));
     l.rlb_player_id = hit ? hit.id : null;
     await q('insert into squad_log(type,slug,name,club_from,club_to,pos_from,pos_to,rlb_player_id) values($1,$2,$3,$4,$5,$6,$7,$8)', [l.type, l.slug, l.name, l.club_from || null, l.club_to || null, l.pos_from || null, l.pos_to || null, l.rlb_player_id]);
   }
@@ -66,7 +71,8 @@ export async function syncSquads(b, fetcher = fetchHtml) {
 export async function rlbLeavers(b) {
   const gone = await q('select * from bl_players where in_squad=false and left_at is not null');
   const active = b.playersArr.filter(p => p.status === 'active'); const out = [];
-  for (const g of gone) { const hit = active.find(o => clubMatches(clubSlugs[g.club] || g.club || '', o.club) && playerMatches(g.slug, g.name, o.name)); if (hit) out.push({ player: hit, since: g.left_at }); }
+  // zuerst über die kicker-Kennung (eindeutig), erst dann über Verein und Namen: ein abgehender Namensvetter trifft sonst den falschen RLB-Spieler
+  for (const g of gone) { const hit = active.find(o => o.kicker_slug && o.kicker_slug === g.slug) || active.find(o => !o.kicker_slug && clubMatches(clubSlugs[g.club] || g.club || '', o.club) && playerMatches(g.slug, g.name, o.name)); if (hit) out.push({ player: hit, since: g.left_at }); }
   return out;
 }
 

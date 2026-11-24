@@ -27,13 +27,16 @@ export async function roundCheck(round, b, d) {
     const c1 = kader.filter(p => p.contract === '1J').length, c2 = kader.filter(p => p.contract === '2J').length;
     if (c2 > 2 || c1 + c2 > 4) add('warn', `${m.name}: ${c1 + c2} Verträge (${c2} über 2 Jahre) – erlaubt sind 4, davon 2 über 2 Jahre`);
   }
+  // kicker-Seiten, die vor Spielende gesendet wurden, zeigen einen Zwischenstand
+  if (round.type !== 'nachtrag') for (const m of (inbox?.matches || []).filter(x => x.vorlaeufig)) add('bad', `kicker-Seite «${m.title}» kam vor Spielende – nach dem Abpfiff nochmals öffnen (sonst zählt ein Zwischenstand)`);
   // 2) Spiele
   if (passed && !allDone) add('warn', `Spiele: ${finished} von ${matches.length} beendet`);
   // 3) kicker-Import und Bericht
   if (passed && allDone) {
     if (!imp) add(Object.keys(d.results).length ? 'warn' : 'bad', (Object.keys(d.results).length ? 'kein kicker-Import gespeichert (Werte stammen aus anderer Quelle)' : 'kicker-Werte noch nicht importiert') + (inbox && inbox.n ? ` (Eingang: ${inbox.n}/9 Spiele${inbox.elf ? ' + Elf des Tages' : ''})` : ' (Eingang leer)'));
     else {
-      if (imp.games != null && imp.games < 9 && round.type !== 'nachtrag') add('bad', `kicker-Import: nur ${imp.games} von 9 Spielen`);
+      const soll = (round.match_ids || []).length || (round.type === 'nachtrag' ? 1 : 9);   // ein abgespaltenes Spiel zählt in seiner Nachtragsrunde
+      if (imp.games != null && imp.games < soll) add('bad', `kicker-Import: nur ${imp.games} von ${soll} Spielen`);
       if (imp.games == null) add('warn', 'kicker-Import stammt aus der alten Version ohne Vollständigkeitsbericht – bei Gelegenheit neu importieren');
       const c = imp.counts || {}; if (c.nicht_gefunden) add('bad', `kicker-Import: ${c.nicht_gefunden} Spieler «Name prüfen»`); if (c.spiel_fehlt) add('bad', `kicker-Import: ${c.spiel_fehlt} Spieler ohne Spiel`); if (c.verein_unbekannt) add('bad', `kicker-Import: ${c.verein_unbekannt} Spieler mit unbekanntem Verein`);
       // Elf-des-Tages-Fehler ist nur ein Hinweis, wenn die Elf von Hand vollständig erfasst ist (Prüfung unter 4)

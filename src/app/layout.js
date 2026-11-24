@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getUser } from '@/lib/auth';
 import { logoutAction } from '@/actions';
 import { maybeSync } from '@/lib/oldb';
+import { waitUntil } from '@vercel/functions';
 import { openRound } from '@/lib/data';
 import { fmtDt } from '@/components/ui';
 import RlbLogo from '@/components/RlbLogo';
@@ -14,7 +15,8 @@ export const dynamic = 'force-dynamic';
 export default async function RootLayout({ children }) {
   const user = await getUser();
   let open = null;
-  if (user) { await maybeSync(60); open = await openRound(); }
+  // Spielplan-Sync im Hintergrund: die Seite wartet nicht darauf (ein hängender Dienst hält sonst jede Seite auf)
+  if (user) { try { waitUntil(maybeSync(60)); } catch { /* ausserhalb von Vercel: ohne Hintergrundlauf */ maybeSync(60).catch(() => {}); } open = await openRound(); }
   return (
     <html lang="de"><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" /></head>
       <body>

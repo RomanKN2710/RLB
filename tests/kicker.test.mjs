@@ -103,3 +103,45 @@ describe('parseSquadPage', () => {
     ]);
   });
 });
+
+import { playerMatches, resolveKickerPlayer, clubMatches } from '../src/lib/kicker-match.js';
+import { competitionOf } from '../src/lib/kicker-parse.js';
+import kickerClubs from '../src/lib/kicker-clubs.js';
+import { entryValues } from '../src/lib/rules.js';
+
+describe('Namensabgleich kicker ↔ RLB (Review 24.11.2026)', () => {
+  test('ganze Namensteile: Ilic ist nicht Milic, Baum nicht Nussbaum', () => {
+    assert.equal(playerMatches('danilho-milic', 'Milic', 'Ilic'), false); assert.equal(playerMatches('paul-nussbaum', 'Nussbaum', 'Baum'), false);
+    for (const [slug, name, our] of [['nico-schlotterbeck', 'Schlotterbeck', 'Schlotterbeck N.'], ['said-el-mala', 'El Mala', 'El Mala'], ['jonas-heuer-fernandes', 'Heuer Fernandes', 'Heuer Fernandes'], ['luis-diaz', 'L. Diaz', 'Luis Diaz'], ['emmanuel-latte-lath', 'Latte Lath', 'Latte Lath'], ['florian-grillitsch', 'Grillitsch', 'Grillitsch'], ['marvin-gruell', 'Grüll', 'Grull']]) assert.equal(playerMatches(slug, name, our), true, our);
+  });
+  test('Vereinsliste als Modul entspricht db/seed/kicker-clubs.json', () => { assert.deepEqual(kickerClubs, JSON.parse(fs.readFileSync(new URL('../db/seed/kicker-clubs.json', import.meta.url), 'utf8'))); });
+  test('kicker-Kennung gilt über Vereine hinweg: Vereinswechsel wird erkannt statt Nullwerte zu schreiben', () => {
+    const p = { id: 'x', name: 'Stage', club: 'Bremen', kicker_slug: 'jens-stage', base_pos: 'M', extra_pos: [] };
+    const r = resolveKickerPlayer({ slug: 'jens-stage', name: 'Stage', team: 'vfb-stuttgart' }, [p], null);
+    assert.equal(r.player.id, 'x'); assert.equal(r.clubChanged, true);
+    assert.equal(resolveKickerPlayer({ slug: 'jens-stage', name: 'Stage', team: 'werder-bremen' }, [p], null).clubChanged, undefined);
+    assert.equal(clubMatches('vfb-stuttgart', 'Stuttgart'), true);
+  });
+  test('ohne Kennung bleibt der Abgleich auf den Verein beschränkt', () => {
+    const p = { id: 'x', name: 'Stage', club: 'Bremen', kicker_slug: null, base_pos: 'M', extra_pos: [] };
+    assert.equal(resolveKickerPlayer({ slug: 'jens-stage', name: 'Stage', team: 'vfb-stuttgart' }, [p], null), null);
+  });
+});
+describe('Nur Bundesliga der laufenden Saison im Eingang', () => {
+  const page = u => `<html><head><link rel="canonical" href="${u}"></head></html>`;
+  test('Wettbewerb und Saison aus der Adresse', () => {
+    assert.deepEqual(competitionOf(page('https://www.kicker.de/bremen-gegen-dortmund-2026-bundesliga-4862091/aufstellung')), { wettbewerb: 'bundesliga', jahr: 2026 });
+    assert.equal(competitionOf(page('https://www.kicker.de/bayern-gegen-leverkusen-2026-dfb-pokal-4934123/aufstellung')).wettbewerb, 'dfb-pokal');
+    assert.equal(competitionOf('', 'https://www.kicker.ch/a-gegen-b-2026-2-bundesliga-493412/aufstellung').wettbewerb, '2-bundesliga');
+    assert.equal(competitionOf('', 'https://www.kicker.de/a-gegen-b-2025-bundesliga-493412/aufstellung').jahr, 2025);
+    assert.equal(competitionOf('<html></html>'), null);
+  });
+});
+describe('Verein der Runde (results.club)', () => {
+  const clubRes = { Bremen: { pts: 3, cs: true }, Stuttgart: { pts: 0, cs: false } };
+  test('nach einem Vereinswechsel zählt die frühere Runde mit dem damaligen Verein', () => {
+    const player = { club: 'Stuttgart' };
+    assert.equal(entryValues(player, 'V', { start: 1, club: 'Bremen' }, clubRes).punkte, 3); assert.equal(entryValues(player, 'V', { start: 1, club: 'Bremen' }, clubRes).shutout, 1);
+    assert.equal(entryValues(player, 'V', { start: 1 }, clubRes).punkte, 0);
+  });
+});

@@ -21,15 +21,14 @@ export async function POST(req) {
   let r; try { r = await savePage(html, { url, matchday: Number(sp.get('matchday')) || null }); }
   catch (e) { return new NextResponse('Fehler: ' + e.message, { status: 422, headers: CORS }); }
   const head = r.kind === 'elf' ? `Elf des Tages Spieltag ${r.matchday}: ${r.elf?.n || 0} Spieler${r.elf?.sdt ? ', Spieler des Tages ' + r.elf.sdt : ', Spieler des Tages nicht erkannt'}${(r.elf?.n || 0) < 11 ? ` – nur ${r.elf?.n || 0} erkannt (${r.elf?.links || 0} Spielerlinks), bitte die Seite melden` : ''}` : `${r.title} – Spieltag ${r.matchday}`;
-  const stand = `Eingang ${r.status.n}/9 Spiele${r.status.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'}`;
+  const stand = `Eingang ${r.status.n}/9 Spiele${r.status.elf ? ' + Elf des Tages' : ', Elf des Tages fehlt'}${r.vorlaeufig ? ' · VORLÄUFIG: das Spiel ist noch nicht zu Ende – nach dem Abpfiff diese Seite nochmals öffnen' : ''}`;
   // Direkt importieren: die Werte stehen sofort in der Datenbank, der Admin muss nichts mehr anklicken
   if (sp.get('noimport')) return new NextResponse(`${head} gespeichert · ${stand}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
-  const { one } = await import('@/lib/db'); const rd = await one("select status from rounds where type='regulaer' and matchday=$1", [r.matchday]);
-  if (rd && rd.status === 'final') return new NextResponse(`${head} gespeichert · ${stand} · Spieltag ${r.matchday} ist abgeschlossen, nicht importiert – falls gewollt die Runde in der App wieder öffnen und «Eingang erneut importieren»`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
   try { const u = await getUser(); const imp = await importInbox(r.matchday, { userId: u ? u.id : null, auto: true });
     const probs = imp.errors.length ? ` · ${imp.errors.length} Problem(e): ${imp.errors.slice(0, 2).join(' · ')}${imp.errors.length > 2 ? ' …' : ''}` : '';
     return new NextResponse(`${head} ✓ importiert · ${stand} · ${importSummary(imp).join(', ')}${probs}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }
-  catch (e) { return new NextResponse(`${head} gespeichert · ${stand} · Import fehlgeschlagen: ${e.message} – in der App «Eingang importieren»`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }
+  catch (e) { if (/ist abgeschlossen/.test(e.message)) return new NextResponse(`${head} gespeichert · ${stand} · ${e.message}`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } });
+    return new NextResponse(`${head} gespeichert · ${stand} · Import fehlgeschlagen: ${e.message} – in der App «Eingang erneut importieren»`, { headers: { ...CORS, 'content-type': 'text/plain; charset=utf-8' } }); }
 }
 /** Stand des Eingangs: GET ?matchday=N */
 export async function GET(req) {
