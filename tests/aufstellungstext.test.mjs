@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLineupText, findPlayer } from '../src/lib/aufstellungstext.js';
+import { parseLineupText, findPlayer, chunkOf, CLUBWORDS, parseMailDate } from '../src/lib/aufstellungstext.js';
 import fs from 'node:fs';
 import { managers, kader, kaderOf, mid, posts, postsBetween, blogger, post } from './helpers/blog-fixture.mjs';
 
@@ -154,4 +154,29 @@ describe('Handy-Blog Runde 7 (23.10.2026)', () => {
   test('Pädi: 4-4-2 mit «anstelle»-Wechseln, 11 Spieler', () => { const x = block(res, 'Pädi'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.found.length, 11); assert.ok(names(x).includes('Prömel') && names(x).includes('Maksimovic') && !names(x).includes('Conté') && !names(x).includes('Nkunku')); });
   test('Dani: «Fabio Viera HSV» ist Vieira, nicht Fabio Silva – 11 Spieler', () => { const x = block(res, 'Dani'); assert.ok(x.ok, x.problems.join('; ')); assert.equal(x.found.length, 11); assert.ok(names(x).includes('Vieira') && names(x).includes('Fabio Silva')); });
   test('findPlayer: Nachname vor Vornamen', () => { assert.deepEqual(findPlayer('Fabio Viera', kader[dani]).hits.map(p => p.name), ['Vieira']); assert.deepEqual(findPlayer('Fabio Silva', kader[dani]).hits.map(p => p.name), ['Fabio Silva']); });
+});
+
+describe('Review 24.11.2026: Namen nur als ganze Namensteile', () => {
+  const k = ['Kim', 'Ito', 'Kane', 'Baum', 'Hack', 'Luis Diaz', 'Fabio Silva', 'Fabio Vieira', 'Ullrich', 'Gregoritsch', 'El Aynaoui', 'Latte Lath'].map(n => ({ id: n.toLowerCase().replace(/\s+/g, '-'), name: n, base_pos: 'M', alias: [] }));
+  const hit = n => findPlayer(n, k).hits.map(p => p.name);
+  test('längere fremde Namen treffen keinen kurzen Kaderspieler', () => { for (const n of ['Kimmich', 'Mitoma', 'Kanemoto', 'Baumgartner', 'Hackl']) assert.deepEqual(hit(n), [], n); });
+  test('gemeinsamer Vorname bei anderem Nachnamen zählt nicht', () => { assert.deepEqual(hit('Luis Vazquez'), []); assert.deepEqual(hit('Fabio Viera'), ['Fabio Vieira']); });
+  test('Tippfehler, Teilnamen und Bindestriche gehen weiter', () => { assert.deepEqual(hit('Ulrich'), ['Ullrich']); assert.deepEqual(hit('Gregrotisch'), ['Gregoritsch']); assert.deepEqual(hit('Aynaoui'), ['El Aynaoui']); assert.deepEqual(hit('Latte-Lath'), ['Latte Lath']); assert.deepEqual(hit('Silva'), ['Fabio Silva']); });
+  test('«M. Beier» ist ein Vorname, keine Position', () => { assert.deepEqual(chunkOf('M. Beier', CLUBWORDS).pos, []); assert.deepEqual(chunkOf('M Beier', CLUBWORDS).pos, ['M']); assert.deepEqual(chunkOf('V: Anton', CLUBWORDS).pos, ['V']); });
+  test('Zürcher Zeit im Winter', () => { assert.equal(parseMailDate('27.11.2026 18:08').toISOString(), '2026-11-27T17:08:00.000Z'); assert.equal(parseMailDate('23. Oktober 2026 um 18:08').toISOString(), '2026-10-23T16:08:00.000Z'); });
+});
+
+describe('Review 24.11.2026: Abschnitte und Manager-Erkennung', () => {
+  const k = kader[mid('Roman')]; const pick = (pos, n) => k.filter(p => p.base_pos === pos).slice(0, n);
+  const eleven = [...pick('T', 1), ...pick('V', 4), ...pick('M', 4), ...pick('S', 2)]; const bench = k.filter(p => !eleven.includes(p)).slice(0, 3);
+  test('Ersatzbank mit Leerzeilen (Mail-Format) gehört nicht zur Elf', () => {
+    const text = `Freitag, 27. November 2026\nRoman Runde 11\n\n${eleven.map(p => `${p.base_pos} ${p.name}`).join('\n\n')}\n\nErsatzbank:\n\n${bench.map(p => `${p.base_pos} ${p.name}`).join('\n\n')}\n\nEingestellt von MARKADONA um 12:00\n`;
+    const x = parseLineupText(text, managers, kaderOf, { roundNumbers: [110, 11] }).blocks.find(b => b.name === 'Roman');
+    assert.ok(x && x.ok, x?.problems?.join('; ')); assert.equal(Object.keys(x.entries).length, 11);
+  });
+  test('«V David Raum» in der Aufstellung macht den Post nicht zu Davids Post', () => {
+    const arbi = kader[mid('Arbi')];
+    const text = `Freitag, 27. November 2026\nAufstellung\n\n${arbi.slice(0, 11).map(p => `${p.base_pos} ${p.name === 'Raum' ? 'David Raum' : p.name}`).join('\n')}\nBerisha\nEingestellt von MARKADONA um 12:00\n`;
+    assert.deepEqual(parseLineupText(text, managers, kaderOf, { roundNumbers: [110, 11] }).blocks.map(b => b.name), ['Arbi']);
+  });
 });

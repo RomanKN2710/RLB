@@ -114,6 +114,12 @@ export async function parseBidPaste(roundId, text) {
   const pool = await D.freeAgents(b); const { playerMatches } = await import('@/lib/kicker');
   const prevRound = await one('select * from rounds where number < $1 order by number desc limit 1', [round.number]);
   const prevRel = prevRound ? await q("select * from transfers where type='entlassung' and round_id=$1", [prevRound.id]) : [];
+  // Ein Post, dessen Gebote schon in der Vorrunde gewertet wurden (dort verspätet oder nach der Deadline gepostet), ist kein neues Gebot
+  const altBids = prevRound ? await q("select * from bids where round_id=$1 and status<>'sealed'", [prevRound.id]) : [];
+  const same = (a, c) => { const x = R.norm(a), y = R.norm(c); return !!x && !!y && (x === y || x.endsWith(y) || y.endsWith(x)); };
+  parsed.blocks = parsed.blocks.filter(x => { const alt = altBids.filter(a => a.manager_id === x.managerId);
+    if (!alt.length || !x.bids.length || !x.bids.every(bd => alt.some(a => same(a.player_name, bd.player_name) && Number(a.price) === bd.price))) return true;
+    parsed.skipped.push(`${x.name}: «${x.title}» – diese Gebote wurden schon in ${prevRound.label} gewertet`); return false; });
   for (const x of parsed.blocks) {
     const budget = await D.budgetLeft(x.managerId); x.budget = budget;
     for (const bid of x.bids) {
@@ -149,18 +155,21 @@ export async function applyBidPaste(u, roundId, text) {
   for (const x of parsed.blocks) {
     if (!x.ok) { log.push(`${x.name}: nicht übernommen (${x.problems.join('; ')})`); continue; }
     if (x.resolved) { log.push(`${x.name}: Gebote schon aufgelöst, nicht geändert`); continue; }
-    await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [round.id, x.managerId]);
     // Notizen (bedingter Wechsel ohne Kauf, Frist) bleiben am Gebot, damit sie beim Aufloesen und in der Tabelle sichtbar sind
     const note = [x.fallback ? `Falls kein Zuschlag: ${x.fallback.in.name} für ${x.fallback.out.name} einwechseln (kostenpflichtig, von Hand)` : null, x.spaet ? 'nach der Deadline eingegangen' : null].filter(Boolean).join(' · ') || null;
     const groups = x.groups || [{ gruppe: 1, maxWins: x.maxWins, releases: x.releases }];
+    await tx(async t => {
+    await t.q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [round.id, x.managerId]);
     for (const bd of x.bids) { const g = groups.find(y => y.gruppe === (bd.gruppe || 1)) || groups[0];
-      await q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,source,note,gruppe) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,'blog',$12,$13)`,
+      await t.q(`insert into bids(round_id,manager_id,player_name,club,pos,price,release_player_id,swap_out_player_id,status,created_at,priority,max_wins,release_order,source,note,gruppe) values($1,$2,$3,$4,$5,$6,$7,$8,'sealed',now(),$9,$10,$11,'blog',$12,$13)`,
         [round.id, x.managerId, bd.poolName || bd.player_name, bd.club, bd.pos, bd.price, bd.release?.id || null, bd.swapOut?.id || null, bd.priority, g.maxWins, g.releases.map(p => p.id), note, g.gruppe]); }
+    });
     const gtxt = g => { const mine = x.bids.filter(bd => (bd.gruppe || 1) === g.gruppe);
       return `${groups.length > 1 ? `Gebot Nr. ${g.nr ?? g.gruppe} ` : ''}(max. ${g.maxWins}): ${mine.map(bd => `${bd.priority}. ${bd.pos} ${bd.poolName || bd.player_name} ${bd.price}${bd.release ? ' −' + bd.release.name : ''}${bd.swapOut ? ' ⇄' + bd.swapOut.name : ''}`).join(', ')}${g.releases.length ? ' · Entlassungen: ' + g.releases.map(p => p.name).join(', ') : ''}`; };
     n++; log.push(`${x.name}: ${x.bids.length} Gebot(e) gespeichert ${groups.map(gtxt).join(' | ')}${note ? ' · ' + note : ''}`);
   }
   if (parsed.unclear.length) log.push('Unklar: ' + parsed.unclear.join('; '));
+  if (parsed.skipped?.length) log.push('Übersprungen: ' + parsed.skipped.join('; '));
   const prevLog = (await getSetting(`bid_paste_${roundId}`)) || { runs: [] };
   await setSetting(`bid_paste_${roundId}`, { runs: [...(prevLog.runs || []).slice(-9), { at: new Date().toISOString(), by: u.name || u.email, n, log }] });
   await audit(u.id, 'bid_paste', { roundId, n, log });

@@ -4,6 +4,7 @@
    einem Manager und – anhand der Deadlines – einer Runde zugeordnet. */
 import { createHash } from 'node:crypto';
 import { q, one } from './db';
+import { zurich, parseMailDate } from './aufstellungstext.js';
 
 export async function ensureTable() {
   await q(`create table if not exists blog_posts (
@@ -42,7 +43,7 @@ export function parseBlogText(text, { defaultDate = null } = {}) {
     if (em) {
       const lines = buf.map(x => x.replace(/\s+$/, '')); while (lines.length && !lines[0].trim()) lines.shift(); while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
       if (lines.length) { const title = lines[0].trim(); const body = lines.slice(1).join('\n').replace(/^\n+/, '').trim();
-        posts.push({ title, author: em[1].trim(), posted_at: curDate ? `${curDate}T${em[2].padStart(2, '0')}:${em[3]}:00+02:00` : null, body: body || title }); }
+        posts.push({ title, author: em[1].trim(), posted_at: curDate ? zurich(curDate, em[2], em[3]).toISOString() : null, body: body || title }); }
       buf = []; continue;
     }
     if (/^(Keine Kommentare|\d+ Kommentare?|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|In Facebook freigeben|Auf Pinterest teilen)/i.test(line)) continue;
@@ -50,7 +51,7 @@ export function parseBlogText(text, { defaultDate = null } = {}) {
   }
   // Text endet mitten im letzten Post (ohne Fusszeile): trotzdem als Post ablegen
   const rest = buf.map(x => x.replace(/\s+$/, '')); while (rest.length && !rest[0].trim()) rest.shift(); while (rest.length && !rest[rest.length - 1].trim()) rest.pop();
-  if (rest.length >= 2) posts.push({ title: rest[0].trim(), author: null, posted_at: curDate ? `${curDate}T23:59:00+02:00` : null, body: rest.slice(1).join('\n').replace(/^\n+/, '').trim() });
+  if (rest.length >= 2) posts.push({ title: rest[0].trim(), author: null, posted_at: curDate ? zurich(curDate, 23, '59').toISOString() : null, body: rest.slice(1).join('\n').replace(/^\n+/, '').trim() });
   return posts;
 }
 
@@ -72,8 +73,8 @@ export function classify(p, managers, rounds) {
   if (!manager && p.author) { for (const m of managers) if (hasName(p.author, m.name)) { manager = m; break; } }
   // Massgebliches Datum: bei weitergeleiteten Gebots-Mails das Datum der Mail ("Von: …, Freitag, 4. September 2026, 12:13")
   let when = p.posted_at ? new Date(p.posted_at).getTime() : null;
-  const vm = body.match(/^(?:Von|Gesendet):.*?(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4}),?(?:\s*um)?\s*(\d{1,2}):(\d{2})/m);
-  if (vm && MONTHS[vm[2].toLowerCase()]) when = new Date(`${vm[3]}-${String(MONTHS[vm[2].toLowerCase()]).padStart(2, '0')}-${String(vm[1]).padStart(2, '0')}T${vm[4].padStart(2, '0')}:${vm[5]}:00+02:00`).getTime();
+  // früheste Mail-Kopfzeile im Text (Original-Mail), Zürcher Zeit
+  for (const l of body.split('\n').slice(0, 20)) { const hm = l.match(/^(?:Von|Gesendet|Sent|Date|Datum)\s*:\s*(.+)$/i); const d = hm && parseMailDate(hm[1]); if (d && (!when || d.getTime() < when || !p.posted_at)) when = d.getTime(); }
   let round = null;
   if (when && (kind === 'aufstellung' || kind === 'gebot')) round = rounds.find(r => r.deadline && new Date(r.deadline).getTime() >= when) || null;
   return { kind, manager_id: manager ? manager.id : null, round_number: round ? round.number : null };

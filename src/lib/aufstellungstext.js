@@ -18,7 +18,8 @@ export function chunkOf(raw, clubWords) {
   let s = raw.replace(/^[\s\-–•*·>#]+/, '').replace(/^\d+[.)]?\s+/, '').trim(); let pos = [];
   const suf = s.match(/\(\s*([A-Za-zÄÖÜäöü\/]{1,12})\b[^)]*\)\s*$/); if (suf && posList(suf[1]).length) { pos = posList(suf[1]); s = s.slice(0, suf.index).trim(); }
   else s = s.replace(/\([^)]*\)/g, ' ').trim();
-  const pre = s.match(/^([A-Za-zÄÖÜäöü\/]{1,12})\s*[:.)\-–\t ]\s*(.+)$/); if (pre && !pos.length && posList(pre[1]).length && pre[1].length <= 3 + (pre[1].includes('/') ? 2 : 0)) { pos = posList(pre[1]); s = pre[2].trim(); }
+  const initial = /^\p{Lu}\.\s+\p{Lu}\p{Ll}/u.test(s);   // «M. Beier» ist ein Vorname, keine Position
+  const pre = s.match(/^([A-Za-zÄÖÜäöü\/]{1,12})\s*[:.)\-–\t ]\s*(.+)$/); if (pre && !initial && !pos.length && posList(pre[1]).length && pre[1].length <= 3 + (pre[1].includes('/') ? 2 : 0)) { pos = posList(pre[1]); s = pre[2].trim(); }
   const name = words(s).filter(w => !clubWords.has(norm(w)) && !FILLER.has(norm(w)) && !/^\d+[.)]?$/.test(w)).join(' ').replace(/[:;,.]+$/, '').trim();
   return { pos, name };
 }
@@ -31,27 +32,40 @@ const lev = (a, b) => { const m = a.length, n = b.length; if (!m || !n) return M
 /** Spieler des Kaders finden, auf den ein Name passt: exakt, alle Namensteile, ein Namensteil, zuletzt Tippfehler-tolerant. */
 export function findPlayer(name, kader) {
   const n = norm(name); if (!n || n.length < 3) return { hits: [], how: '' };
-  const parts = p => words(p.name).map(norm).filter(t => t.length >= 3);
+  // Ganze Namensteile vergleichen, nie Teilzeichenfolgen: «Kimmich» ist nicht Kim, «Baumgartner» nicht Baum
+  const toks = v => String(v || '').split(/[^\p{L}\p{N}]+/u).map(norm).filter(Boolean);
+  const parts = p => toks(p.name).filter(t => t.length >= 3);
   const exact = kader.filter(p => norm(p.name) === n); if (exact.length) return { hits: exact, how: 'exakt' };
-  const all = kader.filter(p => { const ts = parts(p); return ts.length && ts.every(t => n.includes(t)); }); if (all.length) return { hits: all, how: 'Name' };
-  const chunkParts = words(name).map(norm).filter(t => t.length >= 3);
+  const inToks = toks(name);
+  const all = kader.filter(p => { const ts = parts(p); return ts.length && ts.every(t => inToks.includes(t)); }); if (all.length) return { hits: all, how: 'Name' };
+  const chunkParts = inToks.filter(t => t.length >= 3);
   // Nachname zuerst: «Fabio Viera» ist Vieira (Nachname mit Tippfehler), nicht Fabio Silva (nur der Vorname passt)
   const last = chunkParts[chunkParts.length - 1]; const lastOf = p => { const ts = parts(p); return ts[ts.length - 1]; };
   const surname = last ? kader.filter(p => lastOf(p) === last) : []; if (surname.length) return { hits: surname, how: 'Nachname' };
-  const some = kader.filter(p => parts(p).some(t => chunkParts.includes(t)) || (n.length >= 5 && norm(p.name).includes(n)));
-  if (some.length) { const near = last && last.length >= 5 ? kader.filter(p => { const t = lastOf(p); return t && lev(last, t) <= (Math.min(last.length, t.length) >= 8 || (Math.min(last.length, t.length) >= 6 && last[0] === t[0]) ? 2 : 1); }) : [];
-    return near.length ? { hits: near, how: 'ähnlich' } : { hits: some, how: 'Namensteil' }; }
+  // Tippfehler nur zwischen längeren Namen (beide ≥ 5 Zeichen): «Hackl» ist nicht Hack
+  const close = (c, t) => c.length >= 5 && t.length >= 5 && lev(c, t) <= (Math.min(c.length, t.length) >= 8 || (Math.min(c.length, t.length) >= 6 && c[0] === t[0]) ? 2 : 1);
+  const near = last ? kader.filter(p => { const t = lastOf(p); return t && close(last, t); }) : []; if (near.length) return { hits: near, how: 'ähnlich' };
+  // Ein Namensteil: der Nachname des Spielers kommt vor, oder der Schnipsel ist ein einzelnes Wort (Vorname allein, «Miguel»).
+  // Ein gemeinsamer Vorname bei anderem Nachnamen zählt nicht: «Luis Vazquez» ist nicht Luis Diaz.
+  const some = kader.filter(p => { const ts = parts(p); return chunkParts.includes(ts[ts.length - 1]) || (chunkParts.length === 1 && ts.includes(chunkParts[0])) || (n.length >= 5 && norm(p.name).includes(n)); });
+  if (some.length) return { hits: some, how: 'Namensteil' };
   // Voller kicker-Name als Alias ("Miguel" heisst bei kicker Miguel Gutierrez): ein Aliasteil (>= 4 Zeichen) trifft
   const alias = kader.filter(p => (p.alias || []).some(t => t.length >= 4 && chunkParts.includes(t))); if (alias.length) return { hits: alias, how: 'kicker-Name' };
-  // Tippfehler: ein Namensteil des Schnipsels nahe an einem Namensteil des Spielers (Ulrich/Ullrich, Gregrotisch/Gregoritsch)
-  if (chunkParts.length <= 3) { const fuzzy = kader.filter(p => parts(p).some(t => chunkParts.some(c => c.length >= 5 && lev(c, t) <= (Math.min(c.length, t.length) >= 8 || (Math.min(c.length, t.length) >= 6 && c[0] === t[0]) ? 2 : 1)))); if (fuzzy.length) return { hits: fuzzy, how: 'ähnlich' }; }
+  // Tippfehler in einem einzelnen Wort gegen irgendeinen Namensteil (Gregrotisch/Gregoritsch); bei mehreren Wörtern zählt nur der Nachname (oben)
+  if (chunkParts.length === 1) { const fuzzy = kader.filter(p => parts(p).some(t => close(chunkParts[0], t))); if (fuzzy.length) return { hits: fuzzy, how: 'ähnlich' }; }
   return { hits: [], how: '' };
 }
 
+// Rundenangabe im Titel: «Runde 7», «R6», «7. Spieltag». «für 2 Spieler» oder «für 3-4-3» ist keine (das r von «für» zählt nicht).
+export const ROUND_IN_TITLE = /(?<![\p{L}])(?:runde|spieltag|r)\s*(\d+)(?![\d-])|(\d+)\.\s*spieltag/iu;
 const NOISE = /^(hi|hallo|hoi|salut|public|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|januar|februar|maerz|märz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|aufstellung|auswechslung|einwechslung|runde|spieltag|wechsel|system|update|sollte|erhalte|falls/i;
 export const SIG = /^(freundliche gr|viele gr|liebe gr|vielen dank|besten dank|danke|gruss|grüss|gruess|merci|lg\b|mfg|vg\b|this e-?mail|---|uploaded image|eingestellt von)/i;
 const UI = /^(?:[‹›«»]+$|(?:Rotissery League Bundesliga|Improving the Bundesliga experience|Web-Version anzeigen|Powered by Blogger|Uploaded Image|Keine Kommentare|\d+ Kommentare?|Kommentar veröffentlichen|Diesen Post per E-Mail versenden|BlogThis!|Auf X teilen|Auf Twitter teilen|In Facebook freigeben|Auf Pinterest teilen|Labels?:|Neuerer Post|Älterer Post|Startseite|Abonnieren|Posts? kommentieren|Share|Teilen)\b)/i;
-const ENDE = /^(?:Eingestellt von\s+)?(\p{L}[\p{L}\s.'-]{0,40}?)\s+um\s+(\d{1,2}):(\d{2})\s*$/iu;
+const ENDE_RE = /^(Eingestellt von\s+)?(\p{L}[\p{L}\s.'-]{0,40}?)\s+um\s+(\d{1,2}):(\d{2})\s*$/iu;
+const KEIN_AUTOR = /\b(stand|heute|gestern|morgen|bis|ab|deadline|sp[äa]testens|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|anpfiff|spiel|abgabe|frist|gesendet)\b/i;
+// Fusszeile eines Posts: «Eingestellt von X um HH:MM» (Desktop) oder «X um HH:MM» (Handy, höchstens zwei Wörter, kein Satzteil wie «Stand Freitag um 18:30»)
+const ENDE = { test: l => !!endeOf(l) };
+function endeOf(l) { const m = String(l || '').match(ENDE_RE); if (!m) return null; if (!m[1] && (m[2].trim().split(/\s+/).length > 2 || KEIN_AUTOR.test(m[2]))) return null; return [m[0], m[2], m[3], m[4]]; }
 // Spitznamen und buergerliche Namen, wie sie im Blog vorkommen (Blog-Konto MARKADONA postet fuer alle: kein Rueckschluss)
 const NICK = { rofe: 'Röfe', rolf: 'Röfe', stauffer: 'Röfe', daniel: 'Dani', allenspach: 'Dani', patrick: 'Pädi', duss: 'Pädi', fehlmann: 'Mark', lenz: 'David', knipprath: 'Roman', berisha: 'Arbi', berishaa: 'Arbi', bance: 'Arbi', aristide: 'Arbi', peter: 'René' };
 const MONTHS = { januar: 1, january: 1, februar: 2, february: 2, maerz: 3, marz: 3, march: 3, april: 4, mai: 5, may: 5, juni: 6, june: 6, juli: 7, july: 7, august: 8, september: 9, oktober: 10, october: 10, november: 11, dezember: 12, december: 12 };
@@ -69,6 +83,21 @@ function zurich(date, hh, mm) {
   return new Date(guess.getTime() - (off ? Number(off[1]) : 1) * 3600e3);
 }
 
+const MON3 = { jan: 1, feb: 2, mar: 3, mrz: 3, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
+/** Datum und Uhrzeit aus einer Mail-Kopfzeile, Zürcher Zeit: «Freitag, 23. Oktober 2026 um 18:08», «23. Okt. 2026 18:08»,
+    «27.11.2026 18:08», «Fri, 6 Nov 2026, 20:38», «Friday, November 27, 2026, 6:08 PM». Liefert Date oder null. */
+export function parseMailDate(v) {
+  const s = String(v || ''); const t = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(a\.?m\.?|p\.?m\.?)?/i); if (!t) return null;
+  const mon = w => MONTHS[norm(w)] || MON3[norm(w).slice(0, 3)] || null; let y, mo, d;
+  let m = s.match(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/); if (m) { d = m[1]; mo = Number(m[2]); y = m[3]; }
+  if (!mo) { m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) { y = m[1]; mo = Number(m[2]); d = m[3]; } }
+  if (!mo) { m = s.match(/(\d{1,2})\.?\s+(\p{L}{3,})\.?,?\s+(\d{4})/u); if (m && mon(m[2])) { d = m[1]; mo = mon(m[2]); y = m[3]; } }
+  if (!mo) { m = s.match(/(\p{L}{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/u); if (m && mon(m[1])) { d = m[2]; mo = mon(m[1]); y = m[3]; } }
+  if (!mo || mo > 12 || Number(d) > 31) return null;
+  let hh = Number(t[1]); const ap = (t[3] || '').toLowerCase().replace(/\./g, ''); if (ap === 'pm' && hh < 12) hh += 12; if (ap === 'am' && hh === 12) hh = 0; if (hh > 23) return null;
+  return zurich(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`, hh, t[2]);
+}
+
 /** Text in Posts/Bloecke teilen: Blog-Posts enden mit "Eingestellt von … um …" (Blog: neuester Post oben);
     sonst gilt jede kurze Zeile mit Managernamen als Blockanfang (Chat/Mail: Reihenfolge wie geschrieben).
     Liefert die Bloecke in zeitlicher Reihenfolge (aeltester zuerst), damit ein «Update» den frueheren Post ergaenzt. */
@@ -82,7 +111,7 @@ export function splitBlocks(lines, managers, kaderOf) {
     let cur = [], curDate = null, sawDate = false;
     for (const line of lines) {
       const d = dateLine(line); if (d) { curDate = d; sawDate = true; continue; }
-      const e = line.match(ENDE); if (e) { if (cur.some(Boolean)) blocks.push({ lines: cur, author: e[1].trim(), at: curDate ? zurich(curDate, e[2], e[3]) : null, time: `${e[2].padStart(2, '0')}:${e[3]}` }); cur = []; }
+      const e = endeOf(line); if (e) { if (cur.some(Boolean)) blocks.push({ lines: cur, author: e[1].trim(), at: curDate ? zurich(curDate, e[2], e[3]) : null, time: `${e[2].padStart(2, '0')}:${e[3]}` }); cur = []; }
       else if (!UI.test(line)) cur.push(line);
     }
     if (cur.some(Boolean)) blocks.push({ lines: cur, author: null, at: null, time: null });   // letzter Post ohne Fusszeile (Text endet mitten im Post)
@@ -95,7 +124,8 @@ export function splitBlocks(lines, managers, kaderOf) {
       const pick = l => { const ms = mgrIn(l); return ms.length === 1 ? ms[0] : null; };
       const header = re => nonEmpty.slice(0, 8).find(l => re.test(l));
       let mgr = pick(title) || pick(header(/^(betreff|subject)\s*:/i) || '') || pick((header(/^(von|from)\s*:/i) || '').replace(/^(von|from)\s*:/i, '')) || null;
-      if (!mgr) { const body = nonEmpty.filter(l => !/^(an|to|cc|bcc|gesendet|sent|datum|date)\s*:/i.test(l) && !/^(hi|hallo|hoi|salut|liebe[rs]?|guten|servus|sali|hey)\b/i.test(l));
+      if (!mgr) { const body = nonEmpty.filter(l => !/^(an|to|cc|bcc|gesendet|sent|datum|date)\s*:/i.test(l) && !/^(hi|hallo|hoi|salut|liebe[rs]?|guten|servus|sali|hey)\b/i.test(l)
+          && !/^\s*(?:\d+\s*[.)]?\s*)?(?:TW|ST|[TVMS](?:\/[TVMS])?)\s*[:.|,\t -]\s*\p{L}/u.test(l) && !/\(\s*[TVMS](?:\/[TVMS])?\s*[,)]/.test(l));   // Spielerzeilen («V David Raum», «Mark Flekken (T)») nennen keinen Manager
         const all = new Set(); body.forEach(l => mgrIn(l).forEach(m => all.add(m)));
         if (all.size === 1) mgr = [...all][0];
         else if (all.size > 1) { const sig = [...body].reverse().find(l => words(l).length <= 3 && mgrIn(l).length === 1); if (sig) mgr = mgrIn(sig)[0]; else return { ...bl, manager: null, title, unclear: [...all].map(m => m.name) }; } }
@@ -180,7 +210,7 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
     const head = b.lines.filter(Boolean).slice(0, 6).join('\n').replace(/\S+@\S+/g, '');   // Mail-Adressen (gebot@gmx.ch) zaehlen nicht
     // Gebots-Posts (auch weitergeleitete Mails) gehoeren nicht hierher; «Fw:» allein heisst nichts, Aufstellungen kommen genauso per Mail
     if (/\b(gebote?|biete)\b/i.test(b.title) || /^(betreff|subject)\s*:.*\b(gebote?|biete)\b/im.test(head) || /^(ich\s+)?biete\b/im.test(head)) { skipped.push(`${tag} – Gebot`); continue; }
-    const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i); const rn = m && Number(m[1] || m[2]);
+    const m = b.title.match(ROUND_IN_TITLE); const rn = m && Number(m[1] || m[2]);
     if (b.at && opts.notBefore && b.at <= new Date(opts.notBefore)) { skipped.push(`${tag} – vor der Deadline der Vorrunde gepostet`); continue; }
     // Titel nennt eine andere Runde: eine spaetere ist ein Post fuer spaeter; eine fruehere ist meist ein alter Titel
     // (kopiert) – wenn der Post nachweislich in dieser Runde (nach der Vorrunden-Deadline) erschien, zaehlt er, mit Hinweis
@@ -262,9 +292,10 @@ export function parseLineupText(text, managers, kaderOf, opts = {}) {
 
 /** Einen Post lesen: Spielerliste und Wechsel getrennt erfassen. */
 function readBlock(b, kader, gone, clubWords, managers) {
+  let modeLines = 0;   // Inhaltszeilen seit der letzten Abschnitts-Überschrift
   const list = {}, subs = [], unmatched = [], ambiguous = [], notes = [];
   let noChange = false, stop = false, mode = 'lineup', pending = [], subCol = -1;
-  const m = b.title.match(/(?:runde|spieltag|\br)\s*(\d+)|(\d+)\.\s*spieltag/i);
+  const m = b.title.match(ROUND_IN_TITLE);
   const resolve = (chunkRaw, quiet) => {
     if (words(chunkRaw).length === 1 && posList(chunkRaw.trim()).length) return { pos: posList(chunkRaw.trim()), none: true };
     const { pos, name } = chunkOf(chunkRaw, clubWords); if (!name || norm(name).length < 3) return { pos, none: true };
@@ -287,7 +318,7 @@ function readBlock(b, kader, gone, clubWords, managers) {
   if (/unver[äa]ndert|keine\s+(wechsel|änderung|aenderung)|wie\s+(gehabt|bisher|vorrunde|letzte)/i.test(b.title)) noChange = true;   // «Runde 5 unverändert» im Titel
   for (let line of b.lines) {
     if (stop) continue;
-    if (!line) { mode = 'lineup'; continue; }
+    if (!line) { if (mode !== 'bench' && modeLines > 0) mode = 'lineup'; continue; }   // Leerzeile direkt nach der Überschrift (Mail-Format) beendet den Abschnitt nicht
     if (/^(pos(ition)?|nr\.?|#|spieler|name)\b.*\b(name|spieler|verein|team|club|pos)\b/i.test(line) || /^pos\b/i.test(line)) { subCol = line.split(/\s*[|\t]\s*/).findIndex((c, i) => i > 0 && /wechsel|für|fuer|statt|raus|ersetzt|^out$|^for$/i.test(c)); continue; }   // Tabellenkopf, evtl. mit Spalte «Wechsel»
     if (dateLine(line) || /^public$/i.test(line) || /^(gesendet|sent|von|from|an|to|cc|bcc|betreff|subject|datum|date)\s*:/i.test(line)) continue;   // Mail-Kopfzeilen
     if (SIG.test(line)) { stop = true; continue; }                 // Grussformel, Signatur, Mail-Disclaimer: ab hier nichts mehr
@@ -296,9 +327,11 @@ function readBlock(b, kader, gone, clubWords, managers) {
     if (h) { const md = modeOf(h[2]); const rest = line.slice(h[0].length).trim();
       if (md === 'skip') continue;
       if (md === 'bench') { mode = 'bench'; continue; }                // Ersatzbank: gehoert nicht zur Elf
-      if (!rest || !/\p{L}{3}/u.test(rest)) { if (!h[1]) mode = md; continue; }   // reine Ueberschrift ("Wechsel:", "Eine Auswechslung")
+      if (mode === 'bench') mode = 'lineup';                           // neue Überschrift beendet die Ersatzbank
+      if (!rest || !/\p{L}{3}/u.test(rest)) { if (!h[1]) { mode = md; modeLines = 0; } continue; }   // reine Ueberschrift ("Wechsel:", "Eine Auswechslung")
       line = rest; lm = md === 'lineup' ? mode : md; }
     if (mode === 'bench') continue;
+    modeLines++;
     if (posList(line).length && words(line).length === 1) { pending = posList(line); continue; }   // Position auf eigener Zeile
     // Tabellenzeile mit Eintrag in der Spalte «Wechsel»: der dort genannte Spieler geht raus
     if (subCol > 0 && /[|\t]/.test(line)) { const cells = line.split(/\s*[|\t]\s*/); const sub = (cells[subCol] || '').replace(/^(?:für|fuer|statt|anstelle|anstatt|for|f)\s+/i, '').trim();

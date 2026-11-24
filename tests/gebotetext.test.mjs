@@ -108,3 +108,33 @@ describe('Gebote Spieltag 9 (06./07.11.2026): Eventualaufträge mit «anstelle»
     const x = block(res, 'Arbi'); assert.equal(bid(x, 0), 'M Krattenmacher (Elversberg) 2 -Otavio'); assert.equal(bid(x, 1), 'S Machino (Gladbach) 2 -Mensah >Potulski'); assert.equal(x.spaet, true);
   });
 });
+
+describe('Review 24.11.2026: nichts verschlucken', () => {
+  const post = body => `Freitag, November 27, 2026\nGebote Pädi\n${body}\nMarkadona um 12:00\n`;
+  const P = (body, opts = {}) => parse(post(body), { roundNumbers: [110, 11], ...opts });
+  test('«Name für Preis» ist ein Gebot (das r von «für» ist keine Rundenangabe)', () => {
+    for (const l of ['M Weiser Bremen für 2.-', 'Weiser, Bremen, M, für 2 CHF', 'M Weiser Bremen für 2']) {
+      const x = block(P(`${l}\nM Hofmann Leverkusen 3.-\nentlasse: V Posch Mainz, V Itakura Gladbach`), 'Pädi');
+      assert.deepEqual(x.bids.map(b => `${b.player_name} ${b.price}`), ['Weiser 2', 'Hofmann 3'], l); assert.equal(x.bids[0].club, 'Bremen'); }
+  });
+  test('Titel «Gebot Arbi für 2 Spieler» ist keine Runde 2; «Stand Freitag um 18:30» beendet den Post nicht', () => {
+    const r = parse('Freitag, November 27, 2026\nGebot Arbi für 2 Spieler\nBiete Weiser, Bremen, M, 2.- und entlasse Mensah\nStand Freitag um 18:30\nMachino, Gladbach, S, 2.- und entlasse Otavio\nMarkadona um 12:00\n', { roundNumbers: [110, 11] });
+    assert.deepEqual(r.skipped, []); assert.deepEqual(block(r, 'Arbi').bids.map(b => b.player_name), ['Weiser', 'Machino']);
+  });
+  test('eine am Gebot genannte Entlassung wird nicht ein zweites Mal vergeben', () => {
+    const x = block(P('M Weiser Bremen 2.- und entlasse Posch\nM Hofmann Leverkusen 3.-\nentlasse: V Posch Mainz, V Itakura Gladbach'), 'Pädi');
+    assert.deepEqual(x.bids.map(b => b.release?.name), ['Posch', 'Itakura']);
+  });
+  test('Zeile mit Preis, aus der kein Gebot wurde, steht als Hinweis da', () => {
+    const x = block(P('M Weiser Bremen 2.-\n4.- \nentlasse Posch'), 'Pädi');
+    assert.ok(x.notes.some(n => /kein Gebot gelesen: «4\.-»/.test(n)), x.notes.join(' | '));
+  });
+  test('Mail-Datum: deutsche und englische Formen, Winterzeit, die früheste Kopfzeile zählt', () => {
+    const iso = l => sentAt(['Fw: x', l])?.toISOString();
+    assert.equal(iso('Gesendet: Freitag, 23. Oktober 2026 18:08'), '2026-10-23T16:08:00.000Z');
+    assert.equal(iso('Gesendet: 27.11.2026 18:08'), '2026-11-27T17:08:00.000Z');
+    assert.equal(iso('Date: Fr., 27. Nov. 2026 um 18:08 Uhr'), '2026-11-27T17:08:00.000Z');
+    assert.equal(iso('Sent: Friday, November 27, 2026, 6:08 PM'), '2026-11-27T17:08:00.000Z');
+    assert.equal(sentAt(['Fwd', 'Date: Fri, 6 Nov 2026, 20:38', 'Gesendet: Freitag, 6. November 2026 um 13:39']).toISOString(), '2026-11-06T12:39:00.000Z');
+  });
+});

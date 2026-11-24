@@ -139,7 +139,8 @@ export function BlogPaste({ roundId, log }) { const { msg, pending, run } = useR
         <td className="l small">{x.ok ? <span className="pill ok">zulässig</span> : <span className="pill bad">{x.problems.join('; ')}</span>}</td>
         <td className="l mini">{x.bisher}{x.resolved && <div className="pill grey">aufgelöst – nicht änderbar</div>}</td></tr>)}
       {G.unclear?.length > 0 && <tr><td className="l muted" colSpan={5}>Unklar: {G.unclear.join('; ')}</td></tr>}
-    </tbody></table></div> : <div className="mini">keine Gebots-Posts im Text</div>}</>}
+      {G.skipped?.length > 0 && <tr><td className="l muted" colSpan={5}>Übersprungen: {G.skipped.join('; ')}</td></tr>}
+    </tbody></table></div> : <div className="mini">keine Gebots-Posts im Text{G.skipped?.length > 0 && <> · Übersprungen: {G.skipped.join('; ')}</>}</div>}</>}
     {log?.runs?.length > 0 && <details><summary className="mini">Bisherige Übernahmen ({log.runs.length})</summary>{log.runs.slice().reverse().map((r, i) => <div key={i} className="mini" style={{ borderTop: '1px solid var(--line)', padding: '4px 0' }}><b>{new Date(r.at).toLocaleString('de-CH', { timeZone: 'Europe/Zurich' })}</b> · {r.by} · {r.n} übernommen<ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>{(r.log || []).map((l, j) => <li key={j}>{l}</li>)}</ul></div>)}</details>}
   </div>); }
 
