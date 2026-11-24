@@ -49,6 +49,7 @@ export async function importPages(round, b, pages, opts = {}) {
     matches.push({ paarung, teams: parsed.teams.map(t => t.slug), n: Object.keys(stats).length });
     Object.values(stats).forEach(s => (pageNames[s.team] ||= []).push(s));
     await upsertPool(Object.values(stats), b, round.matchday, round.deadline || new Date());   // Spieltagskader = Bundesliga-Kader
+    await upsertStats(Object.values(stats), b, round.matchday);
     allStarters.push(...Object.values(stats).filter(s => s.start === 1 && s.kpos).map(s => ({ ...s, formation: (parsed.teams.find(t => t.slug === s.team) || {}).formation })));
     const seen = {}; let n = 0;
     // Zwei kicker-Spieler, die auf denselben noch nicht zugeordneten RLB-Spieler passen (Namensvettern im selben Verein): keinen binden, melden
@@ -165,6 +166,17 @@ export function importSummary(r) { const c = r.counts || {}; return [`${r.games}
 /** Spielerpool pflegen. playedAt (Zeitpunkt des Spieltags) gesetzt: jeder Spieler auf der Aufstellungsseite (Startelf oder
     Bank) steht im Bundesliga-Kader – so bleibt der Pool aktuell, auch wenn der Kader-Abgleich mit kicker ausfällt. Ein
     späterer Abgang (left_at nach dem Spieltag) bleibt bestehen, damit ein nachträglicher Import ihn nicht zurückholt. */
+/** Werte aller Spieler einer Spielseite je Spieltag festhalten (auch der freien): Grundlage für die Saisonwerte im Transfermarkt. */
+export async function upsertStats(stats, b, matchday) {
+  if (!matchday) return 0; await ensureSchema(); const rows = []; const seen = new Set();
+  for (const s of stats) { if (!s.slug || seen.has(s.slug)) continue; seen.add(s.slug);
+    rows.push([s.slug, matchday, (b.clubs || []).map(c => c.id).find(id => clubMatches(s.team, id)) || null, Number(s.start) || 0, Number(s.assist) || 0, Number(s.tore) || 0, Number(s.karten) || 0]); }
+  for (let i = 0; i < rows.length; i += 150) { const part = rows.slice(i, i + 150); const params = [];
+    const vals = part.map((r, ri) => { for (const v of r) params.push(v); const o = ri * 7; return '($' + (o + 1) + ',$' + (o + 2) + ',$' + (o + 3) + ',$' + (o + 4) + ',$' + (o + 5) + ',$' + (o + 6) + ',$' + (o + 7) + ')'; }).join(',');
+    await q('insert into bl_stats(slug,matchday,club,start,assist,tore,karten) values ' + vals + ' on conflict(slug,matchday) do update set club=excluded.club, start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten', params); }
+  return rows.length;
+}
+
 export async function upsertPool(stats, b, matchday, playedAt = null) {
   const seen = new Set(); const rows = [];
   for (const s of stats) {

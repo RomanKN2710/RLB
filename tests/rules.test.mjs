@@ -139,3 +139,12 @@ describe('resolveBids: Budget über alle Zuschläge, eine Entlassung je Zuschlag
     assert.match(out.find(b => b.status === 'won').reason, /Los nötig/);
   });
 });
+
+import { categoryGaps } from '../src/lib/rules.js';
+describe('categoryGaps: Abstände je Kategorie', () => {
+  const row = (id, tore, karten) => ({ manager_id: id, tot: { punkte: 0, shutout: 0, assist: 0, tore, karten, tdr: 0, start: 0 }, rp: { punkte: 0, shutout: 0, assist: 0, tore: 0, karten: 0, tdr: 0, start: 0 } });
+  const table = [row(1, 10, 5), row(2, 12, 3), row(3, 7, 5), row(4, 15, 9)];
+  test('Tore: nächster vorn und hinten', () => { const g = categoryGaps(table, 1).find(x => x.cat === 'tore'); assert.equal(g.platz, 3); assert.deepEqual(g.vor, { diff: 2, wer: [2] }); assert.deepEqual(g.hinter, { diff: 3, wer: [3] }); });
+  test('Karten: weniger ist besser, Gleichstand wird genannt', () => { const g = categoryGaps(table, 1).find(x => x.cat === 'karten'); assert.equal(g.platz, 2); assert.deepEqual(g.vor, { diff: 2, wer: [2] }); assert.deepEqual(g.hinter, { diff: 4, wer: [4] }); assert.deepEqual(g.gleich, [3]); });
+  test('ganz vorn und ganz hinten', () => { assert.equal(categoryGaps(table, 4).find(x => x.cat === 'tore').vor, null); assert.equal(categoryGaps(table, 3).find(x => x.cat === 'tore').hinter, null); });
+});

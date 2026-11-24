@@ -1,4 +1,7 @@
 {
   "buildCommand": "npm test && next build",
-  "crons": [ { "path": "/api/sync", "schedule": "0 3 * * *" } ]
+  "crons": [
+    { "path": "/api/sync", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/erinnerung", "schedule": "0 7 * * *" }
+  ]
 }

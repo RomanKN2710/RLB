@@ -17,7 +17,7 @@ export default function LoginForm() {
         <Msg state={state} />
         <SubmitButton busy="Anmelden …">Anmelden</SubmitButton>
       </form>
-      <p className="mini">Konten werden vom Admin angelegt. Passwort vergessen: Admin setzt ein neues Startpasswort.</p>
+      <p className="mini">Konten werden vom Admin angelegt. <a href="/login/vergessen">Passwort vergessen?</a></p>
     </div>
   );
 }

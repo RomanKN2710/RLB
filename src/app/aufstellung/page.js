@@ -38,6 +38,14 @@ export default async function Aufstellung({ searchParams }) {
   const matches = await q('select m.*, c1.id as c1, c2.id as c2 from matches m left join clubs c1 on c1.oldb_team_id=m.team1 left join clubs c2 on c2.oldb_team_id=m.team2 where m.round_id=$1 order by m.kickoff', [round.id]);
   const initial = cur ? cur.entries : (prev ? Object.fromEntries(Object.entries(prev.entries).filter(([pid]) => players.find(p => p.id === pid))) : {});
   const others = await q('select l.manager_id, l.updated_at from lineups l where l.round_id=$1', [round.id]);
+  // Je Spieler: Gegner und Anpfiff in dieser Runde, Einsatz in der letzten gewerteten Runde, und ob kicker ihn noch im Kader führt
+  const kurz = iso => iso ? new Date(iso).toLocaleString('de-CH', { timeZone: 'Europe/Zurich', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const vorRunde = (await q("select id, label from rounds where number < $1 and type='regulaer' order by number desc limit 1", [round.number]))[0] || null;
+  const letzte = vorRunde ? await q('select player_id, start from results where round_id=$1 and player_id = any($2)', [vorRunde.id, players.map(p => p.id)]) : [];
+  const weg = new Set((await q("select slug from bl_players where in_squad=false and left_at is not null").catch(() => [])).map(r => r.slug));
+  const infoOf = p => { const m = matches.find(x => x.c1 === p.club || x.c2 === p.club); const l = letzte.find(x => x.player_id === p.id);
+    return { gegner: m ? `${m.c1 === p.club ? 'gegen ' + (m.c2 || '?') : 'bei ' + (m.c1 || '?')} · ${kurz(m.kickoff)}` : (matches.length ? 'kein Spiel in dieser Runde' : ''),
+      zuletzt: !vorRunde ? '' : l ? ['nicht eingesetzt', 'Startelf', 'eingewechselt'][l.start] || '' : '', ohneSpiel: !!matches.length && !m, weg: !!(p.kicker_slug && weg.has(p.kicker_slug)) }; };
 
   return (<>
     <div className="card"><div className="row between"><div><div className="eyebrow">Aufstellung</div><h2>{b.managerName[managerId]} · {round.label}</h2></div>
@@ -51,7 +59,7 @@ export default async function Aufstellung({ searchParams }) {
       <p className="mini">Ohne Änderung gilt die Aufstellung der Vorrunde (Ziff. 5.1). Jeder neu aufgestellte Spieler kostet 50 % seines Werts; Jugendspieler (J) verlieren bei Aufstellung ihren Status (4.3.4). Positionsregel: 1 T, 3–5 V, 3–6 M, 1–3 S.</p>
       {admin && <p className="row">{b.managers.map(m => <a key={m.id} className={`btn sm ${m.id === managerId ? '' : 'sec'}`} href={`/aufstellung?m=${m.id}${gewaehlt ? `&r=${gewaehlt.number}` : ''}`}>{m.name}</a>)}</p>}
       {rundenWahl}
-      <LineupEditor roundId={round.id} managerId={managerId} players={players.map(p => ({ id: p.id, name: p.name, club: p.club, base_pos: p.base_pos, extra_pos: p.extra_pos || [], positions: R.positionsOf(p, round.number), price: Number(p.price), jugend: p.jugend, contract: p.contract, slot: p.slot }))} initial={initial} prevEntries={prev ? prev.entries : null} freeIn={cur ? cur.free_in : []} isFirst={isFirst} />
+      <LineupEditor roundId={round.id} managerId={managerId} players={players.map(p => ({ id: p.id, name: p.name, club: p.club, base_pos: p.base_pos, extra_pos: p.extra_pos || [], positions: R.positionsOf(p, round.number), price: Number(p.price), jugend: p.jugend, contract: p.contract, slot: p.slot, info: infoOf(p) }))} initial={initial} prevEntries={prev ? prev.entries : null} freeIn={cur ? cur.free_in : []} isFirst={isFirst} />
     </div>
     <div className="grid2">
       <div className="card"><div className="eyebrow">{round.label}</div><h3>Spiele</h3><table><tbody>{matches.map(m => <tr key={m.id}><td className="l">{fmtDt(m.kickoff)}</td><td className="l">{m.c1 || m.team1} – {m.c2 || m.team2}</td><td>{m.finished ? `${m.goals1}:${m.goals2}` : ''}</td></tr>)}</tbody></table><p className="mini">Quelle: OpenLigaDB. Zeiten werden täglich aktualisiert; die Deadline folgt dem frühesten Anpfiff.</p></div>

@@ -21,6 +21,10 @@ export default async function Markt({ searchParams }) {
   }
   // Eigene Gebote zwischen Deadline und Auflösung: nur lesen, damit sichtbar bleibt, was geboten wurde
   const wartend = managerId ? await q("select b.*, r.label as round_label from bids b join rounds r on r.id=b.round_id where b.manager_id=$1 and b.status='sealed' and ($2::int is null or b.round_id<>$2) order by r.number, b.priority", [managerId, open ? open.id : null]) : [];
+  // Kaufbudget im Überblick: Käufe, Gutschriften, und was die laufenden Gebote höchstens binden (je Gebot die teuersten «höchstens N»)
+  const kaeufe = managerId ? await q("select t.player_name, t.price, r.label from transfers t left join rounds r on r.id=t.round_id where t.manager_id=$1 and t.type='kauf' order by t.created_at", [managerId]) : [];
+  const gutschriften = managerId ? await q("select amount, text from ledger where manager_id=$1 and type='gutschrift' order by created_at", [managerId]) : [];
+  const gebunden = list => { const g = {}; for (const x of list) (g[`${x.round_id}|${x.gruppe || 1}`] ||= []).push(x); return Object.values(g).reduce((a, rows) => a + rows.map(r => Number(r.price) || 0).sort((x, y) => y - x).slice(0, Number(rows[0].max_wins) || 1).reduce((s, v) => s + v, 0), 0); };
   const submitted = open ? await q('select distinct manager_id from bids where round_id=$1', [open.id]) : [];   // je Manager einmal, auch bei mehreren Geboten
   const published = await q("select b.*, m.name as manager_name, r.label as round_label, r.number as rnum, p.name as release_name from bids b join managers m on m.id=b.manager_id join rounds r on r.id=b.round_id left join players p on p.id=b.release_player_id where b.status<>'sealed' order by r.number desc, b.price desc");
   const releases = await q("select t.*, m.name as manager_name, r.label as round_label, r.number as rnum from transfers t join managers m on m.id=t.manager_id left join rounds r on r.id=t.round_id where t.type='entlassung' order by t.created_at desc limit 20");
@@ -38,6 +42,14 @@ export default async function Markt({ searchParams }) {
         return <div key={gr} className="small"><b>{mine.some(x => (x.gruppe || 1) > 1) ? `Gebot ${gr}` : 'Gebot'}:</b> höchstens {f.max_wins || 1} aus {rows.map(r => `${r.pos} ${r.player_name} (${r.club}) CHF ${Number(r.price)}`).join(' · ')} — entlässt {rel || '–'}{sw ? ` — gratis für ${sw}` : ''}</div>; })}</div>}
       <BidForm key={managerId} pool={free} clubs={b.clubs.map(c => c.id)} kader={kader.map(p => ({ id: p.id, label: `${p.base_pos} ${p.name} (${p.club}, ${Number(p.price)})` }))} lineup={lineup ? Object.keys(lineup.entries).map(pid => ({ id: pid, label: `${lineup.entries[pid].pos} ${(b.players[pid] || {}).name}` })) : []} budget={budget} mine={mine.map(x => ({ ...x, price: Number(x.price) }))} minBid={R.MIN_BID} managerId={managerId} managerName={b.managerName[managerId]} isAdminFor={!!fuerAndere} />
     </div>}
+    {managerId && (() => { const frei = budget ?? (R.SEASON_BUDGET - kaeufe.reduce((a, k) => a + Number(k.price), 0) + gutschriften.reduce((a, g) => a + Number(g.amount), 0)); const bind = gebunden([...mine, ...wartend]); const eigene = published.filter(x => x.manager_id === managerId);
+      return <details className="card"><summary><b>{fuerAndere ? `Kaufbudget von ${b.managerName[managerId]}` : 'Mein Kaufbudget'}</b> <span className="mini">frei CHF {frei}{bind ? ` · durch laufende Gebote höchstens gebunden CHF ${bind}` : ''}</span></summary>
+        <div className="kv" style={{ marginTop: 8 }}><b>Saisonbudget</b><span>CHF {R.SEASON_BUDGET} (Ziff. 7.4)</span>
+          <b>Käufe</b><span>{kaeufe.length ? <>− CHF {kaeufe.reduce((a, k) => a + Number(k.price), 0)} · {kaeufe.map(k => `${k.player_name} ${Number(k.price)}${k.label ? ' (' + k.label.replace('Spieltag ', 'ST ') + ')' : ''}`).join(', ')}</> : 'noch keine'}</span>
+          <b>Gutschriften</b><span>{gutschriften.length ? <>+ CHF {gutschriften.reduce((a, g) => a + Number(g.amount), 0)} · {gutschriften.map(g => g.text).join('; ')}</> : 'keine'}</span>
+          <b>Frei</b><span><b>CHF {frei}</b>{bind ? ` · nach den laufenden Geboten mindestens CHF ${frei - bind}` : ''}</span></div>
+        {eigene.length > 0 && <><h3 style={{ marginTop: 12 }}>Gebote bisher</h3><ul className="clean small">{eigene.slice(0, 40).map(x => <li key={x.id}>{x.round_label}: {x.pos} {x.player_name} ({x.club}) CHF {Number(x.price)} · {tag(x.status)}{x.reason ? <span className="mini"> – {x.reason}</span> : null}</li>)}</ul></>}
+      </details>; })()}
     <div className="card"><div className="row between"><div><div className="eyebrow">Transfermarkt</div><h2>{open ? `Gebote für ${open.label}` : 'Keine offene Runde'}</h2></div>
       {open && <div className="small">Gebots-Deadline <b>{fmtDt(open.deadline)}</b></div>}</div>
       {open && <div className="row" style={{ marginTop: 6, gap: 4 }}><span className="mini">Abgegeben ({submitted.length}/{b.managers.length}):</span>{b.managers.map(m => <span key={m.id} className={`pill ${submitted.find(s => s.manager_id === m.id) ? 'ok' : 'grey'}`}>{m.name}{submitted.find(s => s.manager_id === m.id) ? ' ✓' : ''}</span>)}</div>}

@@ -192,3 +192,8 @@ details.bidform[open]>summary{background:var(--accent-soft)}
 @media (prefers-color-scheme:dark){:root{--komm-ink:#E5B863}}
 .adminbox h3,.bericht h3,.hof-tile-title{color:var(--komm-ink)}
 .legend{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}.legend b{color:var(--ink);font-weight:600}
+
+.thsort{background:none;border:0;padding:0;min-height:0 !important;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
+
+.navdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-left:5px;vertical-align:middle}
+.tabbar .navdot{position:absolute;top:6px;left:calc(50% + 8px);margin:0}

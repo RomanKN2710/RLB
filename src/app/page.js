@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import * as D from '@/lib/data';
-import { CATS } from '@/lib/rules';
+import { CATS, categoryGaps, entryValues } from '@/lib/rules';
 import { fmtDt, fmtRp, Info } from '@/components/ui';
 import Countdown from '@/components/Countdown';
 import { q, one } from '@/lib/db';
@@ -49,6 +49,22 @@ export default async function Tabelle({ searchParams }) {
       </div>
       {open && <div className="cta"><Link className="btn" href="/aufstellung">Aufstellung →</Link><Link className="btn sec" href="/markt">Transfermarkt</Link></div>}
     </div>}
+    {mine && (() => { const lu = curData.lineups[me]; const b = sd.base; if (!lu) return null;
+      const rows = Object.entries(lu.entries).map(([pid, e]) => ({ p: b.players[pid], e, r: curData.results[pid] })).filter(x => x.p).sort((a, z) => 'TVMS'.indexOf(a.e.pos) - 'TVMS'.indexOf(z.e.pos) || a.p.name.localeCompare(z.p.name));
+      const t = curData.totals[me];
+      return <details className="card"><summary><b>Meine Elf · {cur.label}</b> <span className="mini">P {t.punkte} · Sh {t.shutout} · A {t.assist} · T {t.tore} · K {t.karten} · TdR {t.tdr} · St {t.start}</span></summary>
+        <div className="tbl" style={{ marginTop: 8 }}><table><thead><tr><th className="l">Pos</th><th className="l">Spieler</th><th className="l">Einsatz</th><th>P</th><th>Sh</th><th>A</th><th>T</th><th>K</th><th>TdR</th><th>St</th></tr></thead>
+          <tbody>{rows.map(({ p, e, r }) => { const v = entryValues(p, e.pos, r, curData.clubRes); return <tr key={p.id}><td className="l muted">{e.pos}</td><td className="l">{p.name} <span className="mini">{r?.club || p.club}</span></td><td className="l mini">{r ? ['–', 'Start', 'Eingew.'][r.start] : 'noch keine Werte'}</td>{[v.punkte, v.shutout, v.assist, v.tore, v.karten, v.tdr, v.start].map((x, i) => <td key={i} className={x ? '' : 'muted'}>{x}</td>)}</tr>; })}</tbody></table></div>
+        <div className="legend"><b>P</b> Punkte des Vereins · <b>Sh</b> zu null · <b>A</b> Assists · <b>T</b> Tore · <b>K</b> Karten · <b>TdR</b> Team der Runde · <b>St</b> Startelf{cur.status !== 'final' ? ' · vorläufig, bis die Runde abgeschlossen ist' : ''}</div></details>; })()}
+    {mine && (() => { const gaps = categoryGaps(sd.table, me); const wer = ids => ids.map(name).join(', ');
+      return <details className="card"><summary><b>Wo ein Rangpunkt drin liegt</b> <span className="mini">Abstände je Kategorie, Saison bis {cur.label}</span></summary>
+        <ul className="clean small mob-only" style={{ marginTop: 8 }}>{gaps.map(g => <li key={g.cat} style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}><b>{g.label}</b> {g.wert} · Platz {g.platz}.{g.gleich.length > 0 ? ' (geteilt)' : ''}{g.weniger ? ' · weniger ist besser' : ''}
+          <div className="mini">{g.vor ? <>nach vorn: <b>{g.vor.diff}</b> {g.weniger ? 'weniger hat' : 'fehlen auf'} {wer(g.vor.wer)}</> : 'ganz vorn'} · {g.hinter ? <>nach hinten: <b>{g.hinter.diff}</b> Vorsprung auf {wer(g.hinter.wer)}</> : 'Schlusslicht'}</div></li>)}</ul>
+        <div className="tbl desk-only" style={{ marginTop: 8 }}><table><thead><tr><th className="l">Kategorie</th><th>Wert</th><th>Platz</th><th className="l">Nach vorn</th><th className="l">Nach hinten</th></tr></thead>
+          <tbody>{gaps.map(g => <tr key={g.cat}><td className="l"><b>{g.label}</b>{g.weniger && <span className="mini"> (weniger ist besser)</span>}</td><td>{g.wert}</td><td>{g.platz}.{g.gleich.length > 0 && <span className="mini"> geteilt</span>}</td>
+            <td className="l small">{g.vor ? <><b>{g.vor.diff}</b> {g.weniger ? 'weniger hat' : 'fehlen auf'} {wer(g.vor.wer)}</> : <span className="tag-won">vorn</span>}</td>
+            <td className="l small">{g.hinter ? <><b>{g.hinter.diff}</b> Vorsprung auf {wer(g.hinter.wer)}</> : <span className="muted">Schlusslicht</span>}{g.gleich.length > 0 && <span className="mini"> · gleichauf mit {wer(g.gleich)}</span>}</td></tr>)}</tbody></table></div>
+        <p className="mini">Jeder überholte Manager bringt in dieser Kategorie einen Rangpunkt, jeder eingeholte einen halben (Ziff. 8). Kleine Abstände nach vorn sind die günstigsten Punkte.</p></details>; })()}
     <div className="card"><div className="row between"><div><div className="eyebrow">Das Rennen</div><h2>Wer holt den Titel?</h2></div><Link className="btn sec sm" href="/prognose">Saisonprognose →</Link></div>
       <Rennen history={sd.history.map(h => ({ label: h.round.label.replace('Spieltag ', 'ST '), table: h.table }))} names={sd.base.managerName} me={u.manager_id} /></div>
     <div className="card"><div className="eyebrow">{cur.label}</div><h2>Auszeichnungen des Spieltags</h2><Auszeichnungen awards={awards} me={u.manager_id} /><Info label="Wie werden die Titel vergeben?">Mindestens fünf Titel pro Runde: zuerst die Leistungen, die klar aus dem Feld herausragen, dann die besten der übrigen. Saisonzähler in der <Link href="/hall-of-fame">Hall of Fame</Link>.</Info></div>

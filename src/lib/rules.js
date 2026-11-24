@@ -215,3 +215,13 @@ export function resolveBids(bids, ctx) {
 
 export const chf = n => (Math.round(Number(n) * 100) / 100).toLocaleString('de-CH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export const fmtRp = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+/** Abstände je Kategorie für einen Manager (Entscheidungshilfe für Aufstellung und Gebote): wie weit ist es zum Nächstbesseren,
+    wie gross ist der Vorsprung auf den Nächstschlechteren. Karten: weniger ist besser (Ziff. 8). table: Zeilen aus standings(). */
+export function categoryGaps(table, me) {
+  const mine = table.find(r => r.manager_id === me); if (!mine) return [];
+  return CATS.map(([c, label]) => { const asc = c === 'karten'; const v = mine.tot[c];
+    const besser = table.filter(r => asc ? r.tot[c] < v : r.tot[c] > v), schlechter = table.filter(r => asc ? r.tot[c] > v : r.tot[c] < v), gleich = table.filter(r => r.manager_id !== me && r.tot[c] === v);
+    const nah = (list) => { if (!list.length) return null; const d = Math.min(...list.map(r => Math.abs(r.tot[c] - v))); return { diff: d, wer: list.filter(r => Math.abs(r.tot[c] - v) === d).map(r => r.manager_id) }; };
+    return { cat: c, label, wert: v, rp: mine.rp[c], platz: besser.length + 1, vor: nah(besser), hinter: nah(schlechter), gleich: gleich.map(r => r.manager_id), weniger: asc }; });
+}

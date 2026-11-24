@@ -18,7 +18,8 @@ const ICON = {
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICON[n]}</svg>;
 
-export default function Nav({ admin }) {
+export default function Nav({ admin, hinweise = {} }) {
+  const Dot = ({ h }) => hinweise[h] ? <i className="navdot" title={hinweise[h]} aria-label={hinweise[h]} /> : null;
   const path = usePathname() || '/'; const ref = useRef(null); const [sheet, setSheet] = useState(false);
   const isOn = h => h === '/' ? (path === '/' || path.startsWith('/runde')) : (path === h || path.startsWith(h + '/'));
   const full = admin ? [...FULL, ['/admin', 'Admin']] : FULL; const more = admin ? [...MORE, ['/admin', 'Admin']] : MORE;
@@ -26,9 +27,9 @@ export default function Nav({ admin }) {
   useEffect(() => { setSheet(false); const el = ref.current?.querySelector('a.on'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' }); }, [path]);
   useEffect(() => { if (!sheet) return; const k = e => { if (e.key === 'Escape') setSheet(false); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [sheet]);
   return (<>
-    <nav ref={ref} className="topnav">{full.map(([h, l]) => <Link key={h} href={h} className={isOn(h) ? 'on' : ''} aria-current={isOn(h) ? 'page' : undefined}>{l}</Link>)}</nav>
+    <nav ref={ref} className="topnav">{full.map(([h, l]) => <Link key={h} href={h} className={isOn(h) ? 'on' : ''} aria-current={isOn(h) ? 'page' : undefined}>{l}<Dot h={h} /></Link>)}</nav>
     <nav className="tabbar" aria-label="Hauptnavigation">
-      {MAIN.map(([h, l, ic]) => <Link key={h} href={h} className={isOn(h) ? 'on' : ''} aria-current={isOn(h) ? 'page' : undefined}><Icon n={ic} /><span>{l}</span></Link>)}
+      {MAIN.map(([h, l, ic]) => <Link key={h} href={h} className={isOn(h) ? 'on' : ''} aria-current={isOn(h) ? 'page' : undefined} style={{ position: 'relative' }}><Icon n={ic} /><span>{l}</span><Dot h={h} /></Link>)}
       <button type="button" className={moreOn || sheet ? 'on' : ''} aria-expanded={sheet} onClick={() => setSheet(s => !s)}><Icon n="more" /><span>Mehr</span></button>
     </nav>
     {sheet && <div className="sheet-backdrop" onClick={() => setSheet(false)}><div className="sheet" role="dialog" aria-label="Weitere Seiten" onClick={e => e.stopPropagation()}>

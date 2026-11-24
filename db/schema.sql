@@ -283,3 +283,7 @@ alter table users add column if not exists pw_changed_at timestamptz;   -- älte
 create table if not exists login_attempts (id bigserial primary key, email text, ip text, ok boolean not null default false, at timestamptz not null default now());
 create index if not exists login_attempts_at on login_attempts(at);
 create table if not exists backups (id serial primary key, at timestamptz not null default now(), art text not null default 'auto', bytes int not null, tabellen jsonb, data bytea not null);   -- tägliche Sicherung (gzip-JSON)
+alter table users add column if not exists mail_off boolean not null default false;   -- keine Mails der App
+create table if not exists mail_log (id bigserial primary key, at timestamptz not null default now(), kind text not null, round_id int, user_id int, ok boolean not null default false, error text);
+create table if not exists password_resets (id bigserial primary key, user_id int not null, token_hash text not null, expires_at timestamptz not null, used_at timestamptz, created_at timestamptz not null default now());
+create table if not exists bl_stats (slug text not null, matchday int not null, club text, start int not null default 0, assist int not null default 0, tore int not null default 0, karten int not null default 0, primary key (slug, matchday));   -- Werte aller Bundesliga-Spieler je Spieltag (für den Transfermarkt)

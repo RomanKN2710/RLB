@@ -294,6 +294,8 @@ export const finalizeRoundAction = wrap(async (roundId, final, grund) => { const
   await BlogImport.finalizeRound(a.id, roundId); rev();
   // Spieltagsbericht entsteht im Hintergrund (eigene Funktion mit längerer Laufzeit)
   const rep = BlogImport.triggerReport(roundId); if (rep) waitUntil(rep);
+  // Hinweis an die Manager (nur wenn der Mailversand eingerichtet ist; einmal je Runde und Empfänger)
+  try { const M = await import('@/lib/mail'); if (M.mailReady()) waitUntil((async () => { const rd = await D.roundById(roundId); for (const u of await M.recipients()) await M.sendMail({ to: u.email, userId: u.id, roundId, kind: 'ausgewertet', once: true, subject: `RLB: ${rd.label} ist ausgewertet`, text: `Hallo ${u.name}\n\n${rd.label} ist ausgewertet, die Gebote sind aufgelöst.\n\nTabelle: ${M.appUrl()}/\nRunde: ${M.appUrl()}/runde/${roundId}\nBericht: ${M.appUrl()}/bericht\nTransfermarkt: ${M.appUrl()}/markt` }); })()); } catch { /* Mail ist Beigabe */ }
   return ok('Runde abgeschlossen. Der Spieltagsbericht wird jetzt erstellt (Seite «Bericht»).'); });
 export const berichtAction = wrap(async (roundId, opts = {}) => { await requireAdmin(); try { const log = await berichtCreate(roundId, opts); revalidatePath('/bericht'); return ok(log.join(' · ')); } catch (e) { revalidatePath('/bericht'); return fail(e.message); } });
 export const splitNachtragAction = wrap(async (matchId) => { const a = await requireAdmin();
@@ -437,3 +439,26 @@ export const hofDeleteAction = wrap(async (season) => { const a = await requireA
 
 /* ---------- Admin: Sicherung von Hand ---------- */
 export const createBackupAction = wrap(async () => { const a = await requireAdmin(); const { createBackup } = await import('@/lib/backup'); const r = await createBackup('von Hand'); await audit(a.id, 'backup', { id: r.id, bytes: r.bytes }); rev(); return ok(`Sicherung Nr. ${r.id} erstellt (${r.zeilen} Zeilen, ${Math.round(r.bytes / 1024)} kB)`); });
+
+/* ---------- Konto: Mails der App, Passwort per Mail zurücksetzen ---------- */
+export const setMailPrefAction = wrap(async (on) => { const u = await requireUser(); await ensureSchema(); await q('update users set mail_off=$1 where id=$2', [!on, u.id]); return ok(on ? 'E-Mails eingeschaltet' : 'E-Mails ausgeschaltet'); });
+export const requestResetAction = wrap(async (prev, fd) => {
+  const { mailReady, sendMail, appUrl } = await import('@/lib/mail'); const { createHash, randomBytes } = await import('node:crypto');
+  if (!mailReady()) return fail('Der Mailversand ist nicht eingerichtet. Bitte einen Admin um ein neues Startpasswort bitten.');
+  await ensureSchema(); const email = String(fd.get('email') || '').trim().toLowerCase(); const antwort = ok('Falls es zu dieser Adresse ein Konto gibt, ist eine Mail mit dem Link unterwegs. Er gilt eine Stunde.');
+  const u = await one('select id, email, name from users where lower(email)=$1', [email]); if (!u) return antwort;   // nicht verraten, ob es das Konto gibt
+  const n = await one("select count(*)::int as n from password_resets where user_id=$1 and created_at > now() - interval '1 hour'", [u.id]); if (n.n >= 3) return antwort;
+  const token = randomBytes(32).toString('hex'); await q("insert into password_resets(user_id, token_hash, expires_at) values($1,$2, now() + interval '1 hour')", [u.id, createHash('sha256').update(token).digest('hex')]);
+  await sendMail({ to: u.email, userId: u.id, kind: 'passwort', subject: 'RLB: neues Passwort setzen', text: `Hallo ${u.name}\n\nMit diesem Link setzt du ein neues Passwort (gilt eine Stunde):\n${appUrl()}/login/neu?token=${token}\n\nWenn du das nicht warst, kannst du die Mail ignorieren; dein Passwort bleibt, wie es ist.` });
+  await audit(u.id, 'pw_reset_request', {}); return antwort;
+});
+export const resetWithTokenAction = wrap(async (prev, fd) => {
+  const { createHash } = await import('node:crypto'); await ensureSchema();
+  const token = String(fd.get('token') || ''), pw = String(fd.get('password') || ''), pw2 = String(fd.get('password2') || '');
+  if (pw.trim().length < 8) return fail('Mindestens 8 Zeichen (ohne Leerzeichen am Rand)'); if (pw !== pw2) return fail('Passwörter stimmen nicht überein');
+  // den Link in einem Schritt einlösen: gilt genau einmal
+  const r = await one('update password_resets set used_at=now() where token_hash=$1 and used_at is null and expires_at > now() returning user_id', [createHash('sha256').update(token).digest('hex')]);
+  if (!r) return fail('Der Link ist abgelaufen oder schon benutzt. Bitte einen neuen anfordern.');
+  await q('update users set password_hash=$1, must_change_pw=false, pw_changed_at=now() where id=$2', [await hashPassword(pw), r.user_id]); await q('delete from login_attempts where email=(select lower(email) from users where id=$1)', [r.user_id]);
+  await audit(r.user_id, 'pw_reset_mail', {}); return ok('Passwort gesetzt.');
+});

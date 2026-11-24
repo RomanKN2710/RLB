@@ -164,7 +164,9 @@ export async function freeAgents(b) {
   const anySquad = await one('select 1 from bl_players where in_squad limit 1');
   const pool = await q(anySquad ? 'select * from bl_players where in_squad order by club, squad_pos, name' : 'select * from bl_players order by club, pos, name');
   const { playerMatches } = await import('./kicker');
+  // Saisonwerte aller Spieler (aus den kicker-Spielberichten): Einsätze, Startelf, Tore, Assists, Karten
+  const st = {}; (await q('select slug, count(*) filter (where start>0)::int as sp, count(*) filter (where start=1)::int as se, coalesce(sum(tore),0)::int as t, coalesce(sum(assist),0)::int as a, coalesce(sum(karten),0)::int as k, max(matchday) filter (where start>0) as zuletzt from bl_stats group by slug').catch(() => [])).forEach(r => { st[r.slug] = r; });
   const active = b.playersArr.filter(p => p.status === 'active');
   const isTaken = p => active.some(o => (!p.club || !o.club || R.norm(o.club) === R.norm(p.club)) && (playerMatches(p.slug, p.name, o.name) || R.norm(o.name) === R.norm(p.name)));
-  return pool.map(p => { const base = p.squad_pos || p.pos; const all = [...new Set([base, ...(p.played_pos || [])].filter(Boolean))]; return { slug: p.slug, name: p.name, first: p.first_name, club: p.club, pos: base, positions: all.join('/'), games: p.games, last: p.last_matchday, taken: isTaken(p) }; });
+  return pool.map(p => { const base = p.squad_pos || p.pos; const all = [...new Set([base, ...(p.played_pos || [])].filter(Boolean))]; return { slug: p.slug, name: p.name, first: p.first_name, club: p.club, pos: base, positions: all.join('/'), games: st[p.slug]?.sp ?? p.games, last: st[p.slug]?.zuletzt ?? p.last_matchday, starts: st[p.slug]?.se ?? null, tore: st[p.slug]?.t ?? null, assists: st[p.slug]?.a ?? null, karten: st[p.slug]?.k ?? null, taken: isTaken(p) }; });
 }

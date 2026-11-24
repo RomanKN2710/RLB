@@ -156,6 +156,14 @@ export const STEPS = [
     const { ensureSchema } = await import('./db'); await ensureSchema();
     const r = await q('update results r set club=p.club from players p where p.id=r.player_id and r.club is null returning r.player_id');
     const log = [`${r.length} Spielerzeilen mit dem heutigen Verein gestempelt`]; await setSetting('results_club_20261124', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'bl_stats_20261124', title: 'Saisonwerte aller Bundesliga-Spieler (auch der freien) aus den gespeicherten Spielberichten und der Auswertung Spieltag 1–3: für die Liste der freien Spieler im Transfermarkt', run: async () => {
+    const K = await import('./kicker'); const Inbox = await import('./kicker-inbox'); const D = await import('./data'); const b = await D.base(); const log = [];
+    for (const [md, players] of Object.entries(statsSeed || {})) { if (!/^\d+$/.test(md) || !players || typeof players !== 'object') continue; const list = Object.entries(players).map(([slug, s]) => ({ slug, team: s.team, start: s.start, assist: s.assist, tore: s.tore, karten: s.karten })); const n = await K.upsertStats(list, b, Number(md)); if (n) log.push(`Spieltag ${md}: ${n} Spieler aus der gespeicherten Auswertung`); }
+    for (const r of await q("select * from rounds where type='regulaer' order by number")) { const pg = await Inbox.pages(r.matchday).catch(() => ({ matches: [] })); let n = 0;
+      for (const html of pg.matches || []) { let parsed; try { parsed = K.parseMatchPage(html); } catch (e) { continue; } n += await K.upsertStats(Object.values(K.matchStats(parsed)), b, r.matchday); }
+      if (n) log.push(`${r.label}: ${n} Spieler aus ${pg.matches.length} Spielberichten`); }
+    if (!log.length) log.push('keine gespeicherten Spielberichte gefunden');
+    await setSetting('bl_stats_20261124', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'ewige_rangliste', title: 'Hall of Fame: ewige Rangliste 1999/00 – 2025/26 (27 Saisons aus dem Excel)', run: async userId => { const log = []; for (const s of ewigeSeed) { const n = await HOF.importSeason(s.season, s.rows, 'Ewige Rangliste (Excel)'); log.push(`${s.season}: ${n} Plätze, Meister ${s.rows.filter(r => r.rank === 1).map(r => r.manager).join(' & ')}`); } await setSetting('ewige_rangliste', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'qa_20261009', title: 'Bereinigung 09.10.2026: doppelte Korrektur-Notizen entfernt, Positionserwerbe der Korrektur 20.09. datiert', run: async userId => {
     const log = [];

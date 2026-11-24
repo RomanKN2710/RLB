@@ -8,6 +8,7 @@ import { fmtDt } from '@/components/ui';
 import { Sync, Split, UserRow, CreateUser, Vorsaison, Manual, PoolPaste, MatchdayImport, HallOfFameAdmin, Backups } from './AdminTools';
 import { listBackups } from '@/lib/backup';
 import { authSecretMissing } from '@/lib/auth-secret';
+import { healthReport } from '@/lib/health';
 import { runPending, status as migrationStatus } from '@/lib/migrations';
 import { roundCheck } from '@/lib/rundencheck';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
@@ -39,6 +40,10 @@ export default async function Admin() {
   const checks = {}; for (const r of show) { if (r.status !== 'final' && r.deadline && new Date(r.deadline).getTime() < now) { try { checks[r.id] = await roundCheck(r, b, await D.roundData(r, b)); } catch (e) { checks[r.id] = { problems: [{ text: 'Check fehlgeschlagen: ' + e.message }], warnings: [], ok: false }; } } }
   const blogUrl = process.env.BLOG_URL || 'https://rotisseryleaguebundesliga.blogspot.com';
   return (<>
+    {await (async () => { let h; try { h = await healthReport(); } catch (e) { return <div className="note">Zustandsprüfung fehlgeschlagen: {e.message}</div>; }
+      return <details className="card" open={h.warnungen.length > 0}><summary><b>Zustand der App</b> <span className={`pill ${h.warnungen.length ? 'bad' : 'ok'}`}>{h.warnungen.length ? `${h.warnungen.length} Punkt${h.warnungen.length === 1 ? '' : 'e'} zu erledigen` : 'alles in Ordnung'}</span></summary>
+        <ul className="clean small" style={{ marginTop: 8 }}>{h.punkte.map(x => <li key={x.name}><span aria-hidden="true">{x.ok === null ? 'ⓘ' : x.ok ? '✓' : '✗'}</span> <b>{x.name}:</b> <span className={x.ok === false ? 'delta down' : ''}>{x.text}</span></li>)}</ul>
+        <p className="mini">Dieselbe Prüfung läuft jeden Morgen; gibt es etwas zu erledigen und sind E-Mails eingerichtet, bekommen die Admins eine Mail.</p></details>; })()}
     {authSecretMissing() && <div className="note" style={{ borderColor: 'var(--bad, #b23a3a)' }}><b>Sicherheit:</b> In Vercel ist <code>AUTH_SECRET</code> nicht gesetzt (oder kürzer als 16 Zeichen). Die Anmeldung läuft mit einem Ersatzschlüssel weiter. Bitte unter Vercel › Settings › Environment Variables einen langen Zufallstext als <code>AUTH_SECRET</code> eintragen und neu veröffentlichen; danach melden sich alle einmal neu an.</div>}
     <div className="card"><div className="row between" style={{ alignItems: 'baseline' }}><div><div className="eyebrow">Admin</div><h2 style={{ margin: 0 }}>Spieltage auswerten</h2></div><span className="row" style={{ gap: 6 }}><a className="btn sm" href="/admin/hilfe">Hilfe für Admins</a><a className="btn sm sec" href="/api/handbuch" title="Admin-Handbuch mit Bildern, 20 Folien">Handbuch (PDF)</a><a className="btn sm sec" href="/api/export" title="Alle Daten als JSON, ohne Passwörter – zum Nachprüfen oder zum Schicken, wenn etwas hakt">Datenabzug (JSON)</a></span></div>
       <div className="steps" style={{ marginTop: 4, marginBottom: 8 }}><span>1 Aufstellungen und Gebote (App oder <a href={blogUrl} target="_blank" rel="noreferrer">Blog</a>; Blog gilt), Gebote auflösen</span><span>2 kicker-Daten per Skript oder von Hand</span><span>3 Auswerten und abschliessen</span></div>
