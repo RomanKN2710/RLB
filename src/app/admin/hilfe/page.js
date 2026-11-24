@@ -24,7 +24,8 @@ const FEHLER = [
   ['kicker: «Spiel fehlt»', 'Diese Aufstellungsseite fehlt im Eingang. Die Seite auf dem Handy nochmals öffnen (Reiter «Aufstellung», nicht Spielbericht).'],
   ['kicker: «Elf des Tages fehlt»', 'Die Elf ist bei kicker oft erst am Montag da. Später nochmals öffnen. Notfalls die elf Namen in Schritt 3 von Hand eintragen.'],
   ['Skript meldet rot «fehlgeschlagen»', '«nochmals senden» tippen. Hilft das nicht: Seite neu laden. Klappt es weiterhin nicht, den Quelltext am Computer einfügen.'],
-  ['Wert eines Spielers stimmt nicht', 'Rundenseite › «Aufstellungen & Spielerwerte» aufklappen und korrigieren. Die Zeile wird gesperrt, ein neuer Import überschreibt sie nicht.'],
+  ['Wert eines Spielers stimmt nicht', 'Rundenseite › «Aufstellungen & Spielerwerte» aufklappen und korrigieren. Die Zeile wird gesperrt, ein neuer Import überschreibt sie nicht – weder auf der Rundenseite noch über «Importieren» in der Übersicht.'],
+  ['Meldung: Runde ist abgeschlossen, zuerst wieder öffnen', 'Abgeschlossene Runden sind gesperrt. Rundenseite › Schritt 3 › «Runde wieder öffnen», kurz den Grund angeben (steht im Protokoll), ändern, wieder «Runde abschliessen (final)».'],
   ['Etwas ist komisch und keiner weiss warum', '«Datenabzug (JSON)» auf der Admin-Seite herunterladen und an Roman schicken.'],
 ];
 const SONST = [
@@ -32,8 +33,9 @@ const SONST = [
   ['Gebot für einen Manager erfassen (z. B. aus einer Mail)', 'Transfermarkt › oben «Gebot erfassen für:» › Manager wählen. Wie im Formular der Manager: mehrere Gebote, Spieler in Reihenfolge, «höchstens N», Entlassungen und Eventualaufträge.'],
   ['Spielerpool aktuell halten', 'Der Pool wird mit jedem kicker-Import nachgeführt (wer im Spielbericht steht, ist im Kader). Nach der Wintertransferzeit einmal Admin › Kader & Spielerpool › «Alle 18 Kader jetzt von kicker laden», sonst das Kader-JSON.'],
   ['Kauf oder Gebühr ausserhalb der Gebote', 'Admin › Kader & Spielerpool › «Manueller Kauf / Buchung».'],
-  ['Zusatzposition von Hand', 'Kader & Trades › beim Spieler «+M» usw. Die App erkennt Positionen sonst selbst aus der kicker-Startelf (gilt ab der Folgerunde).'],
-  ['Trade', 'Die beiden Manager erledigen das unter «Kader & Trades» selbst (Vorschlag und Annahme). Admins sehen alles dort.'],
+  ['Zusatzposition von Hand', 'Kader & Trades › beim Spieler «+M» usw. Die App erkennt Positionen sonst selbst aus der kicker-Startelf (gilt ab der Folgerunde). Eine von Hand entfernte Zusatzposition bleibt entfernt, auch nach dem nächsten Import.'],
+  ['Trade', 'Die beiden Manager erledigen das unter «Kader & Trades» selbst (Vorschlag und Annahme). Admins sehen alles dort. «Rückgängig» (bei Veto-Mehrheit) stellt auch die Aufstellungen der offenen Runde wieder her.'],
+  ['Bezeichnung einer Runde ändern', 'Rundenseite › Schritt 3 › Feld «Bezeichnung» › «Bezeichnung speichern». Das Team der Runde hat seinen eigenen Knopf «Team der Runde speichern».'],
   ['Neues Konto, Passwort vergessen', 'Admin › Konten & Einstellungen. Startpasswort setzen, der Manager ändert es beim ersten Login.'],
   ['Deadline verschieben', 'Rundenseite › Schritt 3 › Deadline «Manuell setzen». «Aus Spielplan» stellt sie zurück.'],
   ['Saison-Endstand in die Hall of Fame', 'Admin › Hall of Fame.'],

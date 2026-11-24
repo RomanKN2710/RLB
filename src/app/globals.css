@@ -163,3 +163,9 @@ details.bidform[open]>summary{background:var(--accent-soft)}
 .stepno{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:700 13px "IBM Plex Sans",sans-serif;margin-right:8px;vertical-align:middle}
 .steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.steps span{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--muted)}
 .steps span.done{border-color:var(--accent);background:var(--accent-soft);color:var(--good)}.steps span.skip{opacity:.6}
+
+/* Auswahllisten mit Häkchen (Trade): auf dem Handy bedienbar, statt Mehrfachauswahl mit Ctrl */
+.checklist { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-height: 280px; overflow: auto; margin: 0; }
+.checklist label { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.checklist label:last-child { border-bottom: 0; }
+.checklist input { width: 20px; height: 20px; flex: none; }

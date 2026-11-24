@@ -18,6 +18,8 @@ import * as HOF from '@/lib/halloffame';
 const ok = (msg, extra) => ({ ok: true, msg, ...extra });
 const fail = msg => ({ ok: false, msg });
 const wrap = fn => async (...a) => { try { return await fn(...a); } catch (e) { return fail(e.message || String(e)); } };
+/** Abgeschlossene Runden sind gesperrt: wer Werte, Korrekturen oder Aufstellungen ändern will, öffnet die Runde zuerst wieder (mit Grund, im Protokoll). */
+const lockedMsg = round => round && round.status === 'final' ? `${round.label} ist abgeschlossen. Zuerst «Runde wieder öffnen», dann ändern.` : null;
 const rev = () => ['/', '/aufstellung', '/markt', '/kader', '/abrechnung', '/admin'].forEach(p => revalidatePath(p, 'layout'));
 
 /* ---------- Auth ---------- */
@@ -49,6 +51,7 @@ export const saveLineupAction = wrap(async (roundId, managerId, entries) => {
   if (!admin && u.manager_id !== managerId) return fail('Nur die eigene Aufstellung');
   const round = await D.roundById(roundId); if (!round) return fail('Runde nicht gefunden');
   if (!admin) { const open = await D.openRound(); if (!open || open.id !== round.id) return fail('Diese Aufstellung ist nicht mehr offen (Deadline 90 Min. vor Anpfiff, Ziff. 5.1)'); }
+  else { const gesperrt = lockedMsg(round); if (gesperrt) return fail(gesperrt); }
   const b = await D.base();
   const clean = {}; for (const [pid, e] of Object.entries(entries || {})) { const p = b.players[pid]; if (!p || p.manager_id !== managerId || p.status !== 'active' || !R.playerValid(p, round.number)) return fail(`Spieler ${pid} nicht im Kader`);
     const pos = String(e.pos || p.base_pos).toUpperCase(); if (!R.positionsOf(p, round.number).includes(pos)) return fail(`${p.name} kann nicht als ${pos} aufgestellt werden (Ziff. 5.2${R.positionFrom(p, pos) ? ', ' + pos + ' gilt erst ab Runde ' + R.positionFrom(p, pos) / 10 : ''})`); clean[pid] = { pos }; }
@@ -152,6 +155,7 @@ export const withdrawBidAction = wrap(async (forManager) => {
 export const proposeTradeAction = wrap(async (prev, fd) => {
   const u = await requireUser(); const from = u.manager_id; const to = Number(fd.get('to')); const give = fd.getAll('give').map(String), get = fd.getAll('get').map(String);
   if (!from || !to || from === to) return fail('Partner wählen'); if (!give.length || give.length !== get.length) return fail('Gleich viele Spieler auf beiden Seiten (Kader bleibt 22)');
+  if (new Set(give).size !== give.length || new Set(get).size !== get.length) return fail('Jeder Spieler darf nur einmal im Trade stehen');
   const ps = await q('select * from players where id = any($1)', [give.concat(get)]);
   if (give.some(id => !ps.find(p => p.id === id && p.manager_id === from && p.status === 'active'))) return fail('Eigene Spieler ungültig');
   if (get.some(id => !ps.find(p => p.id === id && p.manager_id === to && p.status === 'active'))) return fail('Spieler des Partners ungültig');
@@ -170,8 +174,13 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
     await q("update trades set status='rejected' where id=$1", [tradeId]); rev(); return fail('Trade nicht mehr gültig: mindestens ein Spieler ist nicht mehr im ursprünglichen Kader. Trade wurde verworfen.'); }
   const b0 = open ? await D.base() : null;
   await tx(async x => {
+    // Zuerst den Trade für sich beanspruchen: ein Doppelklick oder zwei gleichzeitige Annahmen buchen nur einmal
+    const claim = await x.one("update trades set status='done', done_at=now(), round_id=$2 where id=$1 and status='proposed' returning id", [tradeId, roundId]);
+    if (!claim) throw new Error('Trade ist nicht mehr offen (schon angenommen oder abgelehnt)');
     // Aufstellungen der offenen Runde vor dem Besitzwechsel sichern (sonst fiele der abgegebene Spieler beim Übertrag ersatzlos weg)
     if (open) for (const m of [t.from_manager, t.to_manager]) await BlogImport.materializeLineup(x, open, m, b0);
+    // … und für «Rückgängig» festhalten, wie sie vor dem Trade aussahen
+    if (open) { const snap = await x.q('select manager_id, entries, free_in from lineups where round_id=$1 and manager_id = any($2)', [open.id, [t.from_manager, t.to_manager]]); await x.q('update trades set lineup_snapshot=$1 where id=$2', [JSON.stringify({ round_id: open.id, lineups: snap }), tradeId]); }
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.to_manager, t.give]);
     await x.q("update players set manager_id=$1, source='trade' where id = any($2)", [t.from_manager, t.get_]);
     for (const m of [t.from_manager, t.to_manager]) await x.q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'trade',$3,$4)", [m, roundId, R.TRADE_FEE, `Trade #${t.id}`]);
@@ -188,7 +197,6 @@ export const respondTradeAction = wrap(async (tradeId, accept) => {
         let e = { ...lu.entries }; const free = (lu.free_in || []).slice();
         out.forEach((id, i) => { const np = P[inn[i]]; if (!np) return; const sw = R.swapIn(e, id, np, P, open.number); if (sw) { e = sw.entries; free.push(np.id); } });
         await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(e), free, open.id, m]); } }
-    await x.q("update trades set status='done', done_at=now(), round_id=$2 where id=$1", [tradeId, roundId]);
   });
   await audit(u.id, 'trade_done', { tradeId }); rev(); return ok('Trade vollzogen, je CHF 5 gebucht');
 });
@@ -200,8 +208,23 @@ export const vetoTradeAction = wrap(async (tradeId, on) => {
 });
 export const revertTradeAction = wrap(async (tradeId) => {
   const u = await requireAdmin(); const t = await one('select * from trades where id=$1', [tradeId]); if (!t || t.status !== 'done') return fail('Kein vollzogener Trade');
-  await tx(async x => { await x.q('update players set manager_id=$1 where id=any($2)', [t.from_manager, t.give]); await x.q('update players set manager_id=$1 where id=any($2)', [t.to_manager, t.get_]); await x.q("update trades set status='reverted' where id=$1", [tradeId]); });
-  await audit(u.id, 'trade_revert', { tradeId }); rev(); return ok('Trade rückgängig gemacht (Gebühren bleiben gebucht)');
+  // Nur zurücknehmen, wenn die Spieler noch dort sind, wo der Trade sie hingebracht hat
+  const cur = await q('select id, name, manager_id, status from players where id = any($1)', [t.give.concat(t.get_)]);
+  const falsch = cur.filter(p => p.status !== 'active' || p.manager_id !== (t.give.includes(p.id) ? t.to_manager : t.from_manager));
+  if (falsch.length) return fail(`Nicht rückgängig zu machen: ${falsch.map(p => p.name).join(', ')} ${falsch.length === 1 ? 'ist' : 'sind'} nicht mehr im Kader, in den der Trade führte (weitergegeben, entlassen oder Abgang).`);
+  const log = [];
+  await tx(async x => {
+    const claim = await x.one("update trades set status='reverted' where id=$1 and status='done' returning id", [tradeId]); if (!claim) throw new Error('Trade ist nicht mehr vollzogen');
+    await x.q('update players set manager_id=$1 where id=any($2)', [t.from_manager, t.give]); await x.q('update players set manager_id=$1 where id=any($2)', [t.to_manager, t.get_]);
+    // Aufstellungen: in der Runde des Trades (falls noch offen) den Stand von vorher herstellen; in allen offenen Runden steht danach niemand mehr mit fremden Spielern da
+    const snap = t.lineup_snapshot; const sr = snap && await x.one('select * from rounds where id=$1', [snap.round_id]);
+    if (sr && sr.status !== 'final') for (const l of snap.lineups || []) { await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where round_id=$3 and manager_id=$4', [JSON.stringify(l.entries), l.free_in || [], sr.id, l.manager_id]); log.push(`Aufstellung ${sr.label} wie vor dem Trade`); }
+    const owner = {}; (await x.q('select id, manager_id from players where id = any($1)', [t.give.concat(t.get_)])).forEach(r => owner[r.id] = r.manager_id);
+    for (const lu of await x.q("select l.* from lineups l join rounds r on r.id=l.round_id where r.status<>'final' and l.manager_id = any($1)", [[t.from_manager, t.to_manager]])) {
+      const e = { ...lu.entries }; let ch = false; for (const pid of Object.keys(e)) if (owner[pid] != null && owner[pid] !== lu.manager_id) { delete e[pid]; ch = true; }
+      if (ch) await x.q('update lineups set entries=$1, free_in=$2, updated_at=now() where id=$3', [JSON.stringify(e), (lu.free_in || []).filter(pid => e[pid]), lu.id]); }
+  });
+  await audit(u.id, 'trade_revert', { tradeId, log }); rev(); return ok('Trade rückgängig gemacht (Gebühren bleiben gebucht)' + (log.length ? ' · ' + [...new Set(log)].join(' · ') : '') + ' · Bitte beide Aufstellungen der offenen Runde ansehen.');
 });
 
 /* ---------- Admin: Benutzer ---------- */
@@ -212,7 +235,10 @@ export const createUserAction = wrap(async (prev, fd) => {
   await audit(a.id, 'user_create', { email, role, mid }); rev(); return ok(`Konto ${email} angelegt`);
 });
 export const resetPasswordAction = wrap(async (userId, pw) => { const a = await requireAdmin(); if (String(pw).length < 8) return fail('min. 8 Zeichen'); await q('update users set password_hash=$1, must_change_pw=true where id=$2', [await hashPassword(String(pw)), userId]); await audit(a.id, 'pw_reset', { userId }); return ok('Startpasswort gesetzt'); });
-export const deleteUserAction = wrap(async (userId) => { const a = await requireAdmin(); if (userId === a.id) return fail('Eigenes Konto nicht löschbar'); await q('delete from users where id=$1', [userId]); rev(); return ok('Konto gelöscht'); });
+export const deleteUserAction = wrap(async (userId) => { const a = await requireAdmin(); if (userId === a.id) return fail('Eigenes Konto nicht löschbar'); const u = await one('select id, name, role, manager_id from users where id=$1', [userId]); if (!u) return fail('Konto nicht gefunden');
+  // Verweise lösen (wer hat gespeichert, Protokoll), sonst verweigert die Datenbank das Löschen
+  await tx(async x => { await x.q('update lineups set updated_by=null where updated_by=$1', [userId]); await x.q('update audit set user_id=null where user_id=$1', [userId]); await x.q('delete from users where id=$1', [userId]); });
+  await audit(a.id, 'user_delete', { userId, name: u.name, role: u.role }); rev(); return ok('Konto gelöscht'); });
 
 /* ---------- Admin: Spielplan / Runden ---------- */
 export const syncAction = wrap(async () => { await requireAdmin(); await syncTeams(); const n = await syncSchedule(); rev(); return ok(`Spielplan synchronisiert (${n} Spiele)`); });
@@ -223,7 +249,11 @@ export const setDeadlineAction = wrap(async (roundId, isoOrEmpty) => { const a =
   await audit(a.id, 'deadline', { roundId, isoOrEmpty }); rev(); return ok('Deadline gesetzt'); });
 /* Team der Runde / Spieler des Tages von Hand: Namen werden gegen die Aufstellungen der Runde aufgelöst und als TdR-Punkte
    geschrieben (Elf des Tages 1, Spieler des Tages zusätzlich 1). Nicht zuordenbare Namen werden gemeldet. */
+/* Bezeichnung der Runde: eigener Knopf, damit sie nicht zusammen mit dem Team der Runde gespeichert wird */
+export const roundLabelAction = wrap(async (roundId, label) => { const a = await requireAdmin(); const l = String(label || '').trim(); if (!l) return fail('Bezeichnung fehlt'); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  await q('update rounds set label=$1 where id=$2', [l, roundId]); await audit(a.id, 'round_label', { roundId, von: round.label, nach: l }); rev(); return ok('Bezeichnung gespeichert'); });
 export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  const gesperrt = lockedMsg(round); if (gesperrt) return fail(gesperrt);
   if (String(tdr || '').trim() && !(round.deadline && new Date(round.deadline) <= new Date())) return fail('Team der Runde erst nach der Deadline erfassen');
   if (String(tdr || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean).length > 11) return fail('Höchstens 11 Namen (der Spieler des Tages kommt ins eigene Feld)');
   const b = await D.base(); await D.ensureLineups(round, b);
@@ -245,8 +275,10 @@ export const roundInfoAction = wrap(async (roundId, tdr, sdt, label) => { const 
   await q("update rounds set tdr=$1, sdt=$2, label=coalesce(nullif($3,''),label) where id=$4", [names, sdt || null, label || '', roundId]);
   await audit(a.id, 'round_tdr_manual', { roundId, n: tdrPids.size, sdt: sdtPid }); rev();
   return ok(`Team der Runde: ${tdrPids.size} von ${names.length} Namen in Aufstellungen${sdtPid ? ', Spieler des Tages +1' : ''}, ${written} TdR-Werte geändert.${notes.length ? ' ' + notes.join(' · ') : ''}`); });
-export const finalizeRoundAction = wrap(async (roundId, final) => { const a = await requireAdmin();
-  if (!final) { await q("update rounds set status='open' where id=$1", [roundId]); await audit(a.id, 'round_status', { roundId, final }); rev(); return ok('Runde wieder geöffnet'); }
+export const finalizeRoundAction = wrap(async (roundId, final, grund) => { const a = await requireAdmin();
+  if (!final) { const g = String(grund || '').trim(); if (g.length < 3) return fail('Bitte kurz angeben, warum die Runde wieder geöffnet wird (steht im Protokoll)');
+    await q("update rounds set status='open' where id=$1", [roundId]); await audit(a.id, 'round_status', { roundId, final: false, grund: g }); rev(); return ok('Runde wieder geöffnet. Nach der Änderung wieder abschliessen; den Bericht bei Bedarf auf der Seite «Bericht» neu erstellen.'); }
+  const cur = await D.roundById(roundId); if (cur && cur.status === 'final') return ok('Runde ist schon abgeschlossen');
   await BlogImport.finalizeRound(a.id, roundId); rev();
   // Spieltagsbericht entsteht im Hintergrund (eigene Funktion mit längerer Laufzeit)
   const rep = BlogImport.triggerReport(roundId); if (rep) waitUntil(rep);
@@ -267,15 +299,21 @@ export const splitNachtragAction = wrap(async (matchId) => { const a = await req
 
 /* ---------- Admin: Resultate, Korrekturen ---------- */
 export const saveResultsAction = wrap(async (roundId, managerId, rows) => { const a = await requireAdmin();
+  const gesperrt = lockedMsg(await D.roundById(roundId)); if (gesperrt) return fail(gesperrt);
   await tx(async x => { for (const [pid, r] of Object.entries(rows || {})) { const old = await x.one('select * from results where round_id=$1 and player_id=$2', [roundId, pid]);
     const vals = { start: +r.start || 0, assist: +r.assist || 0, tore: +r.tore || 0, karten: +r.karten || 0, tdr: +r.tdr || 0 };
     const changed = old ? ['start', 'assist', 'tore', 'karten', 'tdr'].some(k => Number(old[k]) !== vals[k]) : true; // Admin ändert gegenüber Import: Zeile sperren
     await x.q(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,locked,source) values($1,$2,$3,$4,$5,$6,$7,$8,'admin')
     on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, locked=(results.locked or excluded.locked), source=case when excluded.locked then 'admin' else results.source end`, [roundId, pid, vals.start, vals.assist, vals.tore, vals.karten, vals.tdr, changed]); } });
   await audit(a.id, 'results', { roundId, managerId }); rev(); return ok('Resultate gespeichert'); });
-export const unlockResultsAction = wrap(async (roundId) => { await requireAdmin(); await q('update results set locked=false where round_id=$1', [roundId]); rev(); return ok('Sperren aufgehoben, Import überschreibt wieder'); });
-export const addCorrectionAction = wrap(async (roundId, managerId, text, delta) => { await requireAdmin(); if (!text) return fail('Text fehlt'); await q('insert into corrections(round_id,manager_id,text,delta) values($1,$2,$3,$4)', [roundId, managerId, text, JSON.stringify(delta || {})]); rev(); return ok('Korrektur gebucht'); });
-export const deleteCorrectionAction = wrap(async (id) => { await requireAdmin(); await q('delete from corrections where id=$1', [id]); rev(); return ok('Gelöscht'); });
+export const unlockResultsAction = wrap(async (roundId) => { const a = await requireAdmin(); const gesperrt = lockedMsg(await D.roundById(roundId)); if (gesperrt) return fail(gesperrt);
+  const r = await q('update results set locked=false where round_id=$1 and locked returning player_id', [roundId]); await audit(a.id, 'results_unlock', { roundId, n: r.length }); rev(); return ok('Sperren aufgehoben, Import überschreibt wieder'); });
+export const addCorrectionAction = wrap(async (roundId, managerId, text, delta) => { const a = await requireAdmin(); if (!text) return fail('Text fehlt');
+  const gesperrt = lockedMsg(await D.roundById(roundId)); if (gesperrt) return fail(gesperrt);
+  await q('insert into corrections(round_id,manager_id,text,delta) values($1,$2,$3,$4)', [roundId, managerId, text, JSON.stringify(delta || {})]); await audit(a.id, 'correction_add', { roundId, managerId, text, delta }); rev(); return ok('Korrektur gebucht'); });
+export const deleteCorrectionAction = wrap(async (id) => { const a = await requireAdmin(); const k = await one('select * from corrections where id=$1', [id]); if (!k) return fail('Korrektur nicht gefunden');
+  const gesperrt = lockedMsg(await D.roundById(k.round_id)); if (gesperrt) return fail(gesperrt);
+  await q('delete from corrections where id=$1', [id]); await audit(a.id, 'correction_delete', { roundId: k.round_id, managerId: k.manager_id, text: k.text, delta: k.delta }); rev(); return ok('Gelöscht'); });
 
 /* ---------- Admin: Gebote auflösen (Ziff. 7) ---------- */
 export const previewBidsAction = wrap(async (roundId) => { await requireAdmin(); await BlogImport.ensureBidColumns(); const round = await D.roundById(roundId); const b = await D.base();
@@ -290,33 +328,44 @@ export const undoBidsAction = wrap(async (roundId) => { const a = await requireA
 
 /* ---------- Admin: Spieler, Buchungen ---------- */
 export const manualBuyAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const m = Number(fd.get('manager_id')), name = String(fd.get('name') || '').trim(), pos = String(fd.get('pos')), club = String(fd.get('club')), price = Number(fd.get('price')) || 0, from = Number(fd.get('valid_from')) || 0;
-  if (!m || !name) return fail('Manager und Name'); await ensureKickerColumns(); const id = `${m}-${name}-${Date.now().toString(36)}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const contract = price >= R.CONTRACT_MIN ? '1J' : null;
+  if (!m || !name) return fail('Manager und Name'); await ensureKickerColumns();
+  const doppelt = await one("select id from players where manager_id=$1 and status='active' and lower(name)=lower($2) and (club is null or club=$3)", [m, name, club]); if (doppelt) return fail(`${name} steht schon aktiv im Kader dieses Managers (doppelt geklickt?)`);
+  const hinweise = []; const budget = await D.budgetLeft(m); if (price > budget) hinweise.push(`Achtung: Kaufbudget überschritten (${budget} verfügbar)`);
+  const kaderN = (await one("select count(*)::int as n from players where manager_id=$1 and status='active'", [m])).n; if (kaderN + 1 > R.KADER_SIZE) hinweise.push(`Achtung: Kader hat jetzt ${kaderN + 1} Spieler – eine Entlassung fehlt`); const id = `${m}-${name}-${Date.now().toString(36)}`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const contract = price >= R.CONTRACT_MIN ? '1J' : null;
   const r = from ? await one('select * from rounds where number=$1', [from]) : await D.openRound();
   // Positionen aus dem kicker-Pool: Grundposition laut Kaderliste, Zusatzpositionen laut bisherigen Startelf-Einsätzen (Ziff. 5.2)
   const pp = (await q('select * from bl_players where club=$1', [club])).find(x => playerMatches(x.slug, x.name, name));
   const basePos = (pp && pp.squad_pos) || pos; const extra = pp ? [...new Set((pp.played_pos || []).filter(x => x && x !== basePos))] : [];
   await q("insert into players(id,manager_id,name,club,base_pos,extra_pos,price,slot,source,status,valid_from,jugend,contract,contract_mandatory,kicker_slug) values($1,$2,$3,$4,$5,$6,$7,'bank','kauf','active',$8,false,$9,$10,$11)", [id, m, name, club || null, basePos, extra, price, r ? r.number : 1, contract, !!contract, pp ? pp.slug : null]);
-  await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,'manuell (Admin)')", [r ? r.id : null, m, name, price]); await audit(a.id, 'manual_buy', { id }); rev(); return ok(`${name} gebucht`); });
+  await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'kauf',$3,$4,'manuell (Admin)')", [r ? r.id : null, m, name, price]); await audit(a.id, 'manual_buy', { id, m, name, club, price }); rev(); return ok(`${name} gebucht${hinweise.length ? ' · ' + hinweise.join(' · ') : ''}`); });
 export const releasePlayerAction = wrap(async (pid) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const open = await D.openRound(); const last = await one('select * from rounds where number < $1 order by number desc limit 1', [open ? open.number : 9999]);
   const neu = open && (p.valid_from ?? 0) >= open.number; const tr = neu ? open : last;
-  await q("update players set status='released', valid_to=$2 where id=$1", [pid, neu ? (p.valid_from - 1) : (last ? last.number : 0)]); await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,'manuell (Admin)')", [tr ? tr.id : null, p.manager_id, p.name, R.value(p)]); await audit(a.id, 'release', { pid }); rev(); return ok(`${p.name} entlassen`); });
+  // Statuswechsel und Buchung in einem Schritt: ein Doppelklick oder zwei Admins zugleich buchen nur einmal
+  const done = await tx(async x => { const hit = await x.one("update players set status='released', valid_to=$2 where id=$1 and status='active' returning id", [pid, neu ? (p.valid_from - 1) : (last ? last.number : 0)]); if (!hit) return false;
+    await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'entlassung',$3,$4,'manuell (Admin)')", [tr ? tr.id : null, p.manager_id, p.name, R.value(p)]); return true; });
+  if (!done) return fail(`${p.name} ist nicht mehr aktiv im Kader (schon entlassen oder Abgang)`);
+  await audit(a.id, 'release', { pid }); rev(); return ok(`${p.name} entlassen`); });
 export const abgangPlayerAction = wrap(async (pid) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const open = await D.openRound(); const last = await one('select * from rounds where number < $1 order by number desc limit 1', [open ? open.number : 9999]);
-  await q("update players set status='abgang', valid_to=$2 where id=$1", [pid, last ? last.number : 0]); await q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'gutschrift',$3,$4)", [p.manager_id, last ? last.id : null, R.value(p), `Abgang ${p.name} aus der Bundesliga (Ziff. 7.4)`]); await q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'abgang',$3,$4,'Wert dem Kaufbudget gutgeschrieben')", [last ? last.id : null, p.manager_id, p.name, R.value(p)]); await audit(a.id, 'abgang', { pid }); rev(); return ok(`Abgang ${p.name} gebucht`); });
+  const done = await tx(async x => { const hit = await x.one("update players set status='abgang', valid_to=$2 where id=$1 and status='active' returning id", [pid, last ? last.number : 0]); if (!hit) return false;
+    await x.q("insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,'gutschrift',$3,$4)", [p.manager_id, last ? last.id : null, R.value(p), `Abgang ${p.name} aus der Bundesliga (Ziff. 7.4)`]);
+    await x.q("insert into transfers(round_id,manager_id,type,player_name,price,note) values($1,$2,'abgang',$3,$4,'Wert dem Kaufbudget gutgeschrieben')", [last ? last.id : null, p.manager_id, p.name, R.value(p)]); return true; });
+  if (!done) return fail(`${p.name} ist nicht mehr aktiv im Kader (Abgang schon gebucht oder entlassen)`);
+  await audit(a.id, 'abgang', { pid, wert: R.value(p) }); rev(); return ok(`Abgang ${p.name} gebucht`); });
 /* Name (kicker-Schreibweise, damit der Import trifft) oder Verein eines Kaderspielers korrigieren */
 export const editPlayerAction = wrap(async (pid, name, club) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?');
   const nm = String(name || '').trim() || p.name; const cl = String(club || '').trim() || p.club; const b = await D.base();
   if (cl !== p.club && !b.clubs.some(c => c.id === cl)) return fail(`Verein «${cl}» unbekannt – gültig: ${b.clubs.map(c => c.id).join(', ')}`);
   await q('update players set name=$1, club=$2 where id=$3', [nm, cl, pid]); await audit(a.id, 'player_edit', { pid, von: [p.name, p.club], nach: [nm, cl] }); rev();
   return ok(`${p.name} (${p.club}) → ${nm} (${cl})`); });
-export const addPositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const set = new Set([...(p.extra_pos || []), pos]); set.delete(p.base_pos); await q('update players set extra_pos=$1 where id=$2', [[...set], pid]); rev(); return ok(`${p.name}: Zusatzposition ${pos}`); });
+export const addPositionAction = wrap(async (pid, pos) => { const a = await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const set = new Set([...(p.extra_pos || []), pos]); set.delete(p.base_pos); await q('update players set extra_pos=$1, extra_pos_denied=array_remove(extra_pos_denied,$3) where id=$2', [[...set], pid, pos]); await audit(a.id, 'position_add', { pid, pos }); rev(); return ok(`${p.name}: Zusatzposition ${pos}`); });
 export const setContractAction = wrap(async (pid, contract) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (p.contract_mandatory && !contract) return fail('Vertragspflicht (Neueinkauf ≥ 20) kann nicht aufgelöst werden (Ziff. 7.4)');
   if (contract) { const others = await q("select contract from players where manager_id=$1 and status='active' and contract is not null and id<>$2", [p.manager_id, pid]); const n2 = others.filter(x => x.contract === '2J').length + (contract === '2J' ? 1 : 0);
     if (others.length + 1 > 4) return fail('Höchstens 4 Verträge pro Manager (Ziff. 4.3.3)'); if (n2 > 2) return fail('Höchstens 2 Verträge über 2 Jahre (Ziff. 4.3.3)'); }
-  await q('update players set contract=$1 where id=$2', [contract || null, pid]); rev(); return ok('Vertrag gesetzt'); });
-export const setJugendAction = wrap(async (pid, on) => { await requireAdmin(); await q('update players set jugend=$1 where id=$2', [!!on, pid]); rev(); return ok('Jugendstatus gesetzt'); });
+  await q('update players set contract=$1 where id=$2', [contract || null, pid]); await audit((await requireAdmin()).id, 'contract', { pid, von: p.contract, nach: contract || null }); rev(); return ok('Vertrag gesetzt'); });
+export const setJugendAction = wrap(async (pid, on) => { const a = await requireAdmin(); await q('update players set jugend=$1 where id=$2', [!!on, pid]); await audit(a.id, 'jugend', { pid, on: !!on }); rev(); return ok('Jugendstatus gesetzt'); });
 export const ledgerAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const m = Number(fd.get('manager_id')), type = String(fd.get('type')), amount = Number(fd.get('amount')), text = String(fd.get('text') || ''); if (!m || !amount) return fail('Manager und Betrag'); const open = await D.openRound();
   await q('insert into ledger(manager_id,round_id,type,amount,text) values($1,$2,$3,$4,$5)', [m, open ? open.id : null, type, amount, text]); await audit(a.id, 'ledger', { m, type, amount }); rev(); return ok('Buchung erfasst'); });
-export const setPaidAction = wrap(async (managerId, paid) => { await requireAdmin(); await q('insert into finance(manager_id,paid) values($1,$2) on conflict(manager_id) do update set paid=excluded.paid', [managerId, Number(paid) || 0]); rev(); return ok('Zahlung gespeichert'); });
+export const setPaidAction = wrap(async (managerId, paid) => { const a = await requireAdmin(); const alt = await one('select paid from finance where manager_id=$1', [managerId]); await q('insert into finance(manager_id,paid) values($1,$2) on conflict(manager_id) do update set paid=excluded.paid', [managerId, Number(paid) || 0]); await audit(a.id, 'paid', { managerId, von: alt ? Number(alt.paid) : 0, nach: Number(paid) || 0 }); rev(); return ok('Zahlung gespeichert'); });
 export const poolPasteAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const text = String(fd.get('text') || ''); let n = 0;
   for (const line of text.split(/\r?\n/)) { const [name, club, pos] = line.split(/[;,\t]/).map(x => (x || '').trim()); if (!name) continue;
     const slug = 'man-' + name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-') + (club ? '-' + club.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '');
@@ -351,6 +400,7 @@ export const importKickerHtmlAction = wrap(async (roundId, htmlAufstellung, html
   return importKickerInboxAction(roundId, unlock); });
 /* Eingang (Handy oder eingefügter Quelltext) importieren */
 export const importKickerInboxAction = wrap(async (roundId, unlock = false) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  const gesperrt = lockedMsg(round); if (gesperrt) return fail(gesperrt);
   let r; try { r = await importInbox(round.matchday, { unlock, userId: a.id }); } catch (e) { return fail(e.message); } rev();
   const parts = importSummary(r);
   if (r.errors.length) return fail(`Import mit ${r.errors.length} Problem(en): ${r.errors.join(' · ')} — ${parts.join(', ')}`);
@@ -361,7 +411,8 @@ export const moveElfInboxAction = wrap(async (roundId, fromMatchday) => { await 
 export const clearKickerInboxAction = wrap(async (roundId) => { await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); await Inbox.clear(round.matchday); rev(); return ok('Eingang geleert'); });
 export const setKickerSlugAction = wrap(async (pid, slug) => { await requireAdmin(); await ensureKickerColumns(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); const v = String(slug || '').trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, '').split('/')[0] || null;
   await q('update players set kicker_slug=$1 where id=$2', [v, pid]); rev(); return ok(v ? `${p.name}: kicker-Kennung ${v}` : `${p.name}: kicker-Kennung entfernt`); });
-export const removePositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); if (pos === p.base_pos) return fail('Grundposition kann nicht entfernt werden'); await q('update players set extra_pos=array_remove(extra_pos,$1) where id=$2', [pos, pid]); rev(); return ok(`${p.name}: Zusatzposition ${pos} entfernt`); });
+export const removePositionAction = wrap(async (pid, pos) => { await requireAdmin(); const p = await one('select * from players where id=$1', [pid]); if (!p) return fail('?'); if (pos === p.base_pos) return fail('Grundposition kann nicht entfernt werden'); // als «nicht gewährt» merken: der nächste kicker-Import vergibt sie nicht wieder (Ziff. 5.2, Zweifelsfall)
+  await q("update players set extra_pos=array_remove(extra_pos,$1), extra_pos_from=coalesce(extra_pos_from,'{}'::jsonb) - $1::text, extra_pos_denied=array(select distinct unnest(coalesce(extra_pos_denied,'{}'::text[]) || array[$1::text])) where id=$2", [pos, pid]); await audit((await requireAdmin()).id, 'position_remove', { pid, pos }); rev(); return ok(`${p.name}: Zusatzposition ${pos} entfernt (bleibt entfernt, bis sie von Hand wieder gesetzt wird)`); });
 
 /* Hall of Fame: Endstand einer vergangenen Saison eintragen (Zeilen «1 Dani 55.5»), ersetzt die Saison komplett. */
 export const hofImportAction = wrap(async (prev, fd) => { const a = await requireAdmin(); const season = String(fd.get('season') || '').trim(); const n = await HOF.importSeason(season, String(fd.get('text') || ''), String(fd.get('note') || '').trim());

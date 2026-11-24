@@ -213,6 +213,7 @@ export async function acquirePositions(starters, b, round) {
     if (!s.kpos || s.kpos === 'T') continue;
     const r = resolveKickerPlayer(s, active, null); if (!r) continue; const p = r.player;
     if (s.kpos === p.base_pos || (p.extra_pos || []).includes(s.kpos)) continue;
+    if ((p.extra_pos_denied || []).includes(s.kpos)) { log.push(`${p.name}: Startelf als ${s.kpos} – Zusatzposition wurde von den Admins nicht gewährt (im Kader von Hand entfernt), bleibt so`); continue; }
     // Ziff. 5.2: "Im Zweifelsfall wird kein Positionserwerb gewaehrt." Zweifelsfall: Aussenverteidiger in einer Dreierkette als M gefuehrt.
     const doubt = s.formation && /^3-/.test(s.formation) && p.base_pos === 'V' && s.kpos === 'M';
     if (doubt) { log.push(`${p.name}: Startelf als M in Formation ${s.formation} – Zweifelsfall (Aussenverteidiger in Dreierkette), Zusatzposition M nicht automatisch gewährt (Ziff. 5.2); bei Bedarf im Kader von Hand +M`); continue; }

@@ -272,3 +272,7 @@ create table if not exists hall_of_fame (
   note text
 );
 create unique index if not exists hall_of_fame_season_manager on hall_of_fame(season, manager);
+
+-- Nachgeführt am 24.11.2026 (src/lib/db.js ensureSchema)
+alter table trades add column if not exists lineup_snapshot jsonb;
+alter table players add column if not exists extra_pos_denied text[] not null default '{}';

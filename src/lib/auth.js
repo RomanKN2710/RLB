@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
-import { one, q } from './db';
+import { one, q, ensureSchema } from './db';
 
 const COOKIE = 'rlb_session';
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || 'dev-secret-change-me');
@@ -22,6 +22,7 @@ export async function getUser() {
   // Faellt die Datenbank aus, gilt der Besucher als abgemeldet: dann bleibt wenigstens
   // /login bedienbar, statt dass jede Seite mit einer Fehlerseite antwortet.
   try {
+    await ensureSchema();
     return await one('select u.id,u.email,u.name,u.role,u.manager_id,u.must_change_pw,m.name as manager_name from users u left join managers m on m.id=u.manager_id where u.id=$1', [p.uid]);
   } catch { return null; }
 }

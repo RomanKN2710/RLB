@@ -1,6 +1,6 @@
 /* Einmalige Datenkorrekturen und Nachträge laufen automatisch: beim Aufruf der Admin-Seite werden alle Schritte
    eingespielt, die laut settings noch fehlen. Jeder Schritt ist idempotent und protokolliert sich selbst. */
-import { q, one, getSetting, setSetting, audit } from './db';
+import { q, one, tx, getSetting, setSetting, audit } from './db';
 import { base } from './data';
 import { applyKorrektur20260915 } from './korrektur-20260915';
 import { applyKorrektur20260920, applyAufstellungenST4 } from './korrektur-20260920';
@@ -175,14 +175,25 @@ export const STEPS = [
 ];
 
 /** Fehlende Schritte einspielen. Liefert [{key, title, log|error}] der jetzt gelaufenen Schritte. */
+/* Die Schritte gehören zur Saison 2026/27. In einer neuen Saison (SEASON anders gesetzt, frische Datenbank) läuft keiner davon. */
+const SAISON = '2026';
 export async function runPending(userId = null) {
-  const out = [];
-  for (const s of STEPS) {
-    if (await getSetting(s.key)) continue;
-    try { const r = await s.run(userId); out.push({ key: s.key, title: s.title, log: r.log || [] }); }
-    catch (e) { out.push({ key: s.key, title: s.title, error: e.message }); await setSetting(s.key + '_fehler', { at: new Date().toISOString(), error: e.message }); }
-  }
-  return out;
+  if (String(process.env.SEASON || SAISON) !== SAISON) return [];
+  const offen = []; for (const s of STEPS) if (!(await getSetting(s.key))) offen.push(s);
+  if (!offen.length) return [];
+  // Nur ein Lauf zur selben Zeit: öffnen zwei Admins die Seite gleichzeitig (oder lädt jemand neu, während ein Schritt läuft), wartet der zweite nicht und startet nichts
+  return tx(async x => {
+    const lock = await x.one('select pg_try_advisory_xact_lock(2026112401) as ok'); if (!lock.ok) return [{ key: 'läuft', title: 'Einmalige Schritte laufen gerade in einem anderen Fenster', log: ['Seite in einer Minute neu laden'] }];
+    const out = [];
+    for (const s of offen) {
+      if (await getSetting(s.key)) continue;   // inzwischen von einem anderen Lauf erledigt
+      // Ein Schritt, der eben gescheitert ist, wird nicht bei jedem Seitenaufruf neu versucht
+      const f = await getSetting(s.key + '_fehler'); if (f && Date.now() - new Date(f.at).getTime() < 5 * 60e3) { out.push({ key: s.key, title: s.title, error: f.error + ' (nächster Versuch frühestens 5 Minuten nach dem letzten)' }); break; }
+      try { const r = await s.run(userId); out.push({ key: s.key, title: s.title, log: r.log || [] }); }
+      catch (e) { out.push({ key: s.key, title: s.title, error: e.message }); await setSetting(s.key + '_fehler', { at: new Date().toISOString(), error: e.message }); break; }   // spätere Schritte bauen auf früheren auf: anhalten
+    }
+    return out;
+  });
 }
 
 /** Stand aller Schritte für die Anzeige. */

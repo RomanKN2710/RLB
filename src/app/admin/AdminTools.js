@@ -23,9 +23,9 @@ export function PoolPaste() { const [s, a] = useFormState(poolPasteAction, null)
   return <div className="adminbox"><h3>Spielerpool ergänzen</h3><p className="mini">Eine Zeile pro Spieler: <code>Name; Verein; Position</code> (Verein und Position optional). Der Pool füllt sich sonst automatisch aus den kicker-Aufstellungen.</p>
     <form action={a} className="stack"><textarea name="text" rows={5} placeholder={'Nwaneri; Dortmund; M\nDoué; Leverkusen; V'} /><div className="row"><button className="sm sec">In Pool übernehmen</button><Msg state={s} /></div></form></div>; }
 
-/* Import-Knopf je Spieltag in der Übersicht (Eingang vom Handy); Sperren werden dabei aufgehoben, kicker ist die Quelle */
+/* Import-Knopf je Spieltag in der Übersicht (Eingang vom Handy). Von Hand korrigierte (gesperrte) Zeilen bleiben stehen, wie auf der Rundenseite. */
 export function MatchdayImport({ matchday }) { const { msg, pending, run } = useRun();
-  return <span className="row" style={{ gap: 4 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importKickerInboxMatchdayAction(matchday, true))}>{pending ? 'importiert…' : 'Importieren'}</button>{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
+  return <span className="row" style={{ gap: 4 }}><button className="sm komm" disabled={pending} onClick={() => run(() => importKickerInboxMatchdayAction(matchday, false))}>{pending ? 'importiert…' : 'Importieren'}</button>{msg && <span className={`mini ${msg.ok ? '' : 'delta down'}`}>{msg.msg}</span>}</span>; }
 
 export function HallOfFameAdmin({ seasons }) { const [s, a] = useFormState(hofImportAction, null); const { msg, pending, run } = useRun(); const [arm, setArm] = useState(null);
   return <div className="stack">

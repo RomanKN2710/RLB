@@ -32,6 +32,17 @@ export async function tx(fn) {
   } catch (e) { await client.query('rollback'); throw e; } finally { client.release(); }
 }
 
+/* Spalten und Tabellen, die seit der Ersteinrichtung dazugekommen sind. Läuft einmal je Serverinstanz (alles «if not exists»),
+   damit neue Versionen ohne Handgriff an der Datenbank starten. Jede Zeile steht auch in db/schema.sql (tests/schema.test.mjs). */
+const DDL = [
+  "alter table trades add column if not exists lineup_snapshot jsonb",
+  "alter table players add column if not exists extra_pos_denied text[] not null default '{}'",
+];
+export async function ensureSchema() {
+  if (!globalThis.__rlbSchema) globalThis.__rlbSchema = (async () => { for (const s of DDL) await pool.query(s); })().catch(e => { globalThis.__rlbSchema = null; throw e; });
+  return globalThis.__rlbSchema;
+}
+
 /** Uebersetzt typische Datenbankfehler in einen Satz, der sagt, was zu tun ist. */
 export function dbHint(e) {
   const c = e && e.code;
