@@ -156,6 +156,15 @@ export const STEPS = [
     const { ensureSchema } = await import('./db'); await ensureSchema();
     const r = await q('update results r set club=p.club from players p where p.id=r.player_id and r.club is null returning r.player_id');
     const log = [`${r.length} Spielerzeilen mit dem heutigen Verein gestempelt`]; await setSetting('results_club_20261124', { at: new Date().toISOString(), log }); return { log }; } },
+  { key: 'results_manager_20261124', title: 'Besitzer je Runde festhalten: Potential und Auszeichnungen rechnen nach einem Trade mit dem damaligen Besitzer', run: async () => {
+    const { ensureSchema } = await import('./db'); await ensureSchema(); const log = [];
+    const r = await q('update results r set manager_id=p.manager_id from players p where p.id=r.player_id and r.manager_id is null returning r.player_id'); log.push(`${r.length} Spielerzeilen mit dem heutigen Besitzer gestempelt`);
+    // Trades zurückrechnen, jüngster zuerst: vor der Runde des Trades gehörte der Spieler dem jeweils anderen Manager
+    for (const t of await q("select t.*, r.number from trades t join rounds r on r.id=t.round_id where t.status='done' order by t.done_at desc")) {
+      const a = await q('update results x set manager_id=$1 from rounds r where r.id=x.round_id and r.number < $2 and x.player_id = any($3) returning x.player_id', [t.from_manager, t.number, t.give]);
+      const c = await q('update results x set manager_id=$1 from rounds r where r.id=x.round_id and r.number < $2 and x.player_id = any($3) returning x.player_id', [t.to_manager, t.number, t.get_]);
+      if (a.length + c.length) log.push(`Trade #${t.id}: ${a.length + c.length} frühere Zeilen dem damaligen Besitzer zugeordnet`); }
+    await setSetting('results_manager_20261124', { at: new Date().toISOString(), log }); return { log }; } },
   { key: 'bl_stats_20261124', title: 'Saisonwerte aller Bundesliga-Spieler (auch der freien) aus den gespeicherten Spielberichten und der Auswertung Spieltag 1–3: für die Liste der freien Spieler im Transfermarkt', run: async () => {
     const K = await import('./kicker'); const Inbox = await import('./kicker-inbox'); const D = await import('./data'); const b = await D.base(); const log = [];
     for (const [md, players] of Object.entries(statsSeed || {})) { if (!/^\d+$/.test(md) || !players || typeof players !== 'object') continue; const list = Object.entries(players).map(([slug, s]) => ({ slug, team: s.team, start: s.start, assist: s.assist, tore: s.tore, karten: s.karten })); const n = await K.upsertStats(list, b, Number(md)); if (n) log.push(`Spieltag ${md}: ${n} Spieler aus der gespeicherten Auswertung`); }

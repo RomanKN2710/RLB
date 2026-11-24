@@ -10,6 +10,8 @@ import { q, one } from '@/lib/db';
 import { fmtDt } from '@/components/ui';
 import RlbLogo from '@/components/RlbLogo';
 import Nav from '@/components/Nav';
+import NavProgress from '@/components/NavProgress';
+import { Suspense } from 'react';
 
 export const metadata = { title: 'RLB Managerspiel 26/27', description: 'Rotissery League Bundesliga', applicationName: 'RLB Managerspiel', appleWebApp: { capable: true, title: 'RLB', statusBarStyle: 'default' }, robots: { index: false, follow: false } };
 export const viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: '#FFFFFF' }, { media: '(prefers-color-scheme: dark)', color: '#1A211D' }], width: 'device-width', initialScale: 1 };
@@ -30,6 +32,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="de"><head><link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" /><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" /></head>
       <body>
+        <Suspense fallback={null}><NavProgress /></Suspense>
         <header>
           <div className="bar">
             <div className="brand"><RlbLogo height={38} wordmark={false} /><div><h1>RLB Managerspiel</h1><small>Rotissery League Bundesliga · Saison 2026/27</small></div></div>

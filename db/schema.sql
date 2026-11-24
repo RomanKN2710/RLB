@@ -287,3 +287,4 @@ alter table users add column if not exists mail_off boolean not null default fal
 create table if not exists mail_log (id bigserial primary key, at timestamptz not null default now(), kind text not null, round_id int, user_id int, ok boolean not null default false, error text);
 create table if not exists password_resets (id bigserial primary key, user_id int not null, token_hash text not null, expires_at timestamptz not null, used_at timestamptz, created_at timestamptz not null default now());
 create table if not exists bl_stats (slug text not null, matchday int not null, club text, start int not null default 0, assist int not null default 0, tore int not null default 0, karten int not null default 0, primary key (slug, matchday));   -- Werte aller Bundesliga-Spieler je Spieltag (für den Transfermarkt)
+alter table results add column if not exists manager_id int;   -- Besitzer des Spielers in dieser Runde (ein späterer Trade ändert frühere Runden nicht)

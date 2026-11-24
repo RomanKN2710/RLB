@@ -319,7 +319,7 @@ export const saveResultsAction = wrap(async (roundId, managerId, rows) => { cons
     const changed = old ? ['start', 'assist', 'tore', 'karten', 'tdr'].some(k => Number(old[k]) !== vals[k]) : true; // Admin ändert gegenüber Import: Zeile sperren
     await x.q(`insert into results(round_id,player_id,start,assist,tore,karten,tdr,locked,source) values($1,$2,$3,$4,$5,$6,$7,$8,'admin')
     on conflict(round_id,player_id) do update set start=excluded.start, assist=excluded.assist, tore=excluded.tore, karten=excluded.karten, tdr=excluded.tdr, locked=(results.locked or excluded.locked), source=case when excluded.locked then 'admin' else results.source end`, [roundId, pid, vals.start, vals.assist, vals.tore, vals.karten, vals.tdr, changed]); } });
-  await q('update results r set club=p.club from players p where p.id=r.player_id and r.round_id=$1 and r.club is null', [roundId]);
+  await q('update results r set club=coalesce(r.club, p.club), manager_id=coalesce(r.manager_id, p.manager_id) from players p where p.id=r.player_id and r.round_id=$1 and (r.club is null or r.manager_id is null)', [roundId]);
   await audit(a.id, 'results', { roundId, managerId, rows }); rev(); return ok('Resultate gespeichert'); });
 export const unlockResultsAction = wrap(async (roundId) => { const a = await requireAdmin(); const gesperrt = lockedMsg(await D.roundById(roundId)); if (gesperrt) return fail(gesperrt);
   const r = await q('update results set locked=false where round_id=$1 and locked returning player_id', [roundId]); await audit(a.id, 'results_unlock', { roundId, n: r.length }); rev(); return ok('Sperren aufgehoben, Import überschreibt wieder'); });
@@ -462,3 +462,24 @@ export const resetWithTokenAction = wrap(async (prev, fd) => {
   await q('update users set password_hash=$1, must_change_pw=false, pw_changed_at=now() where id=$2', [await hashPassword(pw), r.user_id]); await q('delete from login_attempts where email=(select lower(email) from users where id=$1)', [r.user_id]);
   await audit(r.user_id, 'pw_reset_mail', {}); return ok('Passwort gesetzt.');
 });
+
+/* ---------- Admin: gespeicherte kicker-Kaderseiten (im Browser gelesen) übernehmen ---------- */
+export const squadsUploadAction = wrap(async (squads) => { const a = await requireAdmin(); const { applySquads } = await import('@/lib/squads'); const b = await D.base();
+  if (!squads || typeof squads !== 'object' || !Object.keys(squads).length) return fail('Keine Kader gelesen');
+  const { default: clubSlugs } = await import('@/lib/kicker-clubs.js'); const known = new Set(Object.values(clubSlugs)); const fremd = Object.keys(squads).filter(k => !known.has(k));
+  if (fremd.length) return fail(`Unbekannte Vereine: ${fremd.join(', ')} – nur Bundesliga-Kaderseiten der laufenden Saison hochladen`);
+  const r = await applySquads(squads, b, `Kaderseiten hochgeladen (${Object.keys(squads).length} Vereine)`); await audit(a.id, 'squads_upload', { clubs: r.clubs, players: r.players, changes: r.log.length }); rev();
+  const n = t => r.log.filter(l => l.type === t).length; const rlb = r.log.filter(l => l.rlb_player_id);
+  return ok(`${r.players} Spieler in ${r.clubs} Kadern übernommen · Zugänge ${n('zugang')}, Wechsel ${n('wechsel')}, Abgänge ${n('abgang')}, Positionen ${n('position')}${r.clubs < 18 ? ' · Abgänge werden erst gebucht, wenn alle 18 Vereine dabei sind' : ''}${rlb.length ? ' · betrifft RLB-Spieler: ' + rlb.map(l => `${l.name} (${l.type})`).join(', ') : ''}${r.log.filter(l => l.type === 'hinweis').map(l => ' · ' + l.name).join('')}`); });
+
+/* ---------- Admin: Blog selbst lesen (statt kopieren und einfügen) ---------- */
+export const loadBlogTextAction = wrap(async (roundId) => { await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?');
+  const { readBlog } = await import('@/lib/blog'); let data; try { data = await readBlog(); } catch (e) { return fail(`Der Blog ist von der App aus gerade nicht lesbar (${e.message}). Bitte wie bisher den Blog öffnen, alles kopieren und hier einfügen.`); }
+  const vor = await one('select deadline from rounds where number < $1 and deadline is not null order by number desc limit 1', [round.number]); const ab = vor ? new Date(vor.deadline).getTime() - 36 * 3600e3 : 0;   // etwas Vorlauf, der Leser sortiert selbst nach Runde
+  const zeit = iso => { const d = new Date(iso); return isNaN(d) ? null : d; }; const DE = (d, o) => new Intl.DateTimeFormat('de-CH', { timeZone: 'Europe/Zurich', ...o }).format(d);
+  const posts = (data.posts || []).map(p => ({ ...p, d: zeit(p.published) })).filter(p => !p.d || p.d.getTime() > ab).sort((x, y) => (y.d ? y.d.getTime() : 0) - (x.d ? x.d.getTime() : 0));
+  if (!posts.length) return fail('Im Blog stehen keine Posts seit der letzten Deadline.');
+  const out = []; let tag = null;
+  for (const p of posts) { if (p.d) { const t = `${DE(p.d, { weekday: 'long' })}, ${DE(p.d, { day: 'numeric' }).replace('.', '')}. ${DE(p.d, { month: 'long' })} ${DE(p.d, { year: 'numeric' })}`; if (t !== tag) { out.push(t, ''); tag = t; } }
+    out.push(p.title || '(ohne Titel)', '', String(p.text || '').trim(), '', `Eingestellt von ${p.author || 'Blog'} um ${p.d ? DE(p.d, { hour: '2-digit', minute: '2-digit' }) : '12:00'}`, ''); }
+  return ok(`${posts.length} Posts aus dem Blog geladen (${data.via === 'feed' ? 'Blogger-Feed' : 'HTML-Seite'}). Jetzt «Vorschau».`, { text: out.join('\n') }); });

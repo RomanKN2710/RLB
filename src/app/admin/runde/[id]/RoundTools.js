@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
-import { importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBlogAction, applyBlogAction, importKickerHtmlAction, unlockResultsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, undoBidsAction, saveResultsAction, roundLabelAction } from '@/actions';
+import { loadBlogTextAction, importKickerInboxAction, clearKickerInboxAction, moveElfInboxAction, previewBlogAction, applyBlogAction, importKickerHtmlAction, unlockResultsAction, setDeadlineAction, roundInfoAction, finalizeRoundAction, addCorrectionAction, deleteCorrectionAction, previewBidsAction, applyBidsAction, undoBidsAction, saveResultsAction, roundLabelAction } from '@/actions';
 import { CATS } from '@/lib/rules';
 
 function useRun() { const [msg, setMsg] = useState(null); const [pending, start] = useTransition(); return { msg, pending, run: fn => start(async () => setMsg(await fn())) }; }
@@ -120,7 +120,8 @@ export function BlogPaste({ roundId, log }) { const { msg, pending, run } = useR
   const L = prev?.lineups, G = prev?.bids; const canApply = prev && (L?.blocks.some(x => x.ok && !x.gleich) || G?.blocks.some(x => x.ok && !x.resolved));
   return (<div className="stack" style={{ marginTop: 8 }}>
     <textarea rows={7} placeholder={'Blog öffnen, alles markieren (Strg+A), kopieren, hier einfügen – Aufstellungen und Gebote zusammen.'} value={text} onChange={e => { setText(e.target.value); setPrev(null); }} style={{ width: '100%' }} />
-    <div className="row"><button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewBlogAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
+    <div className="row"><button className="sm sec" disabled={pending} title="Die App liest den Blog selbst und füllt das Feld. Klappt das nicht, den Text wie bisher einfügen." onClick={() => run(async () => { const r = await loadBlogTextAction(roundId); if (r.ok && r.text) { setText(r.text); setPrev(null); } return r; })}>Aus dem Blog laden</button>
+      <button className="sm sec" disabled={pending || !text.trim()} onClick={() => run(async () => { const r = await previewBlogAction(roundId, text); if (r.ok) setPrev(r); return r; })}>Vorschau</button>
       <button className="sm komm" disabled={pending || !canApply} title={prev ? '' : 'zuerst Vorschau'} onClick={() => run(async () => { const r = await applyBlogAction(roundId, text); if (r.ok) { setText(''); setPrev(null); } return r; })}>Alles Zulässige übernehmen</button><M msg={msg} /></div>
     {prev?.lineups?.warnung && <div className="note"><b>Gebote verdeckt.</b> {prev.lineups.warnung}</div>}
     {L && <><div className="eyebrow" style={{ marginTop: 6 }}>Aufstellungen</div><div className="tbl wrap"><table><thead><tr><th className="l">Manager</th><th className="l">Erkannt (Blog)</th><th className="l">Prüfung</th><th className="l">Bisher in der App</th></tr></thead><tbody>

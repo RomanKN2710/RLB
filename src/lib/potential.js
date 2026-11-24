@@ -47,7 +47,8 @@ export async function potential(sd) {
   for (const r of rounds) {
     const i = sd.upto.indexOf(r); const d = sd.datas[i]; const tot = {}; const det = {};
     for (const m of ids) {
-      const kader = b.playersArr.filter(p => p.manager_id === m && (p.valid_from ?? 0) <= r.number && (p.valid_to == null || p.valid_to >= r.number) && (p.status === 'active' || p.valid_to != null));
+      // Besitzer in dieser Runde: beim Import festgehalten; ohne Eintrag der heutige
+      const kader = b.playersArr.filter(p => (d.results[p.id]?.manager_id ?? p.manager_id) === m && (p.valid_from ?? 0) <= r.number && (p.valid_to == null || p.valid_to >= r.number) && (p.status === 'active' || p.valid_to != null));
       const cands = kader.map(p => ({ pid: p.id, options: positionsAt(p, r.number, acq).map(pos => { const values = R.entryValues(p, pos, d.results[p.id], d.clubRes); return { pos, score: score(values), values }; }) }));
       const best = bestEleven(cands);
       const sums = R.zero(); (best?.picks || []).forEach(x => R.CATS.forEach(([c]) => sums[c] += x.values[c]));

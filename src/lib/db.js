@@ -38,6 +38,7 @@ const DDL = [
   "alter table trades add column if not exists lineup_snapshot jsonb",
   "alter table players add column if not exists extra_pos_denied text[] not null default '{}'",
   "alter table results add column if not exists club text",
+  "alter table results add column if not exists manager_id int",
   "alter table users add column if not exists pw_changed_at timestamptz",
   "create table if not exists login_attempts (id bigserial primary key, email text, ip text, ok boolean not null default false, at timestamptz not null default now())",
   "create index if not exists login_attempts_at on login_attempts(at)",

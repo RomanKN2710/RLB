@@ -33,7 +33,7 @@ function profile(sd, i, m) {
   const rows = Object.entries(lu?.entries || {}).map(([pid, e]) => { const p = b.players[pid]; if (!p) return null; const res = d.results[pid] || {}; const v = R.entryValues(p, e.pos, res, d.clubRes); return { pid, name: p.name, club: p.club, pos: e.pos, v, s: score(v), start: Number(res.start) || 0, played: !!d.results[pid] }; }).filter(Boolean);
   const total = score(t);
   const inLineup = new Set(rows.map(x => x.pid));
-  const bench = b.playersArr.filter(p => p.manager_id === m && !inLineup.has(p.id) && d.results[p.id] && (p.valid_from ?? 0) <= r.number && (p.valid_to == null || p.valid_to >= r.number))
+  const bench = b.playersArr.filter(p => (d.results[p.id]?.manager_id ?? p.manager_id) === m && !inLineup.has(p.id) && d.results[p.id] && (p.valid_from ?? 0) <= r.number && (p.valid_to == null || p.valid_to >= r.number))
     .map(p => { const v = R.entryValues(p, p.base_pos, d.results[p.id], d.clubRes); return { name: p.name, club: p.club, s: score(v) }; }).sort((a, z) => z.s - a.s)[0] || null;
   const ghosts = rows.filter(x => x.start === 0 && d.matches.some(mm => mm.finished && (b.teamToClub[mm.team1] === x.club || b.teamToClub[mm.team2] === x.club))).map(x => x.name);
   const free = new Set(lu?.free_in || []); const fr = rows.filter(x => free.has(x.pid));

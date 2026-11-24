@@ -13,6 +13,7 @@ import { runPending, status as migrationStatus } from '@/lib/migrations';
 import { roundCheck } from '@/lib/rundencheck';
 import { allStatus as inboxAll } from '@/lib/kicker-inbox';
 import { SquadSync, Leavers } from './SquadTools';
+import SquadUpload from './SquadUpload';
 import { rlbLeavers } from '@/lib/squads';
 import clubSlugs from '../../../db/seed/kicker-clubs.json';
 
@@ -66,6 +67,7 @@ export default async function Admin() {
     <details className="card"><summary><b>Kader &amp; Spielerpool</b> <span className="mini">kicker-Kader, Abgänge, manuelle Käufe und Buchungen</span></summary>
       <div className="stack" style={{ marginTop: 8 }}>
         <SquadSync status={await getSetting('squads_sync')} slugs={Object.values(clubSlugs)} season={process.env.KICKER_SEASON || '2026-27'} />
+        <div className="adminbox"><SquadUpload slugs={Object.values(clubSlugs)} season={process.env.KICKER_SEASON || '2026-27'} /></div>
         <Leavers items={(await rlbLeavers(b)).map(x => ({ player: { id: x.player.id, name: x.player.name, club: x.player.club, price: Number(x.player.price) }, manager: b.managerName[x.player.manager_id], since: x.since }))} />
         <div className="adminbox"><h3>Manueller Kauf / Buchung</h3><Manual managers={b.managers.map(m => ({ id: m.id, name: m.name }))} clubs={b.clubs.map(c => c.id)} /></div>
         <PoolPaste />
@@ -94,6 +96,7 @@ export default async function Admin() {
         <div className="row"><Sync /><span className="mini">Spielplan und Resultate (OpenLigaDB). Letzter Voll-Sync: {lastSync ? fmtDt(lastSync.at) : 'nie'} · aktuelle Spieltage: {lastCur ? fmtDt(lastCur.at) : 'nie'}. Beim Seitenaufruf wird automatisch aktualisiert (stündlich Resultate, täglich der ganze Spielplan).</span></div>
         <div className="row"><a className="btn sm sec" href="/api/export">Datenabzug (JSON)</a><span className="mini">Alle Daten ohne Passwörter, zum Nachprüfen ausserhalb der App.</span></div>
         <Backups list={(await listBackups().catch(() => [])).map(x => ({ id: x.id, at: x.at, art: x.art, bytes: x.bytes }))} />
+        <div className="row"><Link className="btn sm sec" href="/admin/protokoll">Protokoll</Link><span className="mini">Wer hat was wann geändert: Aufstellungen, Werte, Korrekturen, Gebote, Runden, Buchungen, Konten.</span></div>
         <div className="row"><Link className="btn sm sec" href="/archiv">Blog-Archiv</Link><span className="mini">Alle Blog-Einträge je Runde neben Aufstellung und Kader; neue Einträge per Copy-Paste einspielen.</span></div>
         <details><summary className="mini">Einmalige Datenkorrekturen: {migrations.filter(m => m.at).length} von {migrations.length} eingespielt{justRun.length ? ` (${justRun.length} soeben)` : ''}{migrations.some(m => m.error) ? ' – Fehler!' : ''}</summary>
           <p className="mini">Nachträge und Korrekturen aus den Abgleichen laufen automatisch beim Aufruf dieser Seite, jeder Schritt genau einmal.</p>

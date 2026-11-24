@@ -115,7 +115,7 @@ export async function importPages(round, b, pages, opts = {}) {
   if (Object.keys(benchStats).length) log.push(`${Object.keys(benchStats).length} nicht aufgestellte Kaderspieler mit Werten gespeichert (für die Potential-Tabelle)`);
   if (round.type !== 'nachtrag' && elf && tdrNames.length) await q('update rounds set tdr=$1, sdt=coalesce($2, sdt) where id=$3', [tdrNames, elf.sdt ? elf.sdt.name : null, round.id]);
   // Verein der Runde festhalten (nur wo noch keiner steht)
-  await q('update results r set club=p.club from players p where p.id=r.player_id and r.round_id=$1 and r.club is null', [round.id]);
+  await q('update results r set club=coalesce(r.club, p.club), manager_id=coalesce(r.manager_id, p.manager_id) from players p where p.id=r.player_id and r.round_id=$1 and (r.club is null or r.manager_id is null)', [round.id]);
   log.push(`${written} Spielerzeilen geschrieben${skipped ? `, ${skipped} gesperrt (vom Admin geändert)` : ''}`);
   const summary = { at: new Date().toISOString(), games: matches.length, soll: (round.match_ids || []).length || null, elf: !!elf, counts, errors, log, coverage };
   await setSetting(`kicker_import_${round.id}`, summary);
