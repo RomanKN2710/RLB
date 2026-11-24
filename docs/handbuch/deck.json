@@ -3,7 +3,7 @@
   "createdOnFiles": { "v": 1, "at": "2026-10-26T07:40:02Z" },
   "lists": "css",
   "title": "RLB Admin-Handbuch",
-  "order": ["cover", "ueberblick", "adminseite", "rundenseite", "s1-blog", "s1-gebote", "s1-zuteilen", "automatik", "handy", "s2-senden", "s2-hand", "s3-abschluss", "werte", "fehler", "fehler2", "selten", "manager", "hilfe", "code", "checkliste"],
+  "order": ["cover", "ueberblick", "adminseite", "rundenseite", "s1-blog", "s1-gebote", "s1-zuteilen", "automatik", "handy", "s2-senden", "s2-hand", "s3-abschluss", "werte", "fehler", "fehler2", "selten", "manager", "hilfe", "code", "zustand", "checkliste"],
   "sections": {
     "s1": { "description": "Einstieg: was ein Admin tut und wo alles liegt", "start": "cover" },
     "s2": { "description": "Schritt 1: Aufstellungen und Gebote aus dem Blog übernehmen und Gebote zuteilen", "start": "s1-blog" },
