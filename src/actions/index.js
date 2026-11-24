@@ -80,6 +80,7 @@ export const submitBidsAction = wrap(async (payload) => {
   if (!admin && managerId !== u.manager_id) return fail('Nur eigene Gebote');
   const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
   if (!admin && open.deadline && new Date(open.deadline) <= new Date()) return fail('Gebots-Deadline vorbei (Ziff. 7.1)');
+  if (open.bids_resolved) return fail('Die Gebote dieser Runde sind schon aufgelöst');
   const b = await D.base(); const clubs = new Set(b.clubs.map(c => c.id));
   const groups = (payload?.groups || []).map(g => ({ maxWins: Number(g.maxWins) || 1, bids: (g.bids || []).map(x => ({ player_name: String(x.name || '').trim(), club: String(x.club || ''), pos: String(x.pos || '').toUpperCase(), price: Number(x.price) })).filter(x => x.player_name), releases: (g.releases || []).filter(Boolean).map(String), swaps: (g.swaps || []).filter(Boolean).map(String) })).filter(g => g.bids.length);
   if (!groups.length) return fail('Mindestens ein Spieler');
@@ -87,6 +88,18 @@ export const submitBidsAction = wrap(async (payload) => {
   const prevNo = await one('select number from rounds where number < $1 order by number desc limit 1', [open.number]);
   const lu = (await one('select * from lineups where round_id=$1 and manager_id=$2', [open.id, managerId])) || (await D.prevLineup(open, managerId));
   const seenNames = new Set(), seenRel = new Set(), seenSwap = new Set();
+  // Spieler gegen den Spielerpool lesen: Schreibweise, Verein und Position kommen von kicker (Ziff. 5.2); wer schon in einem RLB-Kader steht, ist nicht frei
+  const pool = await D.freeAgents(b); const { playerMatches } = await import('@/lib/kicker'); const nichtImPool = [];
+  const nameHit = (p, n) => playerMatches(p.slug, p.name, n) || R.norm(p.name) === R.norm(n) || (p.first && R.norm(p.first + ' ' + p.name) === R.norm(n));
+  for (const g of groups) for (const bid of g.bids) {
+    const hits = pool.filter(p => nameHit(p, bid.player_name)).filter((p, i, a) => a.findIndex(x => x.name === p.name && x.club === p.club) === i);
+    const inClub = hits.filter(p => p.club === bid.club); const hit = inClub.length === 1 ? inClub[0] : hits.length === 1 ? hits[0] : null;
+    if (!hit && hits.length > 1) return fail(`${bid.player_name}: mehrere Spieler dieses Namens im Pool (${hits.map(p => p.name + ', ' + p.club).join('; ')}) – Verein wählen`);
+    if (hit) { if (hit.taken) return fail(`${hit.name} (${hit.club}) steht schon in einem RLB-Kader`); bid.player_name = hit.name; bid.club = hit.club; if (!String(hit.positions || '').split('/').includes(bid.pos)) bid.pos = hit.pos; }
+    else nichtImPool.push(bid.player_name);
+  }
+  // Was die Gebote zusammen höchstens binden: je Gebot die teuersten «höchstens N» Spieler (Ziff. 7.4)
+  const gebunden = groups.reduce((a, g) => a + g.bids.map(x => Number(x.price) || 0).sort((x, y) => y - x).slice(0, g.maxWins).reduce((s, v) => s + v, 0), 0);
   for (const [gi, g] of groups.entries()) { const tag = groups.length > 1 ? `Gebot ${gi + 1}: ` : '';
     if (g.maxWins < 1 || g.maxWins > g.bids.length) return fail(`${tag}«höchstens» muss zwischen 1 und ${g.bids.length} liegen`);
     for (const bid of g.bids) {
@@ -110,6 +123,7 @@ export const submitBidsAction = wrap(async (payload) => {
     for (const pid of g.swaps) { if (!lu || !lu.entries[pid]) return fail(`${tag}Eventualauftrag: ${(b.players[pid] || {}).name || 'Spieler'} steht nicht in deiner Aufstellung`);
       if (seenSwap.has(pid)) return fail(`${(b.players[pid] || {}).name} ist mehrfach für einen Eventualauftrag genannt`); seenSwap.add(pid); }
   }
+  if (gebunden > budget) return fail(`Deine Gebote können zusammen CHF ${gebunden} binden, im Kaufbudget sind CHF ${budget} (Ziff. 7.4). Preise senken oder «höchstens» verkleinern.`);
   await BlogImport.ensureBidColumns();
   await tx(async x => {
     await x.q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]);
@@ -121,14 +135,16 @@ export const submitBidsAction = wrap(async (payload) => {
         [open.id, managerId, bid.player_name, bid.club, bid.pos, bid.price, rel, sw, ++prio, g.maxWins, g.releases, g.swaps, gi + 1]);
     }
   });
-  await audit(u.id, 'bid', { roundId: open.id, managerId, groups: groups.map(g => ({ maxWins: g.maxWins, n: g.bids.length })) }); rev();
+  await audit(u.id, 'bid', { roundId: open.id, managerId, groups: groups.map(g => ({ maxWins: g.maxWins, bids: g.bids.map(x => `${x.pos} ${x.player_name} (${x.club}) ${x.price}`), releases: g.releases, swaps: g.swaps })) }); rev();
   const n = groups.reduce((a, g) => a + g.bids.length, 0);
-  return ok(`${groups.length > 1 ? groups.length + ' Gebote' : 'Gebot'} mit ${n} Spieler${n === 1 ? '' : 'n'} verdeckt gespeichert${admin && managerId !== u.manager_id ? ' für ' + b.managerName[managerId] : ''}`);
+  return ok(`${groups.length > 1 ? groups.length + ' Gebote' : 'Gebot'} mit ${n} Spieler${n === 1 ? '' : 'n'} verdeckt gespeichert${admin && managerId !== u.manager_id ? ' für ' + b.managerName[managerId] : ''}${nichtImPool.length ? ` · nicht im Spielerpool: ${nichtImPool.join(', ')} (Schreibweise prüfen)` : ''}`);
 });
 export const withdrawBidAction = wrap(async (forManager) => {
   const u = await requireUser(); const open = await D.openRound(); if (!open) return fail('Keine offene Runde');
   const managerId = u.role === 'admin' && Number(forManager) ? Number(forManager) : u.manager_id; if (!managerId) return fail('Kein Manager');
-  await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed'", [open.id, managerId]); await audit(u.id, 'bid_withdraw', { roundId: open.id, managerId }); rev(); return ok('Gebote zurückgezogen');
+  if (u.role !== 'admin' && open.deadline && new Date(open.deadline) <= new Date()) return fail('Gebots-Deadline vorbei (Ziff. 7.1)');
+  const weg = await q("delete from bids where round_id=$1 and manager_id=$2 and status='sealed' returning player_name, club, price, priority, gruppe", [open.id, managerId]);
+  await audit(u.id, 'bid_withdraw', { roundId: open.id, managerId, gebote: weg }); rev(); return ok(weg.length ? 'Gebote zurückgezogen' : 'Es gab keine verdeckten Gebote');
 });
 
 /** Aufstellung einer Runde holen; fehlt sie, aus der letzten Vorrunde übernehmen (Ziff. 5.1) und speichern. */
@@ -268,6 +284,7 @@ export const previewBidTextAction = wrap(async (roundId, text) => { await requir
   return ok(`${parsed.blocks.length} Manager mit Geboten erkannt, ${parsed.blocks.filter(x => x.ok).length} zulässig${parsed.unclear.length ? ' · unklar: ' + parsed.unclear.join('; ') : ''}`, { blocks: parsed.blocks.map(x => ({ managerId: x.managerId, name: x.name, title: x.title, maxWins: x.maxWins, groups: (x.groups || []).map(g => ({ gruppe: g.gruppe, nr: g.nr, maxWins: g.maxWins, releases: g.releases.map(p => p.name) })), budget: x.budget, ok: x.ok, problems: x.problems, notes: x.notes, unmatched: x.unmatched, bisher: x.bisher, resolved: x.resolved, releases: x.releases.map(p => p.name), bids: x.bids.map(bd => ({ priority: bd.priority, gruppe: bd.gruppe || 1, player_name: bd.player_name, club: bd.club, pos: bd.pos, price: bd.price, release: bd.release?.name || null, swapOut: bd.swapOut?.name || null, pool: bd.pool || null, poolNote: bd.poolNote || null })) })), unclear: parsed.unclear, skipped: parsed.skipped }); });
 
 export const applyBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const round = await D.roundById(roundId); if (!round) return fail('Runde?'); if (round.bids_resolved) return fail('Bereits aufgelöst');
+  if (round.deadline && new Date(round.deadline) > new Date()) return fail('Die Deadline ist noch nicht vorbei: Gebote bleiben bis dahin verdeckt (Ziff. 7.1)');
   const r = await BlogImport.applyBids(a.id, roundId); rev(); return ok(`Gebote aufgelöst: ${r.won} Zuschlag${r.won === 1 ? '' : 'e'}` + (r.log.length ? ' · ' + r.log.join(' · ') : '')); });
 export const undoBidsAction = wrap(async (roundId) => { const a = await requireAdmin(); const r = await BlogImport.undoBids(a.id, roundId); rev(); return ok('Auflösung zurückgesetzt – Gebote sind wieder verdeckt' + (r.log.length ? ' · ' + r.log.join(' · ') : '')); });
 

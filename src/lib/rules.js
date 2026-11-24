@@ -175,7 +175,10 @@ export function resolveBids(bids, ctx) {
       if (b.price < Number(pr.price)) { b.status = 'invalid'; b.reason = `Mindestgebot ${pr.price} = alter Wert (7.3)`; continue; }
     }
   }
-  const order = ctx.tiebreak; const withdrawn = new Set();
+  const order = ctx.tiebreak || []; const withdrawn = new Set();
+  // Tabellenplatz für den Gleichstand: wer in der Reihenfolge fehlt (neuer Manager, Tippfehler), steht hinten und gewinnt nicht von selbst.
+  // ctx.tieRank(m) kann gleiche Ränge liefern (punktgleiche Manager); dann ist der Gleichstand unentschieden.
+  const rank = m => { if (ctx.tieRank) { const r = ctx.tieRank(m); if (r != null) return r; } const i = order.indexOf(m); return i < 0 ? order.length : i; };
   // Gleicher Spieler = gleicher Verein und gleicher Name; Teilnamen («El Mala» / «Said El Mala») gelten als derselbe Spieler.
   // Gebote eines Managers sind Alternativen in Reihenfolge: hat er sein Limit (max_wins) erreicht, fallen seine weiteren
   // Gebote weg und die Spieler werden neu vergeben – so lange, bis sich nichts mehr aendert.
@@ -183,15 +186,26 @@ export function resolveBids(bids, ctx) {
     const groups = {}; const keyOf = b => `${b.club || ''}|${norm(b.player_name)}`;
     for (const b of list) { if (b.status === 'invalid' || withdrawn.has(b)) continue; const k = Object.keys(groups).find(g => { const [c, n] = g.split('|'); const nb = norm(b.player_name); return c === (b.club || '') && (n === nb || n.endsWith(nb) || nb.endsWith(n)); }) || keyOf(b); (groups[k] = groups[k] || []).push(b); }
     for (const g of Object.values(groups)) {
-      g.sort((a, b) => b.price - a.price || order.indexOf(a.manager_id) - order.indexOf(b.manager_id));
-      g[0].status = 'won'; g[0].reason = g.length > 1 && g[1].price === g[0].price ? 'Gleichstand, schlechterer Tabellenplatz' : '';
+      g.sort((a, b) => b.price - a.price || rank(a.manager_id) - rank(b.manager_id));
+      const unentschieden = g.length > 1 && g[1].price === g[0].price && (rank(g[0].manager_id) === rank(g[1].manager_id) || rank(g[0].manager_id) >= order.length);
+      g[0].status = 'won'; g[0].reason = g.length > 1 && g[1].price === g[0].price ? (unentschieden ? 'Gleichstand ohne unterscheidbaren Tabellenplatz – Los nötig (Ziff. 7.1)' : 'Gleichstand, schlechterer Tabellenplatz') : '';
       g.slice(1).forEach(b => { b.status = 'lost'; b.reason = b.price === g[0].price ? 'Gleichstand, besserer Tabellenplatz' : 'überboten'; });
     }
     let changed = false;
-    // Limit je Gebotsgruppe («Gebot Nr. 1: max. 1 Torhüter», «Gebot Nr. 2: max. 1 aus vier»)
-    for (const m of new Set(list.map(b => `${b.manager_id}|${Number(b.gruppe) || 1}`))) {
-      const mine = list.filter(b => `${b.manager_id}|${Number(b.gruppe) || 1}` === m && b.status !== 'invalid' && !withdrawn.has(b)).sort((a, b) => a.priority - b.priority); let wins = 0;
-      for (const b of mine) { if (wins >= b.max_wins) { withdrawn.add(b); b.status = 'lost'; b.reason = `Limit erreicht: ${b.max_wins} Zuschlag${b.max_wins > 1 ? 'e' : ''} aus früheren Geboten`; changed = true; continue; } if (b.status === 'won') wins++; }
+    // Je Manager in Reihenfolge seiner Gebote: Limit je Gebotsgruppe («Gebot Nr. 1: max. 1 Torhüter»), Kaufbudget über alle
+    // Zuschläge (Ziff. 7.4) und eine eigene Entlassung je Zuschlag (Kader 22, Ziff. 7.1). Was wegfällt, wird neu vergeben.
+    for (const m of new Set(list.map(b => b.manager_id))) {
+      let left = ctx.budgetLeft(m); const used = new Set(); const wins = {};
+      const mine = pid => okRelease(pid) && ctx.players[pid].manager_id === m;
+      for (const b of list.filter(x => x.manager_id === m && x.status !== 'invalid' && !withdrawn.has(x)).sort((a, z) => a.priority - z.priority)) {
+        const g = Number(b.gruppe) || 1; const drop = (status, why) => { withdrawn.add(b); b.status = status; b.reason = why; b.release_resolved = null; changed = true; };
+        if ((wins[g] || 0) >= b.max_wins) { drop('lost', `Limit erreicht: ${b.max_wins} Zuschlag${b.max_wins > 1 ? 'e' : ''} aus früheren Geboten`); continue; }
+        if (b.status !== 'won') continue;
+        if (b.price > left) { drop('invalid', `Budget reicht nicht mehr: ${left} übrig nach früheren Zuschlägen (7.4)`); continue; }
+        const rel = b.release_player_id ? (mine(b.release_player_id) && !used.has(b.release_player_id) ? b.release_player_id : null) : (b.release_order || []).find(pid => mine(pid) && !used.has(pid)) || null;
+        if (!rel) { drop('invalid', b.release_player_id && used.has(b.release_player_id) ? 'Entlassung schon für einen anderen Zuschlag verwendet (Kader 22)' : 'Keine weitere Entlassung genannt (Kader 22)'); continue; }
+        used.add(rel); b.release_resolved = rel; left -= b.price; wins[g] = (wins[g] || 0) + 1;
+      }
     }
     if (!changed) break;
   }

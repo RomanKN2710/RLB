@@ -107,3 +107,35 @@ describe('resolveBids: «höchstens N» gilt je Gebotsgruppe', () => {
     assert.deepEqual(out.map(b => b.status), ['won', 'won', 'lost']); assert.match(out[2].reason, /Limit/);
   });
 });
+
+describe('resolveBids: Budget über alle Zuschläge, eine Entlassung je Zuschlag, Gleichstand (Review 24.11.2026)', () => {
+  const players = { a1: { id: 'a1', manager_id: 1, status: 'active' }, a2: { id: 'a2', manager_id: 1, status: 'active' }, b1: { id: 'b1', manager_id: 2, status: 'active' }, b2: { id: 'b2', manager_id: 2, status: 'active' } };
+  const mk = (budget, extra = {}) => ({ players, budgetLeft: m => budget[m] ?? 50, managerName: m => 'M' + m, tiebreak: [1, 2], prevReleases: [], ...extra });
+  const bid = (id, manager_id, player_name, price, priority, extra = {}) => ({ id, manager_id, player_name, club: 'Bremen', pos: 'M', price, priority, max_wins: 2, gruppe: 1, release_player_id: null, release_order: manager_id === 1 ? ['a1', 'a2'] : ['b1', 'b2'], ...extra });
+  const st = (out, id) => out.find(b => b.id === id);
+  test('zwei Zuschläge von je 15 bei 20 Budget: der zweite fällt weg und geht an den Nächsten', () => {
+    const out = resolveBids([bid(1, 1, 'A', 15, 1), bid(2, 1, 'B', 15, 2), bid(3, 2, 'B', 2, 1)], mk({ 1: 20 }));
+    assert.equal(st(out, 1).status, 'won'); assert.equal(st(out, 2).status, 'invalid'); assert.match(st(out, 2).reason, /Budget reicht nicht mehr: 5 übrig/); assert.equal(st(out, 3).status, 'won');
+  });
+  test('fällt ein Gebot wegen Budget weg, kommt die nächste Alternative derselben Gruppe zum Zug', () => {
+    const out = resolveBids([bid(1, 1, 'A', 10, 1, { gruppe: 1, max_wins: 1, release_order: ['a1'] }), bid(2, 1, 'B', 15, 2, { gruppe: 2, max_wins: 1, release_order: ['a2'] }), bid(3, 1, 'C', 5, 3, { gruppe: 2, max_wins: 1, release_order: ['a2'] })], mk({ 1: 20 }));
+    assert.deepEqual([1, 2, 3].map(i => st(out, i).status), ['won', 'invalid', 'won']); assert.equal(st(out, 3).release_resolved, 'a2');
+  });
+  test('je Zuschlag eine eigene Entlassung: «höchstens 2» mit einer Entlassung ergibt einen Kauf', () => {
+    const out = resolveBids([bid(1, 1, 'A', 2, 1, { release_order: ['a1'] }), bid(2, 1, 'B', 2, 2, { release_order: ['a1'] })], mk({}));
+    assert.equal(st(out, 1).release_resolved, 'a1'); assert.equal(st(out, 2).status, 'invalid'); assert.match(st(out, 2).reason, /Keine weitere Entlassung/);
+  });
+  test('zwei Zuschläge mit derselben genannten Entlassung: nur der erste zählt', () => {
+    const out = resolveBids([bid(1, 1, 'A', 2, 1, { release_player_id: 'a1', release_order: [] }), bid(2, 1, 'B', 2, 2, { release_player_id: 'a1', release_order: [] })], mk({}));
+    assert.equal(st(out, 1).status, 'won'); assert.equal(st(out, 2).status, 'invalid'); assert.match(st(out, 2).reason, /schon für einen anderen Zuschlag/);
+  });
+  test('Entlassungen werden in Reihenfolge vergeben', () => {
+    const out = resolveBids([bid(1, 1, 'A', 2, 1), bid(2, 1, 'B', 2, 2)], mk({})); assert.deepEqual([st(out, 1).release_resolved, st(out, 2).release_resolved], ['a1', 'a2']);
+  });
+  test('Gleichstand: wer in der Reihenfolge fehlt, gewinnt nicht von selbst; gleicher Rang verlangt das Los', () => {
+    let out = resolveBids([bid(1, 2, 'A', 2, 1), bid(2, 1, 'A', 2, 1)], mk({}, { tiebreak: [1] }));
+    assert.equal(st(out, 2).status, 'won'); assert.equal(st(out, 1).status, 'lost');
+    out = resolveBids([bid(1, 1, 'A', 2, 1), bid(2, 2, 'A', 2, 1)], mk({}, { tieRank: () => 3 }));
+    assert.match(out.find(b => b.status === 'won').reason, /Los nötig/);
+  });
+});

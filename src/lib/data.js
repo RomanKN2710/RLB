@@ -138,7 +138,10 @@ export async function tiebreakOrder(round, b) {
   const prev = await q('select number from rounds where number < $1 order by number desc limit 1', [round.number]);
   if (!prev.length) { const s = await one("select value from settings where key='vorsaison_reihenfolge'"); return s ? s.value.map(n => b.managers.find(m => m.name === n)?.id).filter(Boolean) : b.managerIds; }
   const sd = await season(prev[0].number, b);
-  return sd.table.map(r => r.manager_id).reverse();
+  const order = sd.table.map(r => r.manager_id).reverse();
+  // Punktgleiche Manager teilen sich den Rang: dann entscheidet bei gleichem Gebot das Los, nicht die Listenreihenfolge
+  order.ranks = {}; sd.table.forEach(r => { order.ranks[r.manager_id] = sd.table.length - r.rank; });
+  return order;
 }
 
 export async function kader(managerId, roundNumber) {
